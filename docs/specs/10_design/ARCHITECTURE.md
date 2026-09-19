@@ -1,9 +1,18 @@
 # Architecture Contract: Professional Performance Audit — MCP Gateway
 
 **Owner:** vasquez (CTO)
-**Version:** v1
-**Last Updated:** 2026-09-16
+**Version:** v2
+**Last Updated:** 2026-09-19
 **Domains-Touched:** [engineering]
+
+## Overview (v2 delta — SPEC-ANTIGRAVITY-001)
+
+Antigravity IDE plugin parity subsystem: declarative bundle `plugins/antigravity/`
+(`plugin.json` + `mcp_config.json` + `hooks.json` + `skills/mcp-gway/SKILL.md` +
+`rules/*.md` + `INSTALL.md`) mirroring `plugins/opencode/mcp-gateway.ts` behavior through
+native Antigravity surfaces — `rules/` for persistent guidance, `PreInvocation` hook
+reinject with MARKER dedupe for compression survival, `mcp_config.json` remote `serverUrl`
+for gateway registration. No gateway/CLI/transport change; additive bundle only.
 
 ## Overview
 
@@ -38,6 +47,29 @@ Principio: medir con excelencia y dedicación; optimizar solo con datos.
 - INV-004: Hallazgo sin prueba (diff/scan/log) = REFUTED (guardrails 9)
 - INV-005: 255 tests verdes + `ruff check` + `ruff format --check` en todo momento (Definition of Done)
 - INV-006: `X-Warning: exposed` solo en `GET /metrics` → `403` cuando expuesto sin opt-in (observability/health.py:127-139)
+
+## Plugin Subsystem (v2 — SPEC-ANTIGRAVITY-001)
+
+| Component | Responsibility | Interface |
+|-----------|---------------|-----------|
+| `plugins/antigravity/plugin.json` | Plugin manifest (`mcp-gateway`, `$schema`) | Antigravity plugin loader; workspace `.agents/plugins/` or global `~/.gemini/config/plugins/` |
+| `plugins/antigravity/rules/*.md` | Persistent Gateway Protocol card (mandatory order, Starlark convention, anti-patterns) | Always-on/glob/model-decision rules surface; MARKER `MCP-GWAY v2.8.0` verbatim |
+| `plugins/antigravity/hooks.json` + reinject script | `PreInvocation`/`PostInvocation` reinject with MARKER dedupe (≡ `systemHasRules`/`pushRules`) | stdin JSON → stdout `{injectSteps: [{ephemeralMessage}]}` or `{injectSteps: []}` |
+| `plugins/antigravity/skills/mcp-gway/SKILL.md` | Skill body parity with `skills/mcp-gway/SKILL.md` | name+description frontmatter auto-load |
+| `plugins/antigravity/mcp_config.json` | Gateway remote registration (`serverUrl: http://127.0.0.1:8080/mcp`, secret-free) | Antigravity MCP surface (`mcpServers.gateway`) |
+| `plugins/antigravity/INSTALL.md` | Install + verify matrix + rollback (parity with `plugins/opencode/INSTALL.md`) | Docs |
+
+Data flow: session start → rules inject card (dedupe by MARKER) → pre-model invocation →
+reinject script greps `transcriptPath` for MARKER → injects `ephemeralMessage` only if
+absent → agent calls gateway tools in mandatory order via `mcp_config.json` registration.
+
+Invariants (v2 additions):
+
+- INV-007: `plugins/antigravity/` is additive-only; `src/`, gateway routes, CLI frozen
+- INV-008: No secret/token/credential in the bundle; `headers.Authorization` is a manual
+  user-side edit only, never committed (guardrail 1)
+- INV-009: MARKER `MCP-GWAY v2.8.0` verbatim; card substance ≡ OpenCode MCP_RULES
+- INV-010: `serverUrl` defaults to loopback; non-loopback follows local-first opt-in
 
 ## Non-Functional Requirements
 
