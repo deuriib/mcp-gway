@@ -1,0 +1,6 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "mcp-gateway",
+  "version": "2.8.0",
+  "description": "MCP Gateway parity for Google Antigravity IDE: automatic mcp-gway skill load, gateway MCP registration over loopback, and Gateway Protocol reinjection that survives context compression."
+}

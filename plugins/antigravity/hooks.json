@@ -1,0 +1,11 @@
+{
+  "mcp-gateway-reinject": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "sh ./scripts/reinject.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}
