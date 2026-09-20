@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **feat(casing)**: universal casing ingestion, auto-migration on refresh, and canonical PascalCase exposure (SPEC-CASING-001, ADR-013). Upgraded `to_pascal_case_identifier` to cleanly parse `camelCase`, `ALL_CAPS` acronyms (`GITHUB` → `Github`, `WEATHER_SERVICE` → `WeatherService`), delimiters, and numbers. Implemented case-insensitive server lookup across `remove`, `inspect`, `update`, and `refresh`. `mcp-gway refresh` automatically migrates legacy and non-canonical servers to canonical PascalCase files and tokens.
+
 ## v2.5.0 (2026-09-17)
 
 - **feat(cli)**: expose `mgw` as a 1:1 shortcut for `mcp-gway` (verified 2026-09-17, same `cli.main`, SPEC-MGW-001); `mcp-gway` stays canonical, both shims ship on install (`pyproject.toml:20-21`). Evidence: `tests/test_cli_alias.py` 3/3 green + README/AGENTS.md shortcut callouts.
