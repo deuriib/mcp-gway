@@ -1,9 +1,9 @@
 # Architecture Contract: Professional Performance Audit — MCP Gateway
 
 **Owner:** vasquez (CTO)
-**Version:** v2
-**Last Updated:** 2026-09-19
-**Domains-Touched:** [engineering]
+**Version:** v3
+**Last Updated:** 2026-09-20
+**Domains-Touched:** [engineering, automation]
 
 ## Overview (v2 delta — SPEC-ANTIGRAVITY-001)
 
@@ -78,3 +78,23 @@ Invariants (v2 additions):
 - Security: Deny default; least privilege por interfaz; `barrera` review condicional si nuevos endpoints/payloads/fronteras
 - Observability: `/metrics` Prometheus hand-rolled expuesto; runbook reproducible versionado
 - Reproducibilidad: Script único, máquina sagrada documentada, versión git, carga configurada, comandos exactos
+
+## Universal Casing & PascalCase Subsystem (v3 delta — SPEC-CASING-001)
+
+| Component | Responsibility | Interface |
+|-----------|---------------|-----------|
+| `src/mcp_gway/code_mode.py:to_pascal_case_identifier` | Single canonical PascalCase converter (splits camelCase, delimiters, capitalizes acronyms/words) | `to_pascal_case_identifier(name: str) -> str` |
+| `src/mcp_gway/models.py` | Model name validation / canonical PascalCase representation | `_validate_name_value`, `MCPServerConfig` |
+| `src/mcp_gway/registry.py` | Atomic registry CRUD and server file renaming | `Registry.rename(old: str, new: str)` |
+| `src/mcp_gway/cli.py` | CLI ingestion normalization, case-insensitive server lookup (`remove`, `inspect`, `update`, `refresh`), and auto-migration on `refresh` | `_resolve_saved_name`, `_canonicalize_saved_name` |
+
+Data flow:
+1. **Ingestion (`cli add`)**: User passes name in any casing → `to_pascal_case_identifier` canonicalizes → collision check against `Registry.list()` → `MCPServerConfig` initialized with canonical name → saved to `servers/<CanonicalName>.json` and `.pyi`.
+2. **Auto-Migration (`cli refresh`)**: Reads server stems → if stem != canonical → `Registry.rename` atomically updates `.json`, `.pyi`, internal `name`, and tokens → logs rename (or collision warning if target exists).
+3. **Lookup & Management**: `remove`, `inspect`, `update`, `refresh` call `_resolve_saved_name` → finds exact match, canonical match, or casefold match → executes operation safely.
+4. **Exposure**: `mcp-gway list` and Code Mode tools expose and bind canonical PascalCase names.
+
+Invariants (v3 additions):
+- INV-011: Server names in storage (`servers/<Name>.json|pyi`) and runtime configs are strictly canonical PascalCase.
+- INV-012: CLI server lookup is case-insensitive across all management commands (`remove`, `inspect`, `update`, `refresh`).
+- INV-013: Auto-migration on `refresh` never overwrites upon collision (`FileExistsError` preserves original and warns).

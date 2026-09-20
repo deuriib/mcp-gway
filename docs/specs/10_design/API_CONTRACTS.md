@@ -1,9 +1,9 @@
-# API Contracts: CLI Alias mgw + Antigravity Plugin (v2)
+# API Contracts: CLI Alias mgw + Antigravity Plugin + Universal Casing (v3)
 
 **Owner:** vasquez (CTO)
-**Version:** v2
-**Last Updated:** 2026-09-19
-**Spec:** SPEC-MGW-001, SPEC-ANTIGRAVITY-001
+**Version:** v3
+**Last Updated:** 2026-09-20
+**Spec:** SPEC-MGW-001, SPEC-ANTIGRAVITY-001, SPEC-CASING-001
 
 ## CLI Contract (packaging-only; no HTTP change)
 
@@ -44,3 +44,17 @@
 - Security: barrera path-cite conditional — full `review-security` STRIDE only if the
   proposal introduces a new trust boundary / exfiltration surface (hook shell commands
   get an explicit risk-lens confirm; not expected to escalate)
+
+## Universal Casing & PascalCase Contract (v3 delta — SPEC-CASING-001)
+
+- **Normalizer**: `to_pascal_case_identifier(name: str) -> str` transforms any string (`snake_case`, `kebab-case`, `camelCase`, `ALL_CAPS`, `mixed`) into a valid PascalCase identifier.
+- **CLI `add`**: `mcp-gway add <name>` automatically canonicalizes `<name>` via `to_pascal_case_identifier` prior to registration. Saved config and stub files are strictly named `<CanonicalPascalCase>.json` and `<CanonicalPascalCase>.pyi`.
+- **CLI Resolution**: `mcp-gway remove <name>`, `inspect <name>`, `update <name>`, and `refresh <name>` resolve `<name>` case-insensitively against active servers.
+- **CLI `refresh` Migration**: `mcp-gway refresh` automatically detects any saved server whose stem differs from its canonical PascalCase representation and migrates it atomically (`.json`, `.pyi`, internal `config.name`, and token files).
+- **Code Mode / List Exposure**: Server identifiers are exposed and bound exclusively in canonical PascalCase.
+
+## Sign-off (v3 delta)
+
+- Engineering: vasquez approves normalizer, CLI resolution, and refresh migration logic (`src/mcp_gway/code_mode.py`, `src/mcp_gway/cli.py`, `src/mcp_gway/registry.py`, `src/mcp_gway/models.py`).
+- Automation: CI verification green across full suite.
+
