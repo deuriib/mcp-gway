@@ -1,38 +1,47 @@
-# PROPOSED_CHANGES — Server Naming Capitalization Normalization (SPEC-SERVER-CAPS-001)
+# PROPOSED_CHANGES — Canonical PascalCase storage: add + refresh auto-rename (SPEC-PASCALCASE-STORAGE-001)
 
-**Spec Reference:** `SPEC-SERVER-CAPS-001`  
-**Owner:** vasquez (CTO, engineering chain owner)  
-**Date:** 2026-09-19  
-**Execution Mode:** `single` (engineering-only direct execution)  
-**DOMAINS:** `[engineering, security]`  
-**Skills cited:** `frame-ship:using-frame-ship` → `frame-ship:propose-changes` → `frame-ship:execute-spec` → `frame-ship:quality-gate` → `frame-ship:verify-handoff` → `frame-ship:ship-release`  
-
----
-
-## 1. Summary of Proposed Changes
-
-Implements server naming normalization to PascalCase / Capitalization (`Server.tool`) in Code Mode.
-Introduces a deterministic identifier normalizer (`to_pascal_case_identifier`), establishes dual binding in `StarlarkSandbox` (`Server` capitalized primary + original lowercase alias for zero breaking changes), automatically synchronizes capitalized bindings during dynamic `CodeMode.refresh()`, and aligns `.pyi` virtual stub documentation and gateway tool schema descriptions.
+**Spec refs (reference-only):** `docs/specs/40_workspace/engineering/SPEC-PASCALCASE-STORAGE-001.md` · prior `SPEC-SERVER-CAPS-001` (sandbox dual-binding, f66c0ea — untouched).
+**Execution mode:** `single` (engineering-only direct execution, no dispatch).
+**DOMAINS:** `[engineering]`.
+**Skills cited:** `frame-ship:using-frame-ship` → `frame-ship:translate-to-spec` → `frame-ship:propose-changes` (this proposal) → `frame-ship:review-architecture` → `frame-ship:execute-spec` → `frame-ship:quality-gate` → `frame-ship:verify-handoff`.
+**Date:** 2026-09-20. **Owner:** vasquez (CTO, engineering chain owner).
 
 ---
+
+## 1. Summary
+
+Canonicalize server names at the storage layer using the single existing normalizer `to_pascal_case_identifier` (`code_mode.py:45`):
+(1) `cli add` normalizes the requested name BEFORE validation/storage — new servers are born PascalCase;
+(2) `cli refresh` auto-renames saved lowercase servers to PascalCase (atomic `.json`+`.pyi` + `config.name` + token stems), collision-safe;
+(3) new `Registry.rename(old, new)` atomic helper; (4) `refresh <name>` resolves case-insensitively.
 
 ## 2. REQ-ID Traceability
 
 | REQ-ID | Target File | Action | Description |
 |---|---|---|---|
-| **REQ-F-001** | `src/mcp_gway/code_mode.py` | Add Function | Add `to_pascal_case_identifier(name: str) -> str` handling hyphens, underscores, dots, and digits |
-| **REQ-F-002** | `src/mcp_gway/code_mode.py` | Modify | Dual binding in `CodeMode._inject_tools`: inject both original server name and PascalCase alias into sandbox |
-| **REQ-F-003** | `src/mcp_gway/code_mode.py` | Modify | Dynamic `CodeMode.refresh()`: auto-detect and sync PascalCase and lowercase aliases on add/remove |
-| **REQ-F-004** | `src/mcp_gway/registry.py` | Modify | `Registry._generate_pyi`: update `# Usage:` and sanitized names comment to use PascalCase `{cap_name}.tool_name` |
-| **REQ-F-005** | `src/mcp_gway/gateway.py` | Modify | Update `listToolFiles`, `executeToolCode` schema docstrings with capitalized examples |
-| **REQ-NF-001** | `tests/test_code_mode.py` | Modify | Unit/Integration tests: `to_pascal_case_identifier`, dual binding execution, refresh auto-capitalization |
-| **REQ-NF-002** | `tests/test_registry.py` | Modify | Verification of `# Usage: <PascalCase>.tool_name` in generated `.pyi` stubs |
-| **REQ-NF-003** | Entire repo | Verify | Backward compatibility: existing lowercase `server.tool` calls continue working with zero breaking changes |
+| REQ-F-001 | `src/mcp_gway/cli.py::add` | Modify | `canonical = to_pascal_case_identifier(name)` first; use canonical for config/audit/discovery/registry/echo. Import inside function (avoid `code_mode→registry` cycle at module import). |
+| REQ-F-002 | `src/mcp_gway/cli.py::refresh` | Modify | Per saved server: if stem != PascalCase(stem) → `registry.rename` (+ token stems `$HOME/.config/mcp-gway/tokens/<old>[,_client].json`), continue under new name; `FileExistsError` → warn + keep original. |
+| REQ-F-003 | `src/mcp_gway/registry.py` | Add method | `Registry.rename(old, new)`: validate both, no-op if equal, `FileNotFoundError` if source missing, `FileExistsError` on collision; write new `.json` (name updated) + `.pyi` via `_atomic_write_text`, then unlink old pair. |
+| REQ-F-004 | `src/mcp_gway/cli.py::refresh` | Modify | Resolve `name` arg: exact → casefold match over `registry.list()` → not-found warning (existing behavior). |
+| REQ-NF-001 | `tests/test_pascalcase_storage.py` | Create | add-canonicalizes (local, no network), already-canonical no-op, refresh-renames, collision-skip, case-insensitive resolve, rename unit tests. |
+| REQ-NF-002 | repo | Verify | `pytest`, `ruff check`, `ruff format --check` green. |
 
----
+## 3. Files to Create / Modify (no others touched)
 
-## 3. Risk Assessment
+- Modify: `src/mcp_gway/cli.py` (add + refresh only), `src/mcp_gway/registry.py` (+`rename` only).
+- Create: `tests/test_pascalcase_storage.py`, this proposal + spec (docs only).
+- Untouched: `code_mode.py`, `gateway.py`, `models.py` (validator unchanged — canonical output always passes `^[A-Za-z_][A-Za-z0-9_]{0,63}$`), OAuth/policy/transport.
 
-- **R-001 (Name collision):** Two servers normalizing to the same PascalCase name. Mitigated by registering original names first, logging if collision occurs; underlying configs resolve independently.
-- **R-002 (Keyword collision):** Handled by prepending `_` if starting with a digit or if empty string (`_Server`).
-- **R-003 (Blast Radius):** Isolated strictly to Code Mode sandbox injection and `.pyi` comment presentation. CLI storage and remote HTTP routes untouched.
+## 4. Risk Assessment & Blast Radius
+
+- **Systems:** Low-medium. `add` changes stored stems for non-canonical input (one-way rename of NEW servers only; old files never created so nothing orphans). `refresh` renames saved pairs — atomic-write-then-unlink keeps a crash from losing both; worst case old pair lingers (re-run converges).
+- **Collision:** Two stems mapping to one canonical (`my_server` + `MyServer`) → second wins nothing; we warn + skip, both servers keep working (Code Mode resolves case-insensitively). No overwrite by construction.
+- **Security:** No new trust boundary (names already flow to filesystem via `_safe_path`; canonical output is a strict subset of the validator alphabet). Token stems renamed with `os.replace` semantics via rename; no contents touched, no secrets logged. No PII (server names are operator-chosen, not user data).
+- **Customers/regulators/revenue:** None — local-first CLI, no external surface, no prod env.
+- **Rollback:** `git revert`; already-renamed servers keep working (canonical names are valid everywhere old ones were). No migration needed.
+
+## 5. Approvers
+
+- Engineering owner (vasquez, self as author — architecture review records verdict, no self-approval of proposal).
+- Security review: not required (no auth/data/API/PII surface change) — noted explicitly, `review-security` skipped with rationale.
+- Prior failed attempt (agy session, test failed): root cause unknown from this lane; this proposal de-risks via new isolated test file + full-suite gate before handoff.
