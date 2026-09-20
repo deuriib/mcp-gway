@@ -49,6 +49,15 @@ def test_to_pascal_case_variants() -> None:
     assert to_pascal_case_identifier("my_server") == "MyServer"
     assert to_pascal_case_identifier("myServer") == "MyServer"
     assert to_pascal_case_identifier("Filesystem") == "Filesystem"
+    assert to_pascal_case_identifier("GITHUB") == "Github"
+    assert to_pascal_case_identifier("WEATHER_SERVICE") == "WeatherService"
+    assert to_pascal_case_identifier("AWS_S3") == "AwsS3"
+    assert to_pascal_case_identifier("weatherServiceApi") == "WeatherServiceApi"
+    assert to_pascal_case_identifier("getHTTPResponse") == "GetHttpResponse"
+    assert to_pascal_case_identifier("APIClient") == "ApiClient"
+    assert to_pascal_case_identifier("123server") == "_123Server"
+    assert to_pascal_case_identifier("server-1") == "Server1"
+    assert to_pascal_case_identifier("") == "_Server"
 
 
 # REQ-F-003 — Registry.rename

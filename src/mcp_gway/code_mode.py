@@ -51,14 +51,27 @@ def to_pascal_case_identifier(name: str) -> str:
         'my_server' -> 'MyServer'
         'server-1' -> 'Server1'
         '123server' -> '_123Server'
+        'GITHUB' -> 'Github'
+        'WEATHER_SERVICE' -> 'WeatherService'
+        'myServer' -> 'MyServer'
+        'AWS_S3' -> 'AwsS3'
     """
-    clean = re.sub(r"([0-9]+)", r" \1 ", name)
+    if not name or not name.strip():
+        return "_Server"
+    # Split acronym boundaries: e.g. APIClient -> API Client
+    clean = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", name)
+    # Split camelCase boundaries: e.g. myServer -> my Server
+    clean = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", clean)
+    # Separate numeric runs
+    clean = re.sub(r"([0-9]+)", r" \1 ", clean)
     clean = _PASCAL_SPLIT_RE.sub(" ", clean).strip()
     if not clean:
         return "_Server"
     words = clean.split()
-    pascal = "".join(w[:1].upper() + w[1:] for w in words)
-    if pascal and pascal[0].isdigit():
+    pascal = "".join(w.capitalize() for w in words)
+    if not pascal:
+        return "_Server"
+    if pascal[0].isdigit():
         pascal = f"_{pascal}"
     return pascal
 
@@ -208,9 +221,9 @@ class CodeMode:
         return "\n".join(lines)
 
     def _resolve_server(self, want: str) -> str:
-        lowered = want.lower()
+        canonical = to_pascal_case_identifier(want)
         for name in self.registry.list():
-            if name.lower() == lowered:
+            if name == canonical or name.lower() == want.lower():
                 return name
         raise FileNotFoundError(f"Server '{want}' not found")
 
