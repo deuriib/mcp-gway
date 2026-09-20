@@ -137,6 +137,23 @@ def add(
 ) -> None:
     """Add an MCP server and generate its .pyi stub."""
     _cli_start = time.monotonic()
+    from mcp_gway.code_mode import to_pascal_case_identifier
+
+    _requested_name = name
+    name = to_pascal_case_identifier(name)
+    if name != _requested_name:
+        click.echo(f"Normalized name '{_requested_name}' → '{name}'")
+        try:
+            _canonical_taken = name in _get_registry().list()
+        except Exception:
+            _canonical_taken = False
+        if _canonical_taken:
+            click.echo(
+                f"Error: Server '{name}' already exists "
+                f"(canonical of '{_requested_name}')",
+                err=True,
+            )
+            sys.exit(1)
     headers_dict = parse_headers(list(headers)) if headers else None
     oauth_config = None
     if oauth_client_id or oauth_client_secret or oauth_scope:
@@ -614,6 +631,73 @@ def serve(
         raise click.BadParameter(f"unknown transport '{transport}'")
 
 
+def _resolve_saved_name(registry: Registry, wanted: str) -> str:
+    """Resolve a CLI-given server name against saved stems, case-insensitively.
+
+    Exact match wins; otherwise the first casefold match wins. Falls back to
+    the raw `wanted` so the caller's existing not-found warning path holds.
+    """
+    saved = registry.list()
+    if wanted in saved:
+        return wanted
+    lowered = wanted.casefold()
+    for stem in saved:
+        if stem.casefold() == lowered:
+            return stem
+    return wanted
+
+
+def _rename_token_stems(old: str, new: str) -> None:
+    """Rename saved OAuth token stems alongside a server rename (move only).
+
+    Moves `<old>.json` / `<old>_client.json` to the `<new>` stems when the
+    target is absent — never overwrites, never reads contents, never logs.
+    """
+    tokens_dir = Path.home() / ".config" / "mcp-gway" / "tokens"
+    for suffix in ("", "_client"):
+        src = tokens_dir / f"{old}{suffix}.json"
+        dst = tokens_dir / f"{new}{suffix}.json"
+        try:
+            if src.exists() and not dst.exists():
+                src.rename(dst)
+        except OSError:
+            pass
+
+
+def _canonicalize_saved_name(registry: Registry, stem: str) -> str:
+    """Auto-rename a saved non-canonical stem to PascalCase; return live name.
+
+    Collision (`FileExistsError`) or invalid stems (`ValueError`, e.g. legacy
+    hyphenated files) warn and keep the original — refresh continues, nothing
+    is overwritten or lost.
+    """
+    from mcp_gway.code_mode import to_pascal_case_identifier
+
+    try:
+        canonical = to_pascal_case_identifier(stem)
+    except Exception:
+        return stem
+    if canonical == stem:
+        return stem
+    try:
+        registry.rename(stem, canonical)
+    except FileNotFoundError:
+        return stem
+    except FileExistsError:
+        click.echo(
+            f"Warning: cannot rename '{stem}' → '{canonical}': "
+            f"target exists, keeping original.",
+            err=True,
+        )
+        return stem
+    except ValueError as e:
+        click.echo(f"Warning: cannot rename '{stem}': {e}, keeping original.", err=True)
+        return stem
+    _rename_token_stems(stem, canonical)
+    click.echo(f"Renamed '{stem}' → '{canonical}'")
+    return canonical
+
+
 @main.command()
 @click.argument("name", required=False)
 @click.option("--auth", is_flag=True, help="Force OAuth authentication flow")
@@ -635,7 +719,7 @@ def refresh(name: str | None, auth: bool, oauth_port: int) -> None:
     registry = _get_registry()
 
     if name:
-        names = [name]
+        names = [_resolve_saved_name(registry, name)]
     else:
         names = registry.list()
         if not names:
@@ -644,6 +728,7 @@ def refresh(name: str | None, auth: bool, oauth_port: int) -> None:
         click.echo(f"Refreshing {len(names)} servers...")
 
     for server_name in names:
+        server_name = _canonicalize_saved_name(registry, server_name)
         try:
             config = registry.get_config(server_name)
         except FileNotFoundError:

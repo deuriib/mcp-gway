@@ -115,6 +115,43 @@ class Registry:
         self._atomic_write_text(pyi_path, content)
         self._inc_registry_metric("add")
 
+    def rename(self, old: str, new: str) -> None:
+        """Atomically rename a saved server stem (`.json` + `.pyi` pair).
+
+        Writes the new pair first (via `_atomic_write_text`), then removes
+        the old pair — a crash mid-rename leaves the old pair intact or
+        both pairs present (re-run converges), never a half-written server.
+        `config.name` inside the JSON is updated to `new`; `.pyi` header
+        lines referencing the old stem are re-pointed (signatures untouched).
+        Raises `FileNotFoundError` when the source pair is missing and
+        `FileExistsError` on collision (never overwrites). No-op when equal.
+        """
+        _validate_safe_name(old)
+        _validate_safe_name(new)
+        if old == new:
+            return
+        old_json = self._safe_path(old, ".json")
+        old_pyi = self._safe_path(old, ".pyi")
+        if not old_json.exists() and not old_pyi.exists():
+            raise FileNotFoundError(f"Server '{old}' not found")
+        new_json = self._safe_path(new, ".json")
+        new_pyi = self._safe_path(new, ".pyi")
+        if new_json.exists() or new_pyi.exists():
+            raise FileExistsError(f"Server '{new}' already exists")
+        if old_json.exists():
+            data = json.loads(old_json.read_text(encoding="utf-8"))
+            data["name"] = new
+            self._atomic_write_text(new_json, json.dumps(data, indent=2))
+        if old_pyi.exists():
+            content = old_pyi.read_text(encoding="utf-8")
+            content = content.replace(
+                f"# servers/{old}.pyi", f"# servers/{new}.pyi"
+            ).replace(f'server="{old}"', f'server="{new}"')
+            self._atomic_write_text(new_pyi, content)
+        old_json.unlink(missing_ok=True)
+        old_pyi.unlink(missing_ok=True)
+        self._inc_registry_metric("rename")
+
     def remove(self, name: str) -> None:
         pyi_path = self._safe_path(name, ".pyi")
         if not pyi_path.exists():

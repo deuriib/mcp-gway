@@ -37,7 +37,7 @@ def test_inspect_server(runner, monkeypatch):
         main,
         ["add", "youtube", "--type", "remote", "--url", "https://api.example.com/mcp"],
     )
-    result = runner.invoke(main, ["inspect", "youtube"])
+    result = runner.invoke(main, ["inspect", "Youtube"])
     assert result.exit_code == 0
     assert "search" in result.output
 
@@ -273,7 +273,7 @@ def test_refresh_continues_after_server_error(tmp_path, monkeypatch):
 
     async def mock_discover(cfg, force_auth=False, metrics=None):
         call_count["n"] += 1
-        if cfg.name == "server_a":
+        if cfg.name == "ServerA":
             raise RuntimeError("Connection refused")
         return [ToolInfo(name="ping", description="Ping")]
 
@@ -284,8 +284,8 @@ def test_refresh_continues_after_server_error(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(main, ["refresh"])
     assert result.exit_code == 0
-    assert "Error refreshing server_a" in result.output
-    assert "Refreshed server_b" in result.output
+    assert "Error refreshing ServerA" in result.output
+    assert "Refreshed ServerB" in result.output
     assert call_count["n"] == 2, "Both servers should be attempted"
 
 
@@ -571,7 +571,7 @@ def test_add_local_with_env_stores_environment(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
     registry = Registry(servers_dir=servers_dir)
-    config = registry.get_config("myserver")
+    config = registry.get_config("Myserver")
     assert config.environment == {"FOO": "bar", "BAZ": "qux"}
 
 

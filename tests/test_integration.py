@@ -63,10 +63,10 @@ def test_full_flow(tmp_path, monkeypatch):
     # List servers
     result = runner.invoke(main, ["list"])
     assert result.exit_code == 0
-    assert "youtube" in result.output
+    assert "Youtube" in result.output
 
     # Inspect
-    result = runner.invoke(main, ["inspect", "youtube"])
+    result = runner.invoke(main, ["inspect", "Youtube"])
     assert result.exit_code == 0
     assert "def search(" in result.output
 
@@ -75,7 +75,7 @@ def test_full_flow(tmp_path, monkeypatch):
     code_mode = CodeMode(registry)
 
     listing = code_mode.list_tool_files()
-    assert "youtube.pyi" in listing
+    assert "Youtube.pyi" in listing
 
     stubs = code_mode.read_tool_file(fileName="servers/youtube.pyi")
     assert "def search(" in stubs
