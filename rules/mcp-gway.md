@@ -28,3 +28,7 @@ value = result["key"]  # brackets, not dot
 | Skipping `listToolFiles`                | Always discover first when unsure         |
 | `executeToolCode` before `readToolFile` | Confirm signature first                   |
 | Assuming cross-call state               | Every call is isolated                    |
+
+### NON NEGOTIABLE RULES
+
+- Use this tools and mcp listing proactively
