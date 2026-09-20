@@ -1,37 +1,21 @@
-# IMPLEMENTATION_PLAN — Antigravity CLI Plugin Parity (SPEC-ANTIGRAVITY-001)
+# IMPLEMENTATION_PLAN — Server Naming Capitalization Normalization (SPEC-SERVER-CAPS-001)
 
-**Spec:** `docs/specs/50_archive/SPEC-ANTIGRAVITY-001.md`
-**Proposal:** `docs/specs/40_workspace/engineering/PROPOSED_CHANGES.md`
-**Execution Mode:** `single`
-**Domains:** `[engineering]`
-**Owner:** vasquez (CTO)
+**Spec Reference:** `SPEC-SERVER-CAPS-001`  
+**Execution Mode:** `single`  
+**Owner:** vasquez (CTO)  
+**Date:** 2026-09-19  
 
 ---
 
 ## Steps & Order
 
-1. **Step 1: Manifest & Config** (REQ-F-001, REQ-F-002, REQ-F-006)
-   - Update `plugins/antigravity/plugin.json` (valid schema, name `mcp-gateway`, version 2.8.0)
-   - Format `plugins/antigravity/mcp_config.json` (serverUrl loopback, secret-free)
-
-2. **Step 2: Hooks & Reinjection** (REQ-F-005)
-   - Fix `plugins/antigravity/hooks.json` to Antigravity schema (`{"mcp-gateway-reinject": {"PreInvocation": [...]}}`)
-   - Harden `plugins/antigravity/scripts/reinject.sh` for POSIX execution, transcript parsing, MARKER dedupe, chmod +x
-
-3. **Step 3: Guidance & Rules** (REQ-F-004)
-   - Create `plugins/antigravity/rules/AGENTS.md` containing `<!-- MCP-GWAY v2.8.0 -->`, 4-step order, Starlark calling convention, anti-patterns
-
-4. **Step 4: Skill Bundling** (REQ-F-003)
-   - Create `plugins/antigravity/skills/mcp-gway/SKILL.md` matching root skill
-
-5. **Step 5: Documentation** (REQ-F-007)
-   - Create `plugins/antigravity/INSTALL.md` with workspace/global installation, verify matrix, troubleshooting, rollback
-
-6. **Step 6: Automated Testing & Verification** (REQ-NF-001, REQ-NF-002, REQ-NF-003)
-   - Create `tests/test_antigravity_plugin.py` validating manifest, mcp_config, hooks, reinject dedupe, rules marker, skill, no secrets, no PII
-   - Run `uv run pytest -v tests/test_antigravity_plugin.py`
-   - Run full suite `uv run pytest` + `uv run ruff check` + `uv run ruff format --check`
-
-7. **Step 7: Quality Gate & Handoff**
-   - Update `TEST_MATRIX.md`
-   - Produce Quality Gate Report and `HANDOFF.md`
+| Step | Target File | Action | Evidence / Verification |
+|---|---|---|---|
+| **1** | `src/mcp_gway/code_mode.py` | Add `to_pascal_case_identifier(name: str) -> str` | `pytest tests/test_code_mode.py::test_to_pascal_case_identifier` |
+| **2** | `src/mcp_gway/code_mode.py` | Update `_inject_tools` with dual binding | `pytest tests/test_code_mode.py::test_sandbox_has_server_structs` |
+| **3** | `src/mcp_gway/code_mode.py` | Update `refresh` to automatically manage capitalized aliases | `pytest tests/test_code_mode.py::test_refresh_automatic_capitalization` |
+| **4** | `src/mcp_gway/registry.py` | Update `_generate_pyi` stub comments with capitalized server name | `pytest tests/test_registry.py::test_pyi_usage_comment_capitalized` |
+| **5** | `src/mcp_gway/gateway.py` | Update tool schema docstrings with capitalized examples | Code inspection + schema validation |
+| **6** | `tests/test_code_mode.py` | Add comprehensive unit & integration tests | `pytest tests/test_code_mode.py` |
+| **7** | `tests/test_registry.py` | Add test asserting PascalCase in `.pyi` header | `pytest tests/test_registry.py` |
+| **8** | Full Suite & Linter | Run `pytest -v`, `ruff check`, `ruff format --check` | 100% green |

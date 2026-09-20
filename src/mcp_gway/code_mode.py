@@ -39,6 +39,30 @@ def _validate_code(code: str) -> None:
             )
 
 
+_PASCAL_SPLIT_RE = re.compile(r"[^a-zA-Z0-9]+")
+
+
+def to_pascal_case_identifier(name: str) -> str:
+    """Normalize a server name into a valid PascalCase Starlark identifier.
+
+    Examples:
+        'filesystem' -> 'Filesystem'
+        'mcp-gateway_gateway' -> 'McpGatewayGateway'
+        'my_server' -> 'MyServer'
+        'server-1' -> 'Server1'
+        '123server' -> '_123Server'
+    """
+    clean = re.sub(r"([0-9]+)", r" \1 ", name)
+    clean = _PASCAL_SPLIT_RE.sub(" ", clean).strip()
+    if not clean:
+        return "_Server"
+    words = clean.split()
+    pascal = "".join(w[:1].upper() + w[1:] for w in words)
+    if pascal and pascal[0].isdigit():
+        pascal = f"_{pascal}"
+    return pascal
+
+
 class CodeMode:
     def __init__(
         self,
@@ -71,12 +95,16 @@ class CodeMode:
         """Inject MCP tool access into the sandbox.
 
         Adds:
-        - Server structs for each CodeMode server (e.g., filesystem.read_file(...))
+        - Server structs for each CodeMode server with dual bindings
+          (e.g., Filesystem.read_file(...) and backward-compatible filesystem.read_file(...)).
         """
         for server_name in self._code_mode_servers():
             try:
                 struct = self.server_factory.make_server_struct(server_name)
                 self.sandbox.inject_server(server_name, struct)
+                cap_name = to_pascal_case_identifier(server_name)
+                if cap_name != server_name:
+                    self.sandbox.inject_server(cap_name, struct)
             except Exception as e:  # FEAT-007 (BR-114): degradation is visible
                 self._record_skip(server_name, e)
 
@@ -105,19 +133,37 @@ class CodeMode:
                 pass
 
     def refresh(self) -> None:
-        """Re-sync sandbox servers with the registry (add new, drop removed)."""
-        current = set(self._code_mode_servers())
+        """Re-sync sandbox servers with the registry with automatic capitalization."""
+        current_servers = self._code_mode_servers()
+        # Build map of all active aliases -> original server_name
+        current_aliases: dict[str, str] = {}
+        for s in current_servers:
+            current_aliases[s] = s
+            cap = to_pascal_case_identifier(s)
+            if cap != s:
+                current_aliases[cap] = s
+
         known = set(self.sandbox._modules.keys())
-        for gone in known - current:
+        for gone in known - set(current_aliases.keys()):
             self.sandbox._modules.pop(gone, None)
-        for name in list(known & set(self.registry.list()) - current):
+        for name in list(
+            known & set(self.registry.list()) - set(current_aliases.keys())
+        ):
             self.sandbox._modules.pop(name, None)
-        for name in current - known:
-            try:
-                struct = self.server_factory.make_server_struct(name)
-                self.sandbox.inject_server(name, struct)
-            except Exception as e:  # FEAT-007 (BR-114): degradation is visible
-                self._record_skip(name, e)
+
+        for name in current_servers:
+            cap_name = to_pascal_case_identifier(name)
+            needs_inject = (name not in self.sandbox._modules) or (
+                cap_name != name and cap_name not in self.sandbox._modules
+            )
+            if needs_inject:
+                try:
+                    struct = self.server_factory.make_server_struct(name)
+                    self.sandbox.inject_server(name, struct)
+                    if cap_name != name:
+                        self.sandbox.inject_server(cap_name, struct)
+                except Exception as e:  # FEAT-007 (BR-114): degradation is visible
+                    self._record_skip(name, e)
 
     def _tool_file_names(self, server: str) -> list[str]:
         """Sanitized per-tool file stems for tool-level VFS (callable names)."""

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from mcp_gway.code_mode import CodeMode
+from mcp_gway.code_mode import CodeMode, to_pascal_case_identifier
 from mcp_gway.models import MCPServerConfig, ToolInfo
 from mcp_gway.registry import Registry
 
@@ -76,12 +76,64 @@ def test_get_tool_docs_unknown_tool(code_mode):
 # --- Server struct injection ---
 
 
+def test_to_pascal_case_identifier():
+    assert to_pascal_case_identifier("filesystem") == "Filesystem"
+    assert to_pascal_case_identifier("mcp-gateway_gateway") == "McpGatewayGateway"
+    assert to_pascal_case_identifier("my_server") == "MyServer"
+    assert to_pascal_case_identifier("server-1") == "Server1"
+    assert to_pascal_case_identifier("123server") == "_123Server"
+    assert to_pascal_case_identifier("") == "_Server"
+
+
 def test_sandbox_has_server_structs(code_mode):
-    """The sandbox should have server structs injected."""
+    """The sandbox should have both original and PascalCase server structs injected."""
     assert "youtube" in code_mode.sandbox._modules
+    assert "Youtube" in code_mode.sandbox._modules
     struct = code_mode.sandbox._modules["youtube"]
     assert hasattr(struct, "search")
     assert hasattr(struct, "get_video")
+    struct_cap = code_mode.sandbox._modules["Youtube"]
+    assert hasattr(struct_cap, "search")
+    assert hasattr(struct_cap, "get_video")
+
+
+def test_execute_code_with_capitalized_server_struct(code_mode, monkeypatch):
+    """Execute code that uses the capitalized server struct (e.g. Youtube.search)."""
+
+    async def mock_call_tool_async(config, tool_name, arguments):
+        return {"query": arguments.get("query", ""), "items": []}
+
+    monkeypatch.setattr(
+        code_mode.server_factory, "_call_tool_async", mock_call_tool_async
+    )
+    result = json.loads(
+        code_mode.execute_tool_code('result = Youtube.search(query="test")')
+    )
+    assert result["result"]["query"] == "test"
+    assert result["logs"] == []
+
+
+def test_refresh_automatic_capitalization(tmp_path):
+    """Calling refresh() should automatically inject PascalCase and lowercase aliases for new servers."""
+    reg = Registry(servers_dir=tmp_path / "servers")
+    cm = CodeMode(reg)
+    assert "my_service" not in cm.sandbox._modules
+    assert "MyService" not in cm.sandbox._modules
+
+    reg.add(
+        MCPServerConfig(
+            name="my_service", type="remote", url="https://example.com/mcp"
+        ),
+        [ToolInfo(name="ping", description="ping service")],
+    )
+    cm.refresh()
+    assert "my_service" in cm.sandbox._modules
+    assert "MyService" in cm.sandbox._modules
+
+    reg.remove("my_service")
+    cm.refresh()
+    assert "my_service" not in cm.sandbox._modules
+    assert "MyService" not in cm.sandbox._modules
 
 
 def test_sandbox_no_call_tool(code_mode):

@@ -206,13 +206,16 @@ class Registry:
     def _generate_pyi(self, config: MCPServerConfig, tools: list[ToolInfo]) -> str:
         import re as _re
 
+        from mcp_gway.code_mode import to_pascal_case_identifier
+
         name = config.name
+        cap_name = to_pascal_case_identifier(name)
         lines = [
             f"# servers/{name}.pyi",
-            f"# Usage: {name}.tool_name(param=value)",
+            f"# Usage: {cap_name}.tool_name(param=value)",
             f'# For detailed docs: use getToolDocs(server="{name}", tool="tool_name")',
             "# Note: hyphenated MCP names are exposed sanitized (hyphens -> underscores).",
-            "# Use sanitized names in executeToolCode as Server.tool_name(...).",
+            f"# Use sanitized names in executeToolCode as {cap_name}.tool_name(...).",
             "",
         ]
         for tool in tools:
