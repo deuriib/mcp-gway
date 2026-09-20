@@ -317,6 +317,7 @@ def add(
 def remove(name: str) -> None:
     """Remove an MCP server and its stored tokens."""
     registry = _get_registry()
+    name = _resolve_saved_name(registry, name)
     try:
         registry.remove(name)
         tokens_dir = Path.home() / ".config" / "mcp-gway" / "tokens"
@@ -336,6 +337,7 @@ def remove(name: str) -> None:
 def update(name: str, tools: str) -> None:
     """Update tools for an existing server."""
     registry = _get_registry()
+    name = _resolve_saved_name(registry, name)
     tool_list = [ToolInfo(name=t.strip(), description="") for t in tools.split(",")]
     try:
         registry.update(name, tool_list)
@@ -374,6 +376,7 @@ def list_servers() -> None:
 def inspect(name: str) -> None:
     """Show tool signatures for a server."""
     registry = _get_registry()
+    name = _resolve_saved_name(registry, name)
     try:
         content = registry.read_pyi(name)
         click.echo(content)
@@ -634,12 +637,22 @@ def serve(
 def _resolve_saved_name(registry: Registry, wanted: str) -> str:
     """Resolve a CLI-given server name against saved stems, case-insensitively.
 
-    Exact match wins; otherwise the first casefold match wins. Falls back to
-    the raw `wanted` so the caller's existing not-found warning path holds.
+    Exact match wins; then canonical PascalCase match wins; then casefold
+    match wins. Falls back to the raw `wanted` so the caller's existing
+    not-found warning path holds.
     """
     saved = registry.list()
     if wanted in saved:
         return wanted
+    from mcp_gway.code_mode import to_pascal_case_identifier
+
+    try:
+        canonical = to_pascal_case_identifier(wanted)
+        if canonical in saved:
+            return canonical
+    except Exception:
+        pass
+
     lowered = wanted.casefold()
     for stem in saved:
         if stem.casefold() == lowered:

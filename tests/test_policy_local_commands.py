@@ -32,6 +32,7 @@ def test_ac012_cli_add_local(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr("mcp_gway.cli.discover_tools", _mock)
     monkeypatch.setattr("mcp_gway.core.discover_tools", _mock)
+    monkeypatch.setenv("HOME", str(tmp_path))
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
         result = runner.invoke(

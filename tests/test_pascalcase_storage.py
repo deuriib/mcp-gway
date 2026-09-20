@@ -208,3 +208,50 @@ def test_refresh_case_insensitive_name(tmp_path, monkeypatch) -> None:
     result = runner.invoke(C.main, ["refresh", "myserver"])
     assert result.exit_code == 0, result.output
     assert "Refreshed MyServer" in result.output
+
+
+# REQ-F-004 — case-insensitive CLI management commands
+def test_remove_case_insensitive_and_delimiter(tmp_path, monkeypatch) -> None:
+    reg = _registry(tmp_path, monkeypatch)
+    _seed(reg, "MyServer")
+    runner = CliRunner()
+    result = runner.invoke(C.main, ["remove", "my-server"])
+    assert result.exit_code == 0, result.output
+    assert "Removed MyServer." in result.output
+    assert not (tmp_path / "servers" / "MyServer.json").exists()
+
+
+def test_inspect_case_insensitive_and_delimiter(tmp_path, monkeypatch) -> None:
+    reg = _registry(tmp_path, monkeypatch)
+    _seed(reg, "MyServer")
+    runner = CliRunner()
+    result = runner.invoke(C.main, ["inspect", "my_server"])
+    assert result.exit_code == 0, result.output
+    assert "def ping(" in result.output
+
+
+def test_update_case_insensitive_and_delimiter(tmp_path, monkeypatch) -> None:
+    reg = _registry(tmp_path, monkeypatch)
+    _seed(reg, "MyServer")
+    runner = CliRunner()
+    result = runner.invoke(C.main, ["update", "myserver", "--tools", "pong"])
+    assert result.exit_code == 0, result.output
+    assert "Updated MyServer with 1 tools." in result.output
+    assert "def pong(" in reg.read_pyi("MyServer")
+
+
+# REQ-F-003 — refresh renames all-caps / UPPER_SNAKE stems
+def test_refresh_renames_all_caps(tmp_path, monkeypatch) -> None:
+    _registry(tmp_path, monkeypatch)
+    _mock_refresh(monkeypatch)
+    from mcp_gway.registry import Registry as R
+
+    reg = R(servers_dir=tmp_path / "servers")
+    _seed(reg, "GITHUB")
+    runner = CliRunner()
+    result = runner.invoke(C.main, ["refresh"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "servers" / "Github.json").exists()
+    assert (tmp_path / "servers" / "Github.pyi").exists()
+    assert not (tmp_path / "servers" / "GITHUB.json").exists()
+    assert "Renamed 'GITHUB' → 'Github'" in result.output
