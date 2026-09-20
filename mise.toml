@@ -23,7 +23,6 @@
 [tools]
 python = "3.12.14"
 uv = "0.12.12"
-ruff = "0.16.4"
 
 [tasks.dev]
 description = "Setup dev env: sync deps + install pre-commit hooks"
