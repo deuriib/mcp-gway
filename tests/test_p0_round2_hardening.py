@@ -134,7 +134,7 @@ def test_round2_dns_timeout_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None
         return ["93.184.216.34"]
 
     monkeypatch.setattr(M.asyncio, "to_thread", _slow_to_thread)  # type: ignore[attr-defined]
-    monkeypatch.setattr(M, "_SSRF_DNS_TIMEOUT", 0.05)
+    monkeypatch.setattr(M, "SSRF_DNS_TIMEOUT", 0.05)
     with pytest.raises(ValueError, match="dns|timeout|not allowed|blocked"):
         _aio.run(M._aresolve_host_ips("api.example.com", use_cache=False))
 
