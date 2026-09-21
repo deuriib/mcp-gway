@@ -83,7 +83,7 @@ Notes:
    `mcp-gateway` with `status: active`.
 3. `opencode api get "/api/skill?location[directory]=<your-project>"` lists
    `mcp-gway` (single skill; ID is path-derived, frontmatter `name` is display only).
-4. Start any session — the system prompt contains `MCP-GWAY v2.11.0`
+4. Start any session — the system prompt contains `MCP-GWAY v2.11.2`
    (Gateway Protocol card, deduped by marker).
 5. Gateway + MCP are live:
 
