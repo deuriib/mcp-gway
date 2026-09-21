@@ -1,45 +1,41 @@
-# Release Notes: Universal Casing Ingestion & Canonical PascalCase Exposure
+# Release Notes: Test Suite Performance & Zero-Hang Optimization
 
 **Date:** 2026-09-20  
-**Release Manager:** vasquez (CTO, engineering chain owner)  
-**Specs Included:** `SPEC-CASING-001` (Universal Casing Ingestion, Auto-Migration on Refresh & Canonical PascalCase Exposure)  
+**Release Manager:** orchestrator / operations owner function  
+**Specs Included:** `SPEC-TEST-PERF-001` (Test Suite Performance & Zero-Hang Optimization)  
 **Domains-Touched:** [engineering, automation]  
-**Ship Type:** feature (core CLI + Code Mode normalization)  
+**Ship Type:** rollout (CI & test performance optimization)  
 
 ---
 
 ## Highlights
 
-- **Universal Casing Ingestion (`to_pascal_case_identifier`)**:
-  - Developers can add servers using any naming style (`snake_case`, `kebab-case`, `camelCase`, `ALL_CAPS`, `UPPER_SNAKE`, `mixed`).
-  - `to_pascal_case_identifier` intelligently splits camelCase word boundaries (`myServer` → `MyServer`), delimiters (`my-server` → `MyServer`), acronyms / uppercase words (`GITHUB` → `Github`, `WEATHER_SERVICE` → `WeatherService`, `AWS_S3` → `AwsS3`), and protects leading digits (`123server` → `_123Server`).
-- **Transparent Case-Insensitive CLI Management**:
-  - `mcp-gway remove <name>`, `inspect <name>`, `update <name>`, and `refresh <name>` resolve server names case-insensitively (exact match first, then canonical PascalCase, then casefold). Users never encounter `Server not found` errors due to casing discrepancies.
-- **Automated Refresh Migration**:
-  - Running `mcp-gway refresh` automatically detects legacy or non-canonical server stems and migrates them (`.json`, `.pyi`, internal `config.name`, and token files) to canonical PascalCase atomically, with collision safety.
-- **Verification & Parity**:
-  - 562/562 unit and integration tests passing (`pytest`).
+- **Elimination of SSE Disconnect 300s Hang (`test_ac005_sse_disconnect_counted`)**:
+  - Injected scoped monkeypatch of `MAX_IDLE_SECONDS = 0.05` in `tests/test_obsfeat007.py`.
+  - The SSE idle generator exits cleanly in 50ms rather than blocking on the 300s default idle timeout. Test duration dropped from ~300.0s to 0.06s.
+- **Elimination of 30s Sandbox Teardown Delay**:
+  - Bounded stub callback `time.sleep(10)` to 0.8s and 0.5s in `tests/test_sandbox.py` and `tests/test_edgecases_sandbox.py`.
+  - Exiting the sandbox `ThreadPoolExecutor(max_workers=1)` context manager no longer blocks thread shutdown for 10s per test. Tests execute in ~0.8s and ~0.5s.
+- **DNS Timeout Monkeypatch Alignment**:
+  - Aligned monkeypatch in `tests/test_p0_round2_hardening.py` to target `SSRF_DNS_TIMEOUT` (instead of `_SSRF_DNS_TIMEOUT`), dropping execution time from 3.0s to 0.05s.
+- **Radical Test Suite Acceleration**:
+  - Entire suite of 562 tests runs in **8.98 seconds** (down from > 340 seconds / 5.5 minutes).
+  - 100% pass rate (562/562 passed).
   - 100% clean formatting and linting (`ruff`).
-  - Unconditional OPEN verdict across all 7 Quality Gate reviews.
+  - Zero modifications to runtime production code in `src/mcp_gway/`.
 
 ---
 
 ## Changes
 
-### Features
-- Upgraded `to_pascal_case_identifier` in `src/mcp_gway/code_mode.py` to handle all casing variants.
-- Enhanced `_resolve_server` in `src/mcp_gway/code_mode.py` to match canonical PascalCase identifiers.
-- Enhanced `_resolve_saved_name` in `src/mcp_gway/cli.py` to support canonical PascalCase matching and wired it into `remove`, `inspect`, and `update`.
-- Integrated automated migration on `mcp-gway refresh` via `_canonicalize_saved_name`.
-
-### Tests & Quality
-- Added 16 dedicated unit and integration tests in `tests/test_pascalcase_storage.py`.
-- Isolated test environment in `tests/test_policy_local_commands.py` to prevent user config pollution.
-- All 562 tests passing cleanly in CI.
+### Fixes
+- `tests/test_obsfeat007.py`: Added `monkeypatch.setattr("mcp_gway.gateway.MAX_IDLE_SECONDS", 0.05)` to `test_ac005_sse_disconnect_counted`.
+- `tests/test_sandbox.py`: Bounded stub sleep in `test_execute_slow_callback_raises_timeout` and `test_execute_timeout_error_message_includes_details`.
+- `tests/test_edgecases_sandbox.py`: Bounded stub sleep in `test_sandbox_timeout`.
+- `tests/test_p0_round2_hardening.py`: Fixed monkeypatch symbol in `test_round2_dns_timeout_fail_closed`.
 
 ---
 
 ## Rollback / Undo
 
-- **Commit Revert**: `git revert c728cd7 412bc6f`.
-- **Filesystem**: Existing PascalCase files remain fully backwards-compatible with older gateway releases.
+- Revert commit via `git revert <commit-hash>`.

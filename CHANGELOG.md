@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **perf(tests)**: optimize test suite execution and eliminate SSE disconnect hang (SPEC-TEST-PERF-001). Monkeypatched `MAX_IDLE_SECONDS` to 0.05s in `test_ac005_sse_disconnect_counted` to remove a 300-second ASGI idle wait. Bounded mock thread sleeps in sandbox timeout tests (`test_sandbox.py`, `test_edgecases_sandbox.py`) from 10s to 0.8s/0.5s to prevent `ThreadPoolExecutor` shutdown lag. Fixed DNS timeout monkeypatch target to `SSRF_DNS_TIMEOUT` in `test_p0_round2_hardening.py`. Total test suite execution time reduced from >340s to ~8.9s across all 562 tests (100% pass rate, zero production code changes).
 - **feat(casing)**: universal casing ingestion, auto-migration on refresh, and canonical PascalCase exposure (SPEC-CASING-001, ADR-013). Upgraded `to_pascal_case_identifier` to cleanly parse `camelCase`, `ALL_CAPS` acronyms (`GITHUB` → `Github`, `WEATHER_SERVICE` → `WeatherService`), delimiters, and numbers. Implemented case-insensitive server lookup across `remove`, `inspect`, `update`, and `refresh`. `mcp-gway refresh` automatically migrates legacy and non-canonical servers to canonical PascalCase files and tokens.
 
 ## v2.5.0 (2026-09-17)
