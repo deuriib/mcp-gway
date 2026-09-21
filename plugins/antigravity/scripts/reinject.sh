@@ -51,7 +51,12 @@ value = result["key"]  # brackets, not dot
 | Guessing tool names                     | Stub from `readToolFile` is authoritative |
 | Skipping `listToolFiles`                | Always discover first when unsure         |
 | `executeToolCode` before `readToolFile` | Confirm signature first                   |
-| Assuming cross-call state               | Every call is isolated                    |'
+| Assuming cross-call state               | Every call is isolated                    |
+
+## NON Negotiable
+
+- For mcps not listed in your context, use gateway mcp instead, to list and execute mcp tools, this is no negotiable.
+'
 
 if [ "$TRANSCRIPT" != '' ] && [ -f "$TRANSCRIPT" ] && grep -F -q -- "$MARKER" "$TRANSCRIPT"; then
     printf '%s\n' '{"injectSteps": []}'
