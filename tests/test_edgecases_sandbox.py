@@ -45,7 +45,7 @@ def test_sandbox_timeout():
 
     class Slow:
         def spin(self):
-            time.sleep(10)
+            time.sleep(0.5)
             return 1
 
     sb.inject_server("slowedge", Slow())

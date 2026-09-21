@@ -54,7 +54,7 @@ def test_execute_slow_callback_raises_timeout():
 
     class SlowServer:
         def slow_method(self):
-            time.sleep(10)
+            time.sleep(0.8)
             return "done"
 
     sandbox = StarlarkSandbox()
@@ -82,7 +82,7 @@ def test_execute_timeout_error_message_includes_details():
 
     class Blocker:
         def block(self):
-            time.sleep(10)
+            time.sleep(0.8)
 
     sandbox = StarlarkSandbox()
     sandbox.inject_server("b", Blocker())
