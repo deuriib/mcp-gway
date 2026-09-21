@@ -248,7 +248,9 @@ async def test_ac004_discovery_observed_ok_and_error(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ac005_sse_disconnect_counted(tmp_path: Path, caplog) -> None:
+def test_ac005_sse_disconnect_counted(
+    tmp_path: Path, caplog, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """WU-003 / AC-005: SSE disconnect increments the counter.
 
     Uses the ASGI TestClient's ``stream`` context manager.  When the context
@@ -256,6 +258,7 @@ def test_ac005_sse_disconnect_counted(tmp_path: Path, caplog) -> None:
     ``finally`` block (reason = ``idle`` because no messages are sent).
     A short poll accommodates the event-loop scheduling delay.
     """
+    monkeypatch.setattr("mcp_gway.gateway.MAX_IDLE_SECONDS", 0.05)
     gw = Gateway(_make_registry(tmp_path), host="127.0.0.1")
     c = TestClient(gw.app)
     with caplog.at_level(logging.WARNING, logger="mcp_gway.gateway"):
