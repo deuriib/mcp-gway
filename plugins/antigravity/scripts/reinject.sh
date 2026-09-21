@@ -53,7 +53,7 @@ value = result["key"]  # brackets, not dot
 | `executeToolCode` before `readToolFile` | Confirm signature first                   |
 | Assuming cross-call state               | Every call is isolated                    |
 
-## NON Negotiable
+## MCP Rules
 
 - For mcps not listed in your context, use gateway mcp instead, to list and execute mcp tools, this is no negotiable.
 '
