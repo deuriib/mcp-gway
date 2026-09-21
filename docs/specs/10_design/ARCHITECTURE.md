@@ -1,7 +1,7 @@
 # Architecture Contract: Professional Performance Audit — MCP Gateway
 
 **Owner:** vasquez (CTO)
-**Version:** v3
+**Version:** v4
 **Last Updated:** 2026-09-20
 **Domains-Touched:** [engineering, automation]
 
@@ -98,3 +98,24 @@ Invariants (v3 additions):
 - INV-011: Server names in storage (`servers/<Name>.json|pyi`) and runtime configs are strictly canonical PascalCase.
 - INV-012: CLI server lookup is case-insensitive across all management commands (`remove`, `inspect`, `update`, `refresh`).
 - INV-013: Auto-migration on `refresh` never overwrites upon collision (`FileExistsError` preserves original and warns).
+
+## Test Isolation & Zero-Hang Performance Subsystem (v4 delta — SPEC-TEST-PERF-001)
+
+| Component | Responsibility | Interface |
+|-----------|---------------|-----------|
+| `tests/test_obsfeat007.py` | SSE idle disconnect test isolation | `monkeypatch.setattr(mcp_gway.gateway, "MAX_IDLE_SECONDS", 0.05)` |
+| `tests/test_sandbox.py` | Starlark callback timeout test bounding | Bounded callback sleep (0.8s) exceeding timeout (0.3s/0.5s) |
+| `tests/test_edgecases_sandbox.py` | Infinite loop / slow callback timeout test bounding | Bounded callback sleep (0.8s) exceeding timeout (0.5s) |
+| `tests/test_p0_round2_hardening.py` | Asynchronous DNS timeout fail-closed test isolation | `monkeypatch.setattr(mcp_gway.models, "SSRF_DNS_TIMEOUT", 0.05)` |
+| `src/mcp_gway/` | Production codebase integrity | 0 modifications; production timeouts and behaviors remain default |
+
+### Data Flow & Lifecycle:
+1. **Fixture Scoping**: Test cases declare `monkeypatch: pytest.MonkeyPatch` fixture.
+2. **Deterministic Mutation**: Test dynamically overrides slow/idle timeout thresholds (`MAX_IDLE_SECONDS`, `SSRF_DNS_TIMEOUT`) directly on the target imported module before invoking the tested coroutine or client request.
+3. **Execution & Bounded Teardown**: Async tasks and worker threads complete within bounded windows (< 0.2s for timeouts, < 0.8s for thread termination).
+4. **Guaranteed Restoration**: Pytest fixture teardown automatically restores all monkeypatched attributes to original production values, preventing cross-test pollution or state leakage.
+
+### Invariants (v4 additions):
+- INV-014: Production code under `src/mcp_gway/` remains strictly unaltered; performance and zero-hang optimizations are isolated to test files.
+- INV-015: Non-default test timeouts must use pytest's `monkeypatch` fixture to ensure isolated execution without leaking global state across test cases.
+- INV-016: Threaded stub callbacks in timeout verification must use bounded execution times ($T_{sleep} \le T_{timeout} + 0.5\text{s}$) to prevent blocking ThreadPoolExecutor teardown.
