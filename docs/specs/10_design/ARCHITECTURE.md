@@ -25,7 +25,7 @@ Principio: medir con excelencia y dedicación; optimizar solo con datos.
 | Component | Responsibility | Interface |
 |-----------|---------------|-----------|
 | `bench_perf.py` (nuevo, `docs/specs/30_delivery/`) | Orquesta carga concurrente contra 5 paths, perfila Code Mode/sandbox, mide recursos | CLI: `--target-url`, `--concurrency`, `--duration`, `--warmup`, `--output`; salida JSON + MD |
-| `src/mcp_gateway/gateway.py` | HTTP/SSE server (Starlette + uvicorn): 7 Route entries, `/mcp` GET+POST, `/health`, `/ready`, `/live`, `/metrics` | ASGI app; `_mcp_post` handler único para POST `/mcp` y `/mcp/messages` |
+| `src/mcp_gateway/gateway.py` | HTTP/SSE server (Starlette + uvicorn): `mcp_routes` condicional por `transport` (`gateway.py:320-340`) — **http**: `POST /mcp` + `GET /mcp` → 405 `Allow: POST`, 6 entradas; **sse**: `GET /mcp` (SSE) + `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages`, 7 entradas; probes `/health`, `/ready`, `/live`, `/metrics` siempre | ASGI app por proceso con rutas exclusivas por transporte (`app.state.transport`); `_mcp_post` handler único para POST `/mcp` (http) y `/mcp/messages` (sse) |
 | `src/mcp_gateway/code_mode.py` | 4 meta-tools orchestrator: `listToolFiles`, `readToolFile`, `getToolDocs`, `executeToolCode` | Starlark sandbox via `sandbox.py`; `Server.tool_name(param=value)` |
 | `src/mcp_gateway/sandbox.py` | Starlark sandbox hermético (L1-L4 validation, timeout, ACL) | `execute(code: str) -> {"result": ..., "logs": [...]}` |
 | `src/mcp_gateway/core/client.py` | `create_client_transport`, `discover_tools`, `refresh_server` | Auto-detección transporte: streamable-http → sse → http |

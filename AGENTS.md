@@ -29,7 +29,7 @@ src/mcp_gway/
 ├── server_proxy.py      # MCP server wrapper for sandbox
 ├── server_factory.py    # Server structs + sync call wrappers for the sandbox
 ├── code_mode.py         # 4 meta-tools orchestrator
-├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), headless, local-first 127.0.0.1 + CSP — 5 paths lógicos vivos: /mcp (GET+POST), /health, /ready, /live, /metrics (gateway.py:194-200, 7 Route entries; /mcp/messages es alias POST al mismo handler _mcp_post, no endpoint independiente)
+├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), headless, local-first 127.0.0.1 + CSP — rutas /mcp por transporte (gateway.py:320-340, mcp_routes condicional; app.state.transport; sin fallback): http = POST /mcp (GET → 405 Allow: POST) + /health, /ready, /live, /metrics → 6 entradas; sse = GET /mcp (SSE) + POST /mcp → 405 Allow: GET + /mcp/messages (alias POST al handler _mcp_post, no endpoint independiente) + probes → 7 entradas
 ├── cli.py               # CLI commands (add/remove/update/list/inspect/refresh/serve --transport stdio|http|sse/mcp-hidden/local-unrestricted --host 127.0.0.1)
 ├── oauth.py             # OAuth2 support (dynamic registration, token storage); usa httpx2 (dependencia directa)
 ├── transport.py         # Shim deprecado → mcp_gway.core.transport (DeprecationWarning; eliminar en next major)
@@ -75,7 +75,7 @@ tests/
 docs/
 ├── specs/SPEC-UI-001.md (+ SCENARIOS/ACCEPTANCE)  # SUPERSEDED 2026-09-10 (retirado; headless, CLI-only)
 ├── adr/ADR-007-release-workflow-hybrid.md, ADR-008-catalog-mcp-001.md
-├── architecture/adr-009-dynamic-local-commands.md, adr-010-unified-serve.md
+├── architecture/adr-009-dynamic-local-commands.md, adr-010-unified-serve.md (referenciado, ausente en repo; enmienda ADR-010 AC-05 2026-09-22: http/sse comparten el entrypoint `_serve_http`, NO la app — rutas `/mcp` separadas por transporte, sin fallback)
 ├── sbtdd/specs/feat-006-dynamic-local-commands/   # spec + scenarios + acceptance + verify
 ├── superpowers/plans/                             # Planes fechados (históricos)
 └── superpowers/specs/2026-08-2X-*                 # Specs de diseño (históricos)
@@ -145,7 +145,7 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
 
 ### Endpoints vivos + Retiro dashboard/catalog
 
-- **Vivos (v2.4.0):** `/mcp` (GET+POST), `/health`, `/ready`, `/live`, `/metrics` (`gateway.py:194-200`, 7 Route entries; `/mcp/messages` es alias POST al mismo handler `_mcp_post`, no endpoint independiente). Gestión CLI-only.
+- **Vivos (v2.4.0; rutas `/mcp` por transporte, enmienda 2026-09-22):** probes `/health`, `/ready`, `/live`, `/metrics` siempre presentes; `/mcp` según `Gateway(registry, transport=...)` (`gateway.py:320-340`, `mcp_routes` condicional): **http** → `POST /mcp` (JSON-RPC) con `GET /mcp` → 405 `Allow: POST` = 6 entradas, `/mcp/messages` no existe (404); **sse** → `GET /mcp` (SSE) con `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages` alias POST al mismo handler `_mcp_post`, no endpoint independiente = 7 entradas. Sin fallback cruzado; `app.state.transport` expuesto. Gestión CLI-only.
 - **Retirados (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json` — borrar caché vieja manualmente).
 
 ### Registry (.pyi + .json) — Única fuente
@@ -176,6 +176,6 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
 
 ### SSE Transport
 
-- `GET /mcp` → SSE stream with `endpoint` event
-- `POST /mcp/messages?session_id=...` → JSON-RPC messages
+- Solo con `serve --transport sse` (`transport="sse"`): `GET /mcp` → SSE stream with `endpoint` event (bajo `http`, `GET /mcp` → 405 `Allow: POST`)
+- `POST /mcp/messages?session_id=...` → JSON-RPC messages (alias de `_mcp_post`; bajo `transport="http"` la ruta no existe → 404; sin fallback cruzado)
 - Session management via asyncio.Queue

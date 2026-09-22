@@ -156,7 +156,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `mcp-gway list` | List all connected servers |
 | `mcp-gway inspect` | Show tool signatures for a server |
 | `mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]` | Refresh connection and re-discover tools |
-| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). `http`/`sse` share `Gateway.app`; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` necesita `MCP_GWAY_ALLOW_REMOTE=1` |
+| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). Per-transport `/mcp` (apps separadas, sin fallback): `http` → `POST /mcp` only (6 routes; `GET` → 405 `Allow: POST`), `sse` → `GET /mcp` + `POST /mcp/messages` (7 routes; `POST` → 405 `Allow: GET`); probes shared; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` necesita `MCP_GWAY_ALLOW_REMOTE=1` |
 | `mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]` | DEPRECATED hidden alias: `serve --transport stdio` equiv `mcp` — mismo loop NDJSON y mismos args a `_serve_stdio`, modulo aviso de deprecacion en stderr (solo `mcp`). Prefer `command: [mcp-gway, serve, --transport, stdio]` for OpenCode `type: local` |
 | `mcp-gway local-unrestricted enable\|disable\|status` | Break-glass marker 72h (explicit only) — enable/remove, or status without side effects |
 
@@ -278,9 +278,9 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 │                        MCP Gateway v2.4.0                          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  CLI (click)              │  Gateway (Starlette + uvicorn, CSP)      │
-│  - add remote/local       │  - POST /mcp (JSON-RPC)                  │
-│  - remove/inspect/list    │  - GET  /mcp (SSE endpoint event)        │
-│  - refresh --auth         │  - POST /mcp/messages?session_id=... (alias) │
+│  - add remote/local       │  - POST /mcp (JSON-RPC)      [http]      │
+│  - remove/inspect/list    │  - GET  /mcp (SSE endpoint event)  [sse] │
+│  - refresh --auth         │  - POST /mcp/messages (alias) [sse]     │
 │  - serve --host 127.0.0.1 │  - GET  /health                          │
 │  (local-first default)    │  - GET  /ready, /live, /metrics           │
 ├──────────────────────────────────────────────────────────────────────┤
