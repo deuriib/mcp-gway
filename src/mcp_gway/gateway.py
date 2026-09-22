@@ -317,6 +317,11 @@ class Gateway:
             finally:
                 await gateway_self.aclose()
 
+        # WHY gated routes instead of omitting them: an absent route yields
+        # Starlette's plain-text 405/404; an explicit route answers with a JSON
+        # `detail` + RFC-correct `Allow`, so a client can discover which
+        # transport this process serves (405, not 404 — the path exists, the
+        # method is what's off-transport).
         if transport == "sse":
             mcp_routes = [
                 Route("/mcp", self._mcp_sse, methods=["GET"]),

@@ -77,6 +77,7 @@ chmod +x ~/.gemini/config/plugins/mcp-gateway/scripts/reinject.sh
 | Gateway unreachable (`Connection refused`) | Gateway server not running on port 8080 | Run `mcp-gway serve --transport http --port 8080` |
 | Hook script fails / not executed | Missing execute permission on `reinject.sh` | Run `chmod +x <plugin_dir>/scripts/reinject.sh` |
 | MCP tools not appearing in agent context | Non-loopback host or wrong URL | Verify `mcp_config.json` points to `http://127.0.0.1:8080/mcp` |
+| Tools lost, gateway logs `405 Allow: POST` on `GET /mcp` | SSE-only client against `--transport http` (routes are per-transport since v3.0.0, no fallback) | Restart the gateway with `mcp-gway serve --transport sse --port 8080` (SSE clients) or point the client at POST `/mcp` (streamable HTTP) |
 | Duplicate protocol messages in chat | Transcript path mismatch | Hook uses `transcriptPath` from Antigravity input to check for existing marker |
 
 ---

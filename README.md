@@ -280,7 +280,7 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 │  CLI (click)              │  Gateway (Starlette + uvicorn, CSP)      │
 │  - add remote/local       │  - POST /mcp (JSON-RPC)      [http]      │
 │  - remove/inspect/list    │  - GET  /mcp (SSE endpoint event)  [sse] │
-│  - refresh --auth         │  - POST /mcp/messages (alias) [sse]     │
+│  - refresh --auth         │  - POST /mcp/messages (alias) [sse]      │
 │  - serve --host 127.0.0.1 │  - GET  /health                          │
 │  (local-first default)    │  - GET  /ready, /live, /metrics           │
 ├──────────────────────────────────────────────────────────────────────┤
