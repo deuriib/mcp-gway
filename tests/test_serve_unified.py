@@ -58,7 +58,11 @@ def test_serve_unified_transport_option_gate(monkeypatch: Any) -> None:
         raise AssertionError("must not reach stdio")
 
     def _fail_http(
-        host: str, port: int, log_level: str | None, registry_dir: str | None
+        host: str,
+        port: int,
+        log_level: str | None,
+        registry_dir: str | None,
+        transport: str,
     ) -> None:
         raise AssertionError("must not reach http")
 
@@ -76,17 +80,22 @@ def test_serve_unified_transport_option_gate(monkeypatch: Any) -> None:
     called: dict[str, Any] = {}
 
     def _ok_http(
-        host: str, port: int, log_level: str | None, registry_dir: str | None
+        host: str,
+        port: int,
+        log_level: str | None,
+        registry_dir: str | None,
+        transport: str,
     ) -> None:
         called["host"] = host
         called["port"] = port
+        called["transport"] = transport
 
     monkeypatch.setattr(cli_mod, "_serve_http", _ok_http)
     r3 = runner.invoke(
         main, ["serve", "--transport", "http", "--host", "127.0.0.1", "--port", "9000"]
     )
     assert r3.exit_code == 0
-    assert called == {"host": "127.0.0.1", "port": 9000}
+    assert called == {"host": "127.0.0.1", "port": 9000, "transport": "http"}
 
 
 def test_serve_unified_local_first_intact(monkeypatch: Any) -> None:
@@ -104,8 +113,9 @@ def test_serve_unified_local_first_intact(monkeypatch: Any) -> None:
         )
 
 
-def test_serve_unified_http_sse_same_app(monkeypatch: Any) -> None:
-    """AC-05: http and sse start the same Gateway.app (no fork)."""
+def test_serve_unified_http_sse_distinct_routes(monkeypatch: Any) -> None:
+    """REQ-TRANSPORT-005: http and sse share one entrypoint but propagate
+    distinct transports, so each Gateway is built with its own route set."""
     src = inspect.getsource(cli_mod.serve.callback)
     assert "_serve_http" in src
     http_src = inspect.getsource(cli_mod._serve_http)
@@ -116,14 +126,18 @@ def test_serve_unified_http_sse_same_app(monkeypatch: Any) -> None:
     calls: list[str] = []
 
     def _fake_http(
-        host: str, port: int, log_level: str | None, registry_dir: str | None
+        host: str,
+        port: int,
+        log_level: str | None,
+        registry_dir: str | None,
+        transport: str,
     ) -> None:
-        calls.append(f"{host}:{port}")
+        calls.append(transport)
 
     monkeypatch.setattr(cli_mod, "_serve_http", _fake_http)
     assert runner.invoke(main, ["serve", "--transport", "http"]).exit_code == 0
     assert runner.invoke(main, ["serve", "--transport", "sse"]).exit_code == 0
-    assert len(calls) == 2
+    assert calls == ["http", "sse"]
 
 
 def test_serve_unified_stdout_pure_ndjson() -> None:
@@ -210,7 +224,11 @@ def test_serve_host_without_transport_flag_exits_2(monkeypatch: Any) -> None:
         raise AssertionError("must not reach stdio")
 
     def _fail_http(
-        host: str, port: int, log_level: str | None, registry_dir: str | None
+        host: str,
+        port: int,
+        log_level: str | None,
+        registry_dir: str | None,
+        transport: str,
     ) -> None:
         raise AssertionError("must not reach http")
 

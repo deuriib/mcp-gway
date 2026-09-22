@@ -259,7 +259,7 @@ def test_ac005_sse_disconnect_counted(
     A short poll accommodates the event-loop scheduling delay.
     """
     monkeypatch.setattr("mcp_gway.gateway.MAX_IDLE_SECONDS", 0.05)
-    gw = Gateway(_make_registry(tmp_path), host="127.0.0.1")
+    gw = Gateway(_make_registry(tmp_path), host="127.0.0.1", transport="sse")
     c = TestClient(gw.app)
     with caplog.at_level(logging.WARNING, logger="mcp_gway.gateway"):
         with c.stream("GET", "/mcp") as resp:

@@ -10,8 +10,8 @@ from mcp_gway.models import MCPServerConfig, ToolInfo
 from mcp_gway.registry import Registry
 
 
-def _gw(tmp_path):
-    return Gateway(Registry(servers_dir=tmp_path / "srv"))
+def _gw(tmp_path, transport: str = "http"):
+    return Gateway(Registry(servers_dir=tmp_path / "srv"), transport=transport)
 
 
 def _handler_value_error_plain():
@@ -244,7 +244,7 @@ def test_mcp_post_error_mapping_runtime(tmp_path, monkeypatch):
 
 
 def test_mcp_post_session_not_found(tmp_path):
-    gw = _gw(tmp_path)
+    gw = _gw(tmp_path, transport="sse")
     c = TestClient(gw.app)
     r = c.post(
         "/mcp/messages?session_id=nosuch",
@@ -254,19 +254,22 @@ def test_mcp_post_session_not_found(tmp_path):
 
 
 def test_mcp_post_alias_and_limits(tmp_path):
-    gw = _gw(tmp_path)
-    c = TestClient(gw.app)
-    r = c.post(
+    alias_gw = _gw(tmp_path, transport="sse")
+    alias_c = TestClient(alias_gw.app)
+    r = alias_c.post(
         "/mcp/messages",
         json={"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {}},
     )
     assert r.json()["result"] == {}
-    r = c.post(
+
+    limits_gw = _gw(tmp_path, transport="http")
+    limits_c = TestClient(limits_gw.app)
+    r = limits_c.post(
         "/mcp", content=b"not-json", headers={"content-type": "application/json"}
     )
     assert r.status_code == 400
     big = b"x" * 1048577
-    r = c.post(
+    r = limits_c.post(
         "/mcp",
         content=big,
         headers={"content-type": "application/json", "content-length": str(len(big))},

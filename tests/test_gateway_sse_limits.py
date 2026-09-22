@@ -34,7 +34,7 @@ def test_create_session_full_returns_429(tmp_path):
     import httpx2
 
     reg = Registry(servers_dir=tmp_path / "s2")
-    gw = Gateway(reg)
+    gw = Gateway(reg, transport="sse")
     # Fill to MAX_SESSIONS
     for i in range(128):
         gw._create_session(f"s-{i}")
