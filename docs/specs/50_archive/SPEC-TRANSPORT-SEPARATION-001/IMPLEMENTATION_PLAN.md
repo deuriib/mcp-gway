@@ -15,7 +15,7 @@
 | 3 | Migrar tests del contrato viejo: JSON-RPC → `POST /mcp` (http); alias `/mcp/messages`, SSE stream y límites 429 → gateway `transport="sse"` | `tests/test_gateway.py`, `tests/test_edgecases_gateway.py`, `tests/test_gateway_sse_limits.py`, `tests/test_obsfeat007.py`, `tests/test_p0_round2_hardening.py` | `uv run pytest -q` (14 FAIL actuales → 0) | 1h |
 | 4 | Reescribir AC-05 de `test_serve_unified` (mismo entrypoint, app separada por transporte) + fakes con firma `+transport` | `tests/test_serve_unified.py` | `tests/test_serve_unified.py::test_serve_unified_http_sse_distinct_routes` | 0.25h |
 | 5 | Actualizar contrato público (rutas por transporte, enmienda ADR-010) | `AGENTS.md`, `README.md`, `docs/specs/10_design/API_CONTRACTS.md`, `docs/specs/10_design/ARCHITECTURE.md` | diff docs + grep sin "comparten la app" | 0.5h |
-| 6 | Quality checks + TEST_MATRIX | `tests/`, `docs/specs/40_workspace/transport-separation/TEST_MATRIX.md` | `ruff check` + `ruff format --check` + `pytest -q` | 0.25h |
+| 6 | Quality checks + TEST_MATRIX | `tests/`, `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/TEST_MATRIX.md` | `ruff check` + `ruff format --check` + `pytest -q` | 0.25h |
 
 ## Order of Operations
 

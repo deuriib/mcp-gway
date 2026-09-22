@@ -3,7 +3,7 @@
 **Reviewer domain:** Quality Assurance (test adequacy + verification evidence)
 **Date:** 2026-09-22
 **Scope:** commit `bd2d11a` (tests) + `88f47fd` (src)
-**Packet:** `docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md` (reference-only, untouched)
+**Packet:** `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md` (reference-only, untouched)
 
 ## Verdict: **APPROVE**
 

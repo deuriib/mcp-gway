@@ -1,7 +1,7 @@
 # REVIEW-RISK — SPEC-TRANSPORT-SEPARATION-001
 
 **Reviewer role:** risk (blast radius, backward compatibility, operational/adoption risk — not code style, not exploit mechanics)
-**Packet:** docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md (reference-only)
+**Packet:** docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md (reference-only)
 **Scope:** 88f47fd, bd2d11a, dedf480, d42085f on `feat/separate-mcp-transport` vs parent 531cf3c
 **Date:** 2026-09-22
 

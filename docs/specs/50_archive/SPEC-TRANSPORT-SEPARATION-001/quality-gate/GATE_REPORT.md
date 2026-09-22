@@ -46,7 +46,7 @@ One condition at a time; the risk reviewer's conditional was surfaced to the dec
 - [x] Domain owner/specialist role understood: orchestrator dispatches; engineering owner = gate keeper; security owner signs the boundary change
 - [x] Execution mode declared: `subagents` (sequential degradation, same-thread harness; full wave, no min-gate)
 - [x] Reviewer independence verified: 7 dedicated subagents, one per reviewer role (readability, reliability, refuter, resilience, risk, QA, security) — zero bundled reviews; refuter ran before QA synthesis
-- [x] Packet intact: `SPEC:docs/specs/40_workspace/transport-separation/*.md#REQ-TRANSPORT-001..008 / HARD:subagents+sequential-degradation+frozen-src-contract / GATE:6 pass + 1 conditional→resolved / DOMAINS:[engineering, security]`
+- [x] Packet intact: `SPEC:docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/*.md#REQ-TRANSPORT-001..008 / HARD:subagents+sequential-degradation+frozen-src-contract / GATE:6 pass + 1 conditional→resolved / DOMAINS:[engineering, security]`
 
 ## Escalations
 

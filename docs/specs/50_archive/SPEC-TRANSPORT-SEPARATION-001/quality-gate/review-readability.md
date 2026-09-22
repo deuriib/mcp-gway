@@ -4,7 +4,7 @@
 **Reviewer role:** READABILITY reviewer (quality-gate lane)
 **Date:** 2026-09-22
 **Scope:** commits `88f47fd` (src), `bd2d11a` (tests), `dedf480` (docs)
-**Packet:** `docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md` (read first, reference-only)
+**Packet:** `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md` (read first, reference-only)
 
 ## Verdict: APPROVE
 

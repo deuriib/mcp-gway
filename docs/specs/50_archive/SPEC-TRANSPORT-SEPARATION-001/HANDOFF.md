@@ -6,7 +6,7 @@
 **Status:** complete
 **Domains-Touched:** [engineering, security]
 
-**Packet:** `SPEC:docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md#REQ-TRANSPORT-001..008 / HARD:subagents + sequential-degradation + frozen-src-contract / GATE:OPEN (6 pass + 1 conditional→resolved, C3 PASS ×3) / DOMAINS:[engineering, security]`
+**Packet:** `SPEC:docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md#REQ-TRANSPORT-001..008 / HARD:subagents + sequential-degradation + frozen-src-contract / GATE:OPEN (6 pass + 1 conditional→resolved, C3 PASS ×3) / DOMAINS:[engineering, security]`
 
 ## Deliverables
 
@@ -15,8 +15,8 @@
 | Implementation | `src/mcp_gway/gateway.py` (transport param, exclusive `mcp_routes`, 405+`Allow` handlers, `app.state.transport`), `src/mcp_gway/cli.py` (`_serve_http(..., transport)`, banner, help) — commit `14ff7a1` (`feat!`, BREAKING CHANGE footer → 3.0.0) | done |
 | Tests / Evidence | `tests/test_transport_separation.py` (9 contract tests, REQ-001..004+008) + migrated suites (`test_gateway`, `test_edgecases_gateway`, `test_gateway_sse_limits`, `test_obsfeat007`, `test_p0_round2_hardening`, `test_serve_unified`) — commit `35ba3fb`; `uv run pytest -q` → **570 passed, 0 failed**; `ruff check` + `ruff format --check` clean | done |
 | Docs | `AGENTS.md`, `README.md`, `docs/specs/10_design/API_CONTRACTS.md`, `docs/specs/10_design/ARCHITECTURE.md` (per-transport contract, ADR-010 AC-05 inline amendment) — commit `1fbe76f`; `CHANGELOG.md` Unreleased breaking entry | done |
-| Domain artifact | Quality gate: `docs/specs/40_workspace/quality-gate/transport-separation/GATE_REPORT.md` (OPEN) + 7 reviewer artifacts — commits `9dd938c`, `287efc9` | done |
-| Packet | `docs/specs/40_workspace/transport-separation/` (PROPOSED_CHANGES, IMPLEMENTATION_PLAN gates checked, TEST_MATRIX REQ→test trace) — commit `0fbfbeb` | done |
+| Domain artifact | Quality gate: `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/quality-gate/GATE_REPORT.md` (OPEN) + 7 reviewer artifacts — commits `9dd938c`, `287efc9` | done |
+| Packet | `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/` (PROPOSED_CHANGES, IMPLEMENTATION_PLAN gates checked, TEST_MATRIX REQ→test trace) — commit `0fbfbeb` | done |
 
 ## Definition of Done Checklist
 

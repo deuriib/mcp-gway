@@ -25,8 +25,8 @@ las rutas expuestas en `/mcp` y no hay fallback cruzado.
 | `tests/test_edgecases_gateway.py` | file-modify | Alias `/mcp/messages` y límites sobre gateway `sse` |
 | `tests/test_gateway_sse_limits.py`, `tests/test_obsfeat007.py`, `tests/test_p0_round2_hardening.py` | file-modify | Escenarios SSE (`GET /mcp`) sobre gateway `transport="sse"` |
 | `tests/test_serve_unified.py` | file-modify | Fakes con firma `+transport`; AC-05 reescrito: mismo entrypoint, app **separada** por transporte |
-| `docs/specs/40_workspace/transport-separation/IMPLEMENTATION_PLAN.md` | file-create | Pasos, orden, rollback |
-| `docs/specs/40_workspace/transport-separation/TEST_MATRIX.md` | file-create | Trazabilidad REQ → test → artifact |
+| `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/IMPLEMENTATION_PLAN.md` | file-create | Pasos, orden, rollback |
+| `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/TEST_MATRIX.md` | file-create | Trazabilidad REQ → test → artifact |
 | `AGENTS.md`, `README.md`, `docs/specs/10_design/API_CONTRACTS.md`, `docs/specs/10_design/ARCHITECTURE.md` | file-modify | Contrato público: rutas por transporte (ya no "7 Route entries compartidas") |
 
 ## Rationale

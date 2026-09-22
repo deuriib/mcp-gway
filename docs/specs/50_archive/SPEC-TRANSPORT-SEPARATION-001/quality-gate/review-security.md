@@ -4,7 +4,7 @@
 **Date:** 2026-09-22
 **Verdict:** APPROVE (Approved)
 **Scope:** commits 88f47fd (`src/mcp_gway/gateway.py` + `cli.py`), bd2d11a (tests), dedf480 (docs), d42085f (packet)
-**Packet (reference-only):** `docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md`
+**Packet (reference-only):** `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md`
 
 No Critical, no High, no Medium findings → no orchestrator escalation triggered (guardrails: Critical/High surface same session).
 

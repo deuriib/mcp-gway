@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-22
 **Scope:** commits `88f47fd` (src), `bd2d11a` (tests), `dedf480` (docs)
-**Packet:** `docs/specs/40_workspace/transport-separation/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md`
+**Packet:** `docs/specs/50_archive/SPEC-TRANSPORT-SEPARATION-001/{PROPOSED_CHANGES,IMPLEMENTATION_PLAN,TEST_MATRIX}.md`
 **Role:** adversarial — attack every claim, no re-run of other reviewers' checklists, no charity, no manufactured findings.
 **Environment:** Starlette 1.6.0 (uv runtime), `uv run pytest -q` → **570 passed**, `ruff check`/`ruff format --check` clean (independently re-run, not taken on trust).
 **Scratch:** `/tmp/opencode/probe_refuter_transport.py`, `/tmp/opencode/probe_real_server.py` (repo untouched: `git status -- src/ tests/` → 0 entries; only this report added).
