@@ -1,8 +1,8 @@
 # Requirements Index: Universal Casing Ingestion & Canonical PascalCase Exposure
 
-**Owner:** vasquez (CTO)  
-**Brief Reference:** BRIEF-CASING-001  
-**Domains-Touched:** [engineering, automation]  
+**Owner:** vasquez (CTO)
+**Brief Reference:** BRIEF-CASING-001
+**Domains-Touched:** [engineering, automation]
 
 ## Functional Requirements
 

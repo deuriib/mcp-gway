@@ -4,7 +4,7 @@
 
 **MCP Gateway** — A standalone Python CLI that aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint with Code Mode (v2.4.0 interno, CLI-only, headless, sin dashboard/catalog).
 
-> **Nota interna:** ver `CHANGELOG.md` (al día hasta v2.4.0, 2026-09-17). Releases internos no publicados — no anuncio externo.
+> **Nota interna:** ver `CHANGELOG.md` (al día hasta v3.0.0, 2026-09-22). Releases internos no publicados — no anuncio externo.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@
 - **HTTP Server**: Starlette + uvicorn
 - **MCP SDK**: mcp v2.0.0
 - **Sandbox**: starlark-pyo3
-- **Testing**: pytest + pytest-asyncio (255 tests)
+- **Testing**: pytest + pytest-asyncio (570 tests)
 - **Linting**: ruff
 - **Nota**: `htpy` retirado en v2.0.0; `httpx` v1 eliminado en favor de `httpx2` (dependencia directa, alineada con mcp v2 y starlette 1.6).
 
@@ -22,14 +22,14 @@
 
 ```
 src/mcp_gway/
-├── __init__.py          # Package version (2.4.0)
+├── __init__.py          # Package version (3.0.0)
 ├── models.py            # Pydantic models (MCPServerConfig OpenCode-only local|remote, ToolInfo, OAuthConfig)
 ├── registry.py          # .pyi file CRUD (servers/ directory) — única fuente de verdad
 ├── sandbox.py           # Starlark sandbox (hermetic execution)
 ├── server_proxy.py      # MCP server wrapper for sandbox
 ├── server_factory.py    # Server structs + sync call wrappers for the sandbox
 ├── code_mode.py         # 4 meta-tools orchestrator
-├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), headless, local-first 127.0.0.1 + CSP — 5 paths lógicos vivos: /mcp (GET+POST), /health, /ready, /live, /metrics (gateway.py:194-200, 7 Route entries; /mcp/messages es alias POST al mismo handler _mcp_post, no endpoint independiente)
+├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), headless, local-first 127.0.0.1 + CSP — rutas /mcp por transporte (gateway.py:320-340, mcp_routes condicional; app.state.transport; sin fallback): http = POST /mcp (GET → 405 Allow: POST) + /health, /ready, /live, /metrics → 6 entradas; sse = GET /mcp (SSE) + POST /mcp → 405 Allow: GET + /mcp/messages (alias POST al handler _mcp_post, no endpoint independiente) + probes → 7 entradas
 ├── cli.py               # CLI commands (add/remove/update/list/inspect/refresh/serve --transport stdio|http|sse/mcp-hidden/local-unrestricted --host 127.0.0.1)
 ├── oauth.py             # OAuth2 support (dynamic registration, token storage); usa httpx2 (dependencia directa)
 ├── transport.py         # Shim deprecado → mcp_gway.core.transport (DeprecationWarning; eliminar en next major)
@@ -75,7 +75,7 @@ tests/
 docs/
 ├── specs/SPEC-UI-001.md (+ SCENARIOS/ACCEPTANCE)  # SUPERSEDED 2026-09-10 (retirado; headless, CLI-only)
 ├── adr/ADR-007-release-workflow-hybrid.md, ADR-008-catalog-mcp-001.md
-├── architecture/adr-009-dynamic-local-commands.md, adr-010-unified-serve.md
+├── architecture/adr-009-dynamic-local-commands.md, adr-010-unified-serve.md (referenciado, ausente en repo; enmienda ADR-010 AC-05 2026-09-22: http/sse comparten el entrypoint `_serve_http`, NO la app — rutas `/mcp` separadas por transporte, sin fallback)
 ├── sbtdd/specs/feat-006-dynamic-local-commands/   # spec + scenarios + acceptance + verify
 ├── superpowers/plans/                             # Planes fechados (históricos)
 └── superpowers/specs/2026-08-2X-*                 # Specs de diseño (históricos)
@@ -88,7 +88,7 @@ docs/
 uv sync --all-groups                     # Install dependencies (dev group includes pre-commit)
 uv run pre-commit install                # Install git hooks (once per clone)
 uv run pre-commit run --all-files        # Run hooks on all files
-uv run pytest -v                         # Run tests (255 tests)
+uv run pytest -v                         # Run tests (570 tests)
 uv run ruff check src/ tests/            # Lint (CI parity)
 uv run ruff format --check src/ tests/   # Format check (CI parity)
 
@@ -138,14 +138,14 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
   - `push v*` → `uv build` + `pypi-publish` determinístico (GA interno `v2.0.0` via tag, nota interna no publicada — no anuncio externo)
   - `workflow_run` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para patches automáticos `fix/perf` → minor/patch sin tag manual (línea v2.0.1..v2.4.0 ya liberada así)
   - Condición: `if: push || workflow_run.conclusion == 'success'` + `concurrency: release` + `fetch-depth: 0`
-- **Version**: `2.4.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` (`[tool.semantic_release]`)
+- **Version**: `3.0.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` (`[tool.semantic_release]`)
 - **Build**: `uv_build` backend — sin Node en CI (`ruff` único linter)
 
 ## Key Patterns
 
 ### Endpoints vivos + Retiro dashboard/catalog
 
-- **Vivos (v2.4.0):** `/mcp` (GET+POST), `/health`, `/ready`, `/live`, `/metrics` (`gateway.py:194-200`, 7 Route entries; `/mcp/messages` es alias POST al mismo handler `_mcp_post`, no endpoint independiente). Gestión CLI-only.
+- **Vivos (v2.4.0; rutas `/mcp` por transporte, enmienda 2026-09-22):** probes `/health`, `/ready`, `/live`, `/metrics` siempre presentes; `/mcp` según `Gateway(registry, transport=...)` (`gateway.py:320-340`, `mcp_routes` condicional): **http** → `POST /mcp` (JSON-RPC) con `GET /mcp` → 405 `Allow: POST` = 6 entradas, `/mcp/messages` no existe (404); **sse** → `GET /mcp` (SSE) con `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages` alias POST al mismo handler `_mcp_post`, no endpoint independiente = 7 entradas. Sin fallback cruzado; `app.state.transport` expuesto. Gestión CLI-only.
 - **Retirados (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json` — borrar caché vieja manualmente).
 
 ### Registry (.pyi + .json) — Única fuente
@@ -176,6 +176,6 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
 
 ### SSE Transport
 
-- `GET /mcp` → SSE stream with `endpoint` event
-- `POST /mcp/messages?session_id=...` → JSON-RPC messages
+- Solo con `serve --transport sse` (`transport="sse"`): `GET /mcp` → SSE stream with `endpoint` event (bajo `http`, `GET /mcp` → 405 `Allow: POST`)
+- `POST /mcp/messages?session_id=...` → JSON-RPC messages (alias de `_mcp_post`; bajo `transport="http"` la ruta no existe → 404; sin fallback cruzado)
 - Session management via asyncio.Queue

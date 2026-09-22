@@ -398,7 +398,7 @@ def run_benchmarks(config: BenchmarkConfig) -> BenchmarkReport:
             report.latencies.append(seq_result)
 
             # Concurrent measurement
-            conc_result = measure_latency_concurrent(
+            measure_latency_concurrent(
                 client,
                 config.target_url,
                 path,
@@ -479,26 +479,27 @@ def save_report(
 
     # Markdown
     with open(md_path, "w") as f:
-        f.write(f"# Performance Report: MCP Gateway\n\n")
+        f.write("# Performance Report: MCP Gateway\n\n")
         f.write(f"**Timestamp:** {report.timestamp}\n")
         f.write(f"**Target:** {report.target_url}\n\n")
-        f.write(f"## Latency Results\n\n")
+        f.write("## Latency Results\n\n")
         f.write(
-            f"| Path | Method | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (req/s) | Errors |\n"
+            "| Path | Method | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (req/s) | Errors |\n"
         )
         f.write(
-            f"|------|--------|----------|----------|----------|-------------------|--------|\n"
+            "|------|--------|----------|----------|----------|-------------------|--------|\n"
         )
-        for r in report.latencies:
-            f.write(
-                f"| {r.path} | {r.method} | {r.p50_ms:.2f} | {r.p95_ms:.2f} | {r.p99_ms:.2f} | {r.throughput_rps:.1f} | {r.errors} |\n"
-            )
-        f.write(f"\n## Code Mode Overhead\n\n")
-        f.write(f"| Tool | Wall Time (sec) |\n")
-        f.write(f"|------|----------------|\n")
-        for r in report.code_mode:
-            f.write(f"| {r.tool} | {r.wall_time_sec:.4f} |\n")
-        f.write(f"\n## Summary\n\n")
+        f.writelines(
+            f"| {r.path} | {r.method} | {r.p50_ms:.2f} | {r.p95_ms:.2f} | {r.p99_ms:.2f} | {r.throughput_rps:.1f} | {r.errors} |\n"
+            for r in report.latencies
+        )
+        f.write("\n## Code Mode Overhead\n\n")
+        f.write("| Tool | Wall Time (sec) |\n")
+        f.write("|------|----------------|\n")
+        f.writelines(
+            f"| {r.tool} | {r.wall_time_sec:.4f} |\n" for r in report.code_mode
+        )
+        f.write("\n## Summary\n\n")
         f.write(
             f"- Total paths benchmarked: {report.summary.get('total_paths_benchmarked', 0)}\n"
         )
@@ -525,7 +526,7 @@ def main() -> None:
     if args.duration:
         config.duration_sec = args.duration
 
-    print(f"MCP Gateway Performance Benchmark")
+    print("MCP Gateway Performance Benchmark")
     print(f"Target: {config.target_url}")
     print(f"Concurrency: {config.concurrency}")
     print(f"Duration: {config.duration_sec}s")
@@ -534,7 +535,7 @@ def main() -> None:
     report = run_benchmarks(config)
     json_path, md_path = save_report(report, config.output_dir, config.output_prefix)
 
-    print(f"\nBenchmark complete.")
+    print("\nBenchmark complete.")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
 

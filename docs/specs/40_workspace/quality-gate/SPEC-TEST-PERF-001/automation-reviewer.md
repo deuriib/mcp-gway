@@ -1,10 +1,10 @@
 # Automation / Ops Review: SPEC-TEST-PERF-001
 
-**Reviewer:** automation-reviewer  
-**Date:** 2026-09-20  
-**Domain:** automation/ops  
-**Verdict:** pass  
-**Findings:** 0  
+**Reviewer:** automation-reviewer
+**Date:** 2026-09-20
+**Domain:** automation/ops
+**Verdict:** pass
+**Findings:** 0
 
 ## CI Pipeline & Operational Impact
 

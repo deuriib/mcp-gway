@@ -2,7 +2,7 @@
 
 **Owner:** vasquez (CTO)
 **Version:** v3
-**Last Updated:** 2026-09-20
+**Last Updated:** 2026-09-22
 **Spec:** SPEC-MGW-001, SPEC-ANTIGRAVITY-001, SPEC-CASING-001
 
 ## CLI Contract (packaging-only; no HTTP change)
@@ -13,10 +13,13 @@
 - Unknown flag / bad host behavior identical (`serve --host 0.0.0.0` without `MCP_GWAY_ALLOW_REMOTE=1` → `exit 2` under both names)
 - No new flags, no changed defaults, no new env vars in this SPEC
 
-## HTTP/SSE Contract (unchanged, cited for non-regression)
+## HTTP/SSE Contract (amended 2026-09-22 — transport separation; supersedes the previous "unchanged / no shape change / untouched" wording)
 
-- `GET+POST /mcp`, `GET /health`, `/ready`, `/live`, `/metrics` — no shape change
-- `POST /mcp/messages?session_id=...` alias of `_mcp_post` — untouched
+- `GET /health`, `/ready`, `/live`, `/metrics` — unchanged, present in both transports
+- `/mcp` routes are per `Gateway(registry, transport=...)` — exactly one route set per process, no cross-transport fallback:
+  - `transport="http"` (default): `POST /mcp` (JSON-RPC) + `GET /mcp` → `405 Allow: POST`; `/mcp/messages` does not exist (404) — 6 routes
+  - `transport="sse"`: `GET /mcp` (SSE stream) + `POST /mcp` → `405 Allow: GET` + `POST /mcp/messages?session_id=...` alias of `_mcp_post` — 7 routes
+- `app.state.transport` exposes the selected transport
 
 ## Sign-off
 
@@ -57,4 +60,3 @@
 
 - Engineering: vasquez approves normalizer, CLI resolution, and refresh migration logic (`src/mcp_gway/code_mode.py`, `src/mcp_gway/cli.py`, `src/mcp_gway/registry.py`, `src/mcp_gway/models.py`).
 - Automation: CI verification green across full suite.
-

@@ -1,10 +1,10 @@
 # Readability Review: SPEC-TEST-PERF-001
 
-**Reviewer:** review-readability  
-**Date:** 2026-09-20  
-**Domain:** engineering  
-**Verdict:** pass  
-**Findings:** 0  
+**Reviewer:** review-readability
+**Date:** 2026-09-20
+**Domain:** engineering
+**Verdict:** pass
+**Findings:** 0
 
 ## Summary
 The changes are clean, idiomatic Python and pytest fixtures:

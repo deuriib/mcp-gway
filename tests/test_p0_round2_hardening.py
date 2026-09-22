@@ -92,7 +92,7 @@ def test_round2_concurrent_129_returns_429(tmp_path) -> None:  # type: ignore[no
     from mcp_gway.registry import Registry
 
     reg = Registry(servers_dir=tmp_path / "r2c")
-    gw = Gateway(reg)
+    gw = Gateway(reg, transport="sse")
     for i in range(128):
         gw._create_session(f"pre-{i}")
 

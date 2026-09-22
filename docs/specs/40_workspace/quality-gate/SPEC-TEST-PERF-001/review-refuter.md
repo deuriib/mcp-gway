@@ -1,10 +1,10 @@
 # Adversarial Refuter Review: SPEC-TEST-PERF-001
 
-**Reviewer:** review-refuter  
-**Date:** 2026-09-20  
-**Domain:** engineering  
-**Verdict:** pass  
-**Findings:** 0  
+**Reviewer:** review-refuter
+**Date:** 2026-09-20
+**Domain:** engineering
+**Verdict:** pass
+**Findings:** 0
 
 ## Adversarial Challenges & Invariant Checks
 

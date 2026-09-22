@@ -1,10 +1,10 @@
 # Reliability Review: SPEC-TEST-PERF-001
 
-**Reviewer:** review-reliability  
-**Date:** 2026-09-20  
-**Domain:** engineering  
-**Verdict:** pass  
-**Findings:** 0  
+**Reviewer:** review-reliability
+**Date:** 2026-09-20
+**Domain:** engineering
+**Verdict:** pass
+**Findings:** 0
 
 ## Summary
 1. `monkeypatch` fixture ensures that modifications to `MAX_IDLE_SECONDS` and `SSRF_DNS_TIMEOUT` are scoped strictly to the executing test function and automatically restored upon test teardown. No state leakage across tests.

@@ -8,7 +8,7 @@
 #   mise run format       # uv run ruff format src/ tests/  (escritura, uso diario)
 #   mise run format-check # uv run ruff format --check src/ tests/  (CI parity)
 #   mise run ci           # lint + format-check + test (paridad con .github/workflows/test.yml)
-#   mise run serve        # uv run mcp-gway serve --host 127.0.0.1 --port 8080 (local-first)
+#   mise run serve        # uv run mcp-gway serve --transport http --host 127.0.0.1 --port 8080 (local-first)
 #
 # Notas:
 # - `mise.toml` es la única fuente de versiones (pin exacto). `.python-version`
@@ -50,4 +50,4 @@ depends = ["lint", "format-check", "test"]
 
 [tasks.serve]
 description = "Serve gateway local-first on 127.0.0.1:8080"
-run = "uv run mcp-gway serve --host 127.0.0.1 --port 8080"
+run = "uv run mcp-gway serve --transport http --host 127.0.0.1 --port 8080"

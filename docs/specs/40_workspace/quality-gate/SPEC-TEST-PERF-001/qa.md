@@ -1,10 +1,10 @@
 # QA Review: SPEC-TEST-PERF-001
 
-**Reviewer:** qa  
-**Date:** 2026-09-20  
-**Domain:** engineering  
-**Verdict:** pass  
-**Findings:** 0  
+**Reviewer:** qa
+**Date:** 2026-09-20
+**Domain:** engineering
+**Verdict:** pass
+**Findings:** 0
 
 ## Test Suite Execution Evidence
 

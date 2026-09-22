@@ -1,8 +1,8 @@
 # Test / Evidence Matrix: SPEC-TEST-PERF-001
 
-**Agent:** Engineering Specialist  
-**Date:** 2026-09-20  
-**Domains-Touched:** [engineering, automation]  
+**Agent:** Engineering Specialist
+**Date:** 2026-09-20
+**Domains-Touched:** [engineering, automation]
 
 | REQ-ID | Evidence ID | Description | Type | Status | Duration | Commit |
 |--------|-------------|-------------|------|--------|----------|--------|

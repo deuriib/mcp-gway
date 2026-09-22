@@ -2,10 +2,10 @@
 
 ## Verdict: ⚠️ CONDITIONAL
 
-**Reviewed by:** @review-risk  
-**Date:** 2026-09-15  
-**Scope:** Security and business risk of FEAT-007 observability/resilience hardening changes  
-**Spec:** `docs/specs/50_archive/feat-007-observability-hardening/spec.md`  
+**Reviewed by:** @review-risk
+**Date:** 2026-09-15
+**Scope:** Security and business risk of FEAT-007 observability/resilience hardening changes
+**Spec:** `docs/specs/50_archive/feat-007-observability-hardening/spec.md`
 **ADR:** `docs/architecture/adr-012-observability-hardening.md`
 
 ---
@@ -20,8 +20,8 @@ FEAT-007 introduces additive observability and resilience hardening across all m
 
 ### M-01: Raw Exception Messages in CLI Structured Logs
 
-**Severity:** Medium  
-**OWASP:** A03:2021 — Sensitive Data Exposure  
+**Severity:** Medium
+**OWASP:** A03:2021 — Sensitive Data Exposure
 **File:** `src/mcp_gway/cli.py:688-693`
 
 ```python
@@ -50,8 +50,8 @@ except Exception as e:
 
 ### M-02: Raw Exception Messages in CodeMode Skip Logs
 
-**Severity:** Medium  
-**OWASP:** A03:2021 — Sensitive Data Exposure  
+**Severity:** Medium
+**OWASP:** A03:2021 — Sensitive Data Exposure
 **File:** `src/mcp_gway/code_mode.py:89-96`
 
 ```python
@@ -77,8 +77,8 @@ logging.getLogger("mcp_gway.code_mode").warning(
 
 ### M-03: Inconsistent Error Data Handling Across Surfaces
 
-**Severity:** Medium  
-**OWASP:** A05:2021 — Security Misconfiguration  
+**Severity:** Medium
+**OWASP:** A05:2021 — Security Misconfiguration
 **Files:**
 - `src/mcp_gway/gateway.py:80-95` — Safe (`_safe_error_data`)
 - `src/mcp_gway/cli.py:692` — Raw `str(e)`
@@ -94,8 +94,8 @@ logging.getLogger("mcp_gway.code_mode").warning(
 
 ### M-04: Metric Label Cardinality from User-Controlled Server Names
 
-**Severity:** Medium  
-**OWASP:** — (Design-level concern)  
+**Severity:** Medium
+**OWASP:** — (Design-level concern)
 **File:** `src/mcp_gway/observability/metrics.py:202-219`
 
 **Risk:** Server names from `MCPServerConfig.name` flow directly into metric labels (`server` label on `upstream_tool_calls_total`, `discovery_duration_seconds`, etc.). An operator adding 200+ servers with unique names hits the cardinality cap, and the 201st server's metrics coalesce into `_other`. This is the documented behavior (BR-102), but:

@@ -52,7 +52,7 @@ async def test_initialize(gateway):
                 "clientInfo": {"name": "test", "version": "0.1.0"},
             },
         }
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
         data = response.json()
         assert data["result"]["protocolVersion"] == "2024-11-05"
@@ -64,7 +64,7 @@ async def test_tools_list(gateway):
     transport = ASGITransport(app=gateway.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
         data = response.json()
         assert "result" in data
@@ -86,7 +86,7 @@ async def test_tools_call_list_tool_files(gateway):
             "method": "tools/call",
             "params": {"name": "listToolFiles", "arguments": {}},
         }
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
         data = response.json()
         assert "youtube.pyi" in data["result"]["content"][0]["text"]
@@ -102,7 +102,7 @@ async def test_tools_call_execute_code(gateway):
             "method": "tools/call",
             "params": {"name": "executeToolCode", "arguments": {"code": "result = 42"}},
         }
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
         data = response.json()
         assert "42" in data["result"]["content"][0]["text"]
@@ -113,16 +113,9 @@ async def test_unknown_method(gateway):
     transport = ASGITransport(app=gateway.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         payload = {"jsonrpc": "2.0", "id": 5, "method": "unknown/method"}
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         data = response.json()
         assert "error" in data
-
-
-@pytest.mark.asyncio
-async def test_sse_endpoint(gateway):
-    routes = [r.path for r in gateway.app.routes]
-    assert "/mcp" in routes
-    assert "/mcp/messages" in routes
 
 
 @pytest.mark.asyncio
@@ -243,7 +236,7 @@ async def test_execute_code_with_server_struct_via_gateway(gateway, monkeypatch)
                 "arguments": {"code": 'result = youtube.search(query="gateway test")'},
             },
         }
-        response = await client.post("/mcp/messages", json=payload)
+        response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
         data = response.json()
         text = data["result"]["content"][0]["text"]

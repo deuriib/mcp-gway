@@ -1,8 +1,8 @@
 # ADR-013: Universal Casing Ingestion, Refresh Auto-Migration & Canonical PascalCase Exposure
 
-**Date:** 2026-09-20  
-**Deciders:** engineering owner (vasquez / CTO), orchestrator  
-**Status:** accepted  
+**Date:** 2026-09-20
+**Deciders:** engineering owner (vasquez / CTO), orchestrator
+**Status:** accepted
 
 ## Context
 

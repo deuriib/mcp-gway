@@ -1,17 +1,17 @@
 # Product Brief: Universal Casing Ingestion, Auto-Migration on Refresh & Canonical PascalCase Exposure
 
-**ID:** BRIEF-CASING-001  
-**Initiator:** orchestrator  
-**Date:** 2026-09-20  
-**Status:** approved  
-**Execution_Mode:** multi-subagents (frozen at frame-intent; trivial <15 lines goes by CEO fast-path checkpoint-only, outside methodology)  
-**Domains-Touched:** [engineering, automation]  
-**Classification:** bounded-initiative  
+**ID:** BRIEF-CASING-001
+**Initiator:** orchestrator
+**Date:** 2026-09-20
+**Status:** approved
+**Execution_Mode:** multi-subagents (frozen at frame-intent; trivial <15 lines goes by CEO fast-path checkpoint-only, outside methodology)
+**Domains-Touched:** [engineering, automation]
+**Classification:** bounded-initiative
 **Framings-Considered:**
 - Framing A (Smart Split & Title + Refresh Auto-Migration + CLI case-insensitive resolution): Normalizes snake_case, kebab-case, camelCase, and ALL_CAPS into canonical PascalCase on add and refresh, with case-insensitive CLI command resolution. [Recommended & Selected]
 - Framing B (Preserve all-caps acronyms): Preserves uppercase strings like GITHUB or AWS_S3. [Rejected: causes jarring inconsistency in Starlark and Code Mode]
 - Framing C (Transform on add only): Only converts string in `mcp-gway add`. [Rejected: leaves remove, inspect, and existing servers broken]
-**Approval:** chat-yes — deuriib 2026-09-20  
+**Approval:** chat-yes — deuriib 2026-09-20
 
 ---
 
@@ -59,8 +59,8 @@ Deliver an intuitive and consistent experience where any server name casing is a
 
 ## OKRs: Universal Casing & PascalCase Normalization
 
-**Period:** Q3 2026  
-**Owner:** orchestrator  
+**Period:** Q3 2026
+**Owner:** orchestrator
 
 ### Objective 1: Complete and seamless casing ergonomics across the CLI and Code Mode
 
