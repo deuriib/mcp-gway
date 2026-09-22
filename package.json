@@ -1,6 +1,6 @@
 {
   "name": "mcp-gway",
-  "version": "2.11.2",
+  "version": "2.11.3",
   "description": "A standalone CLI gateway that aggregates multiple MCP (Model Context Protocol) servers behind a single headless HTTP/SSE endpoint with Code Mode",
   "type": "module",
   "main": "./plugins/opencode/mcp-gateway.ts",
