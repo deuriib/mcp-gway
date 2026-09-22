@@ -56,8 +56,8 @@ mcp-gway update <name> --tools "tool_a,tool_b"
 mcp-gway refresh                   # all servers
 mcp-gway refresh <name>            # one server
 mcp-gway refresh <name> --auth     # force OAuth re-auth (also: --oauth-port 8989)
-mcp-gway serve --port 8080                     # binds 127.0.0.1 by default
-mcp-gway serve --host 127.0.0.1 --port 8080
+mcp-gway serve --transport http --port 8080        # binds 127.0.0.1 by default
+mcp-gway serve --transport http --host 127.0.0.1 --port 8080
 curl -s http://127.0.0.1:8080/health | jq
 
 # Server-side NDJSON: expose this gateway as an MCP server over stdio

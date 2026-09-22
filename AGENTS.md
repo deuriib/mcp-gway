@@ -4,7 +4,7 @@
 
 **MCP Gateway** — A standalone Python CLI that aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint with Code Mode (v2.4.0 interno, CLI-only, headless, sin dashboard/catalog).
 
-> **Nota interna:** ver `CHANGELOG.md` (al día hasta v2.4.0, 2026-09-17). Releases internos no publicados — no anuncio externo.
+> **Nota interna:** ver `CHANGELOG.md` (al día hasta v3.0.0, 2026-09-22). Releases internos no publicados — no anuncio externo.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@
 - **HTTP Server**: Starlette + uvicorn
 - **MCP SDK**: mcp v2.0.0
 - **Sandbox**: starlark-pyo3
-- **Testing**: pytest + pytest-asyncio (255 tests)
+- **Testing**: pytest + pytest-asyncio (570 tests)
 - **Linting**: ruff
 - **Nota**: `htpy` retirado en v2.0.0; `httpx` v1 eliminado en favor de `httpx2` (dependencia directa, alineada con mcp v2 y starlette 1.6).
 
@@ -22,7 +22,7 @@
 
 ```
 src/mcp_gway/
-├── __init__.py          # Package version (2.4.0)
+├── __init__.py          # Package version (3.0.0)
 ├── models.py            # Pydantic models (MCPServerConfig OpenCode-only local|remote, ToolInfo, OAuthConfig)
 ├── registry.py          # .pyi file CRUD (servers/ directory) — única fuente de verdad
 ├── sandbox.py           # Starlark sandbox (hermetic execution)
@@ -88,7 +88,7 @@ docs/
 uv sync --all-groups                     # Install dependencies (dev group includes pre-commit)
 uv run pre-commit install                # Install git hooks (once per clone)
 uv run pre-commit run --all-files        # Run hooks on all files
-uv run pytest -v                         # Run tests (255 tests)
+uv run pytest -v                         # Run tests (570 tests)
 uv run ruff check src/ tests/            # Lint (CI parity)
 uv run ruff format --check src/ tests/   # Format check (CI parity)
 
@@ -138,7 +138,7 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
   - `push v*` → `uv build` + `pypi-publish` determinístico (GA interno `v2.0.0` via tag, nota interna no publicada — no anuncio externo)
   - `workflow_run` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para patches automáticos `fix/perf` → minor/patch sin tag manual (línea v2.0.1..v2.4.0 ya liberada así)
   - Condición: `if: push || workflow_run.conclusion == 'success'` + `concurrency: release` + `fetch-depth: 0`
-- **Version**: `2.4.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` (`[tool.semantic_release]`)
+- **Version**: `3.0.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` (`[tool.semantic_release]`)
 - **Build**: `uv_build` backend — sin Node en CI (`ruff` único linter)
 
 ## Key Patterns

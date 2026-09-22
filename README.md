@@ -59,8 +59,8 @@ mcp-gway add tools --type local --command "npx -y my-mcp" --env KEY=VALUE --env 
 
 # List and serve (local-first)
 mcp-gway list
-mcp-gway serve --port 8080              # bindea 127.0.0.1 por defecto
-mcp-gway serve --host 127.0.0.1 --port 8080
+mcp-gway serve --transport http --port 8080         # bindea 127.0.0.1 por defecto
+mcp-gway serve --transport http --host 127.0.0.1 --port 8080
 curl -s http://127.0.0.1:8080/health | jq
 ```
 
@@ -77,15 +77,15 @@ One `Gateway(registry, host)` process serves `/mcp`, `/health`, `/ready`, `/live
 
 ```bash
 # Default seguro — solo loopback
-mcp-gway serve --port 8080            # bindea 127.0.0.1
+mcp-gway serve --transport http --port 8080   # bindea 127.0.0.1
 
 # Exponer en 0.0.0.0 requiere opt-in explícito
-MCP_GWAY_ALLOW_REMOTE=1 mcp-gway serve --host 0.0.0.0 --port 8080
+MCP_GWAY_ALLOW_REMOTE=1 mcp-gway serve --transport http --host 0.0.0.0 --port 8080
 # └─ log warning "server exposed on non-loopback host"
 # Protege con firewall + auth reversa: nunca expongas 0.0.0.0 sin firewall/auth delante.
 
 # Sin opt-in → error controlado
-mcp-gway serve --host 0.0.0.0
+mcp-gway serve --transport http --host 0.0.0.0
 # Error: binding to non-loopback host '0.0.0.0' requires MCP_GWAY_ALLOW_REMOTE=1
 # exit 2
 ```
@@ -98,7 +98,7 @@ mcp-gway serve --host 0.0.0.0
 
 ```bash
 curl -s http://127.0.0.1:8080/health | jq
-# {"status":"ok","version":"2.4.0","checks":{"registry":"ok","routes":"ok"},"uptime_seconds":42}
+# {"status":"ok","version":"3.0.0","checks":{"registry":"ok","routes":"ok"},"uptime_seconds":42}
 curl -s http://127.0.0.1:8080/ready | jq   # 200 ready / 503 not_ready (registry/routes/event_loop checks)
 curl -s http://127.0.0.1:8080/live | jq    # 200 alive — no FS I/O, <5ms
 curl -s http://127.0.0.1:8080/metrics | head -n 20
@@ -112,7 +112,7 @@ curl -s http://127.0.0.1:8080/metrics | head -n 20
 ```bash
 curl -s -H "X-Request-ID: demo123" http://127.0.0.1:8080/health -D - | grep -i X-Request-ID
 # X-Request-ID: demo123  ← echo on every response; json log line also has "request_id":"demo123"
-uv run mcp-gway serve --port 8080 2>&1 | head   # each line valid JSON: timestamp, level, logger, message, request_id, method, path, status, duration_ms
+uv run mcp-gway serve --transport http --port 8080 2>&1 | head   # each line valid JSON: timestamp, level, logger, message, request_id, method, path, status, duration_ms
 ```
 
 - `X-Request-ID` or `X-Correlation-ID` accepted, sanitized to `^[A-Za-z0-9_-]{1,64}$`, truncated; auto `uuid4` if absent.
@@ -146,6 +146,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
+> **Transport note:** gateway pairing is transport-agnostic — the routes are per-transport (`serve --transport http` → `POST /mcp` only; `serve --transport sse` → `GET /mcp` + `POST /mcp/messages` only). A mispaired client gets `405` + `Allow` header telling it which transport serves that method. If you upgrade from v2.x, see [MIGRATION.md](MIGRATION.md).
+
 ## Commands
 
 | Command | Description |
@@ -156,7 +158,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `mcp-gway list` | List all connected servers |
 | `mcp-gway inspect` | Show tool signatures for a server |
 | `mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]` | Refresh connection and re-discover tools |
-| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). Per-transport `/mcp` (apps separadas, sin fallback): `http` → `POST /mcp` only (6 routes; `GET` → 405 `Allow: POST`), `sse` → `GET /mcp` + `POST /mcp/messages` (7 routes; `POST` → 405 `Allow: GET`); probes shared; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` necesita `MCP_GWAY_ALLOW_REMOTE=1` |
+| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). Per-transport `/mcp` (apps separadas, sin fallback): `http` → `POST /mcp` only (6 routes; `GET` → 405 `Allow: POST`), `sse` → `GET /mcp` + `POST /mcp/messages` (7 routes; `POST` → 405 `Allow: GET`); probes shared; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` necesita `MCP_GWAY_ALLOW_REMOTE=1`. v2.x → v3.0.0 breaking: [MIGRATION.md](MIGRATION.md) |
 | `mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]` | DEPRECATED hidden alias: `serve --transport stdio` equiv `mcp` — mismo loop NDJSON y mismos args a `_serve_stdio`, modulo aviso de deprecacion en stderr (solo `mcp`). Prefer `command: [mcp-gway, serve, --transport, stdio]` for OpenCode `type: local` |
 | `mcp-gway local-unrestricted enable\|disable\|status` | Break-glass marker 72h (explicit only) — enable/remove, or status without side effects |
 
@@ -256,7 +258,7 @@ uv run pre-commit install  # once per clone — hooks already configured in .pre
 
 # Run checks
 uv run pre-commit run --all-files  # ruff + ruff-format + hygiene (trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files)
-uv run pytest -v  # 242 tests — CLI, MCP, Code Mode, stdio, OAuth, observability
+uv run pytest -v  # 570 tests — CLI, MCP, Code Mode, stdio, OAuth, observability
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
 
@@ -266,7 +268,7 @@ curl -s http://127.0.0.1:8080/ready | jq .status              # "ready"
 curl -s http://127.0.0.1:8080/metrics | head -n 5             # # HELP mcp_gway_...
 
 # Local-first check
-mcp-gway serve --host 0.0.0.0 2>&1 | grep -q "requires MCP_GWAY_ALLOW_REMOTE" && echo "gate ok"
+mcp-gway serve --transport http --host 0.0.0.0 2>&1 | grep -q "requires MCP_GWAY_ALLOW_REMOTE" && echo "gate ok"
 ```
 
 Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `ruff-format`, `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-added-large-files`).
@@ -275,7 +277,7 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        MCP Gateway v2.4.0                          │
+│                        MCP Gateway v3.0.0                          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  CLI (click)              │  Gateway (Starlette + uvicorn, CSP)      │
 │  - add remote/local       │  - POST /mcp (JSON-RPC)      [http]      │
@@ -303,7 +305,7 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 ```
 
 - **Sin Node** en runtime ni CI: sin UI ni assets vendoreados, `ruff` único linter, `uv_build` backend.
-- **Release híbrido** (ADR-007): `push tags v*` → `uv build` + `pypi-publish` (GA `v2.0.0` tag manual, release interno no publicado) + `workflow_run Tests completed` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para `fix/perf` patches auto (línea v2.0.1..v2.4.0 ya liberada así). `concurrency: release`, `fetch-depth:0`, `[tool.semantic_release]` sync `pyproject.toml` + `__init__.py` (`2.4.0` exacta).
+- **Release híbrido** (ADR-007): `push tags v*` → `uv build` + `pypi-publish` (GA `v2.0.0` tag manual, release interno no publicado) + `workflow_run Tests completed` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para `fix/perf` patches auto (línea v2.0.1..v2.4.0 ya liberada así). `concurrency: release`, `fetch-depth:0`, `[tool.semantic_release]` sync `pyproject.toml` + `__init__.py` (`3.0.0` exacta).
 
 ## License
 
