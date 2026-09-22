@@ -50,4 +50,4 @@ las rutas expuestas en `/mcp` y no hay fallback cruzado.
 ## Approval Required From
 
 - [x] Engineering owner: continuidad de la rama ya iniciada (diff previo en working tree)
-- [ ] Architecture: cambio de contrato público de rutas → ADR-010 nota de enmienda en docs
+- [x] Architecture: cambio de contrato público de rutas → enmienda ADR-010 AC-05 registrada inline en AGENTS.md:78 + API_CONTRACTS.md:15-23 (2026-09-22, gate COND-003; ADR-010 file ausente en repo — decisión de waiver con expiry 90d en GATE_REPORT.md)
