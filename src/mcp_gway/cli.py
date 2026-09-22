@@ -458,9 +458,17 @@ def _serve_stdio(log_level: str | None, registry_dir: str | None) -> None:
 
 
 def _serve_http(
-    host: str, port: int, log_level: str | None, registry_dir: str | None
+    host: str,
+    port: int,
+    log_level: str | None,
+    registry_dir: str | None,
+    transport: str,
 ) -> None:
-    """Serve the HTTP/SSE gateway app (http and sse share Gateway.app)."""
+    """Serve the networked gateway for ONE transport (http or sse).
+
+    The transport decides the /mcp routes: http → POST /mcp only;
+    sse → GET /mcp + POST /mcp/messages only. No cross-transport fallback.
+    """
     import time
 
     import uvicorn
@@ -503,7 +511,7 @@ def _serve_http(
         registry = Registry(servers_dir=servers_dir)
         from mcp_gway.gateway import Gateway
 
-        gateway = Gateway(registry, host=host)
+        gateway = Gateway(registry, host=host, transport=transport)
         names = registry.list()
     except Exception as e:
         click.echo(
@@ -548,7 +556,7 @@ def _serve_http(
         )
     label_w = 9
     click.echo(
-        f"  {_c('MCP'.ljust(label_w), dim=True)} {_c(glyph_arr, dim=True)} {_c(f'{base_url}/mcp', fg='cyan')}"
+        f"  {_c('MCP'.ljust(label_w), dim=True)} {_c(glyph_arr, dim=True)} {_c(f'{base_url}/mcp', fg='cyan')} {_c(f'({transport})', dim=True)}"
     )
     click.echo(
         f"  {_c('Health'.ljust(label_w), dim=True)} {_c(glyph_arr, dim=True)} {_c(f'{base_url}/health', fg='cyan')}"
@@ -584,7 +592,8 @@ def _serve_http(
     type=click.Choice(["stdio", "http", "sse"]),
     default="stdio",
     show_default=True,
-    help="Transport to serve (stdio default; http and sse share the same app)",
+    help="Transport to serve (stdio default; http = POST /mcp; "
+    "sse = GET /mcp + POST /mcp/messages)",
 )
 @click.option("--host", default="127.0.0.1", help="Bind host (http|sse only)")
 @click.option(
@@ -629,7 +638,7 @@ def serve(
                 sys.exit(2)
         _serve_stdio(log_level, registry_dir)
     elif transport in ("http", "sse"):
-        _serve_http(host, port, log_level, registry_dir)
+        _serve_http(host, port, log_level, registry_dir, transport)
     else:
         raise click.BadParameter(f"unknown transport '{transport}'")
 

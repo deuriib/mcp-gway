@@ -169,9 +169,20 @@ class Gateway:
         self,
         registry: Registry,
         host: str = "127.0.0.1",
+        transport: str = "http",
     ) -> None:
+        """Build the ASGI app for a single MCP transport.
+
+        ``transport`` selects which routes are exposed on ``/mcp``:
+        ``http`` (Streamable HTTP) exposes POST /mcp only; ``sse`` exposes
+        GET /mcp + POST /mcp/messages only. The two never coexist and there
+        is no fallback between them.
+        """
+        if transport not in ("http", "sse"):
+            raise ValueError(f"unknown transport '{transport}'")
         self.registry = registry
         self.host = host
+        self.transport = transport
         self.code_mode = CodeMode(registry)
         self._sessions: dict[str, SessionInfo] = {}
         self.start_time: float = time.monotonic()
@@ -306,15 +317,24 @@ class Gateway:
             finally:
                 await gateway_self.aclose()
 
+        if transport == "sse":
+            mcp_routes = [
+                Route("/mcp", self._mcp_sse, methods=["GET"]),
+                Route("/mcp", self._mcp_post_not_allowed, methods=["POST"]),
+                Route("/mcp/messages", self._mcp_post, methods=["POST"]),
+            ]
+        else:
+            mcp_routes = [
+                Route("/mcp", self._mcp_post, methods=["POST"]),
+                Route("/mcp", self._mcp_get_not_allowed, methods=["GET"]),
+            ]
         self.app = Starlette(
             routes=[
                 Route("/health", self._health, methods=["GET"]),
                 Route("/ready", handle_ready, methods=["GET"]),
                 Route("/live", handle_live, methods=["GET"]),
                 Route("/metrics", handle_metrics, methods=["GET"]),
-                Route("/mcp", self._mcp_sse, methods=["GET"]),
-                Route("/mcp", self._mcp_post, methods=["POST"]),
-                Route("/mcp/messages", self._mcp_post, methods=["POST"]),
+                *mcp_routes,
             ],
             lifespan=_lifespan,
         )
@@ -326,6 +346,7 @@ class Gateway:
         self.app.add_middleware(CorrelationMiddleware)
         self.app.state.registry = registry  # type: ignore[attr-defined]
         self.app.state.serve_host = host  # type: ignore[attr-defined]
+        self.app.state.transport = transport  # type: ignore[attr-defined]
         self.app.state.metrics = self.metrics  # type: ignore[attr-defined]
         self.app.state.gateway = self  # type: ignore[attr-defined]
         self.app.state.start_time = self.start_time  # type: ignore[attr-defined]
@@ -497,6 +518,24 @@ class Gateway:
 
     async def _health(self, request: Request) -> JSONResponse:
         return await handle_health(request)
+
+    async def _mcp_get_not_allowed(self, request: Request) -> JSONResponse:
+        """GET /mcp is gated off: this gateway serves Streamable HTTP only."""
+        return JSONResponse(
+            {"detail": "SSE transport not enabled (serve --transport sse)"},
+            status_code=405,
+            headers={"Allow": "POST"},
+        )
+
+    async def _mcp_post_not_allowed(self, request: Request) -> JSONResponse:
+        """POST /mcp is gated off: this gateway serves SSE only."""
+        return JSONResponse(
+            {
+                "detail": "Streamable HTTP transport not enabled (serve --transport http)"
+            },
+            status_code=405,
+            headers={"Allow": "GET"},
+        )
 
     async def _mcp_sse(self, request: Request) -> StreamingResponse:
         # per-process gate: lock makes concurrent check-and-create atomic,
