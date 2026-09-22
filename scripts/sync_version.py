@@ -3,16 +3,19 @@ from __future__ import annotations
 """Sync owned version markers from pyproject.toml without fighting semantic-release.
 
 Single source of truth stays ``pyproject.toml:project.version`` (read-only).
-Semantic-release owns ``pyproject.toml`` + ``src/mcp_gway/__init__.py`` +
-``CHANGELOG.md`` — this script never writes those files.
+Semantic-release owns ``pyproject.toml`` + ``src/mcp_gway/__init__.py``;
+``CHANGELOG.md`` is maintained manually — this script never writes those files.
 
 Owned refs (closed allow-list):
 - ``plugins/opencode/mcp-gateway.ts`` — ``const MARKER = "MCP-GWAY vX.Y.Z"``
 - ``plugins/opencode/INSTALL.md`` — ``MCP-GWAY vX.Y.Z`` tokens
-- ``docs/specs/40_workspace/engineering/PROPOSED_CHANGES-version-sync.md``
-  — ``MCP-GWAY vX.Y.Z`` marker, if present (idempotent no-op otherwise)
 - ``package.json`` — ``"version": "X.Y.Z"`` (JSON parse, 2-space indent +
   trailing newline per repo style; no-op when already at version)
+- ``README.md`` / ``AGENTS.md`` — ``MCP-GWAY vX.Y.Z`` tokens, if present
+  (idempotent no-op otherwise)
+- ``uv.lock`` — root package ``version = "X.Y.Z"`` under
+  ``[[package]] name = "mcp-gway"`` (lockstep with the project bump so a
+  release never leaves the lockfile stale; no-op when the block is absent)
 """
 
 import argparse
@@ -27,6 +30,9 @@ TS_MARKER_RE = re.compile(
     r'const MARKER = "MCP-GWAY v\d+\.\d+\.\d+(?:[-.+][0-9A-Za-z-.+]*)?";'
 )
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-.+][0-9A-Za-z-.+]*)?$")
+LOCK_ROOT_VERSION_RE = re.compile(
+    r'(\[\[package\]\]\s+name = "mcp-gway"\s+version = ")[^"]+'
+)
 
 OWNED_TARGETS: tuple[str, ...] = (
     "plugins/opencode/mcp-gateway.ts",
@@ -34,6 +40,7 @@ OWNED_TARGETS: tuple[str, ...] = (
     "package.json",
     "README.md",
     "AGENTS.md",
+    "uv.lock",
 )
 
 
@@ -74,6 +81,9 @@ def sync_text(path: str, text: str, version: str) -> str:
             return text
         data["version"] = version
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    if path.endswith("uv.lock"):
+        synced, count = LOCK_ROOT_VERSION_RE.subn(rf"\g<1>{version}", text)
+        return synced if count else text
     synced, _ = MARKER_RE.subn(f"MCP-GWAY v{version}", text)
     return synced
 
