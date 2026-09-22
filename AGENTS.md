@@ -22,7 +22,7 @@
 
 ```
 src/mcp_gway/
-├── __init__.py          # Package version (3.0.0)
+├── __init__.py          # Package version (3.0.1)
 ├── models.py            # Pydantic models (MCPServerConfig OpenCode-only local|remote, ToolInfo, OAuthConfig)
 ├── registry.py          # .pyi file CRUD (servers/ directory) — única fuente de verdad
 ├── sandbox.py           # Starlark sandbox (hermetic execution)
@@ -138,7 +138,7 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
   - `push v*` → `uv build` + `pypi-publish` determinístico (GA interno `v2.0.0` via tag, nota interna no publicada — no anuncio externo)
   - `workflow_run` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para patches automáticos `fix/perf` → minor/patch sin tag manual (línea v2.0.1..v2.4.0 ya liberada así)
   - Condición: `if: push || workflow_run.conclusion == 'success'` + `concurrency: release` + `fetch-depth: 0`
-- **Version**: `3.0.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` (`[tool.semantic_release]`)
+- **Version**: `3.0.1` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` + `uv.lock` (vía `sync_version.py`, `build_command` + `assets`) (`[tool.semantic_release]`)
 - **Build**: `uv_build` backend — sin Node en CI (`ruff` único linter)
 
 ## Key Patterns

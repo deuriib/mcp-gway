@@ -44,7 +44,7 @@
 - Antigravity plugin's exact client protocol (streamable-HTTP vs SSE-only) is unprovable from the repo — INSTALL mitigation covers both branches; re-review next release (waiver R2, owner: engineering).
 - Off-matrix methods (e.g. `DELETE /mcp`) fall through to Starlette's default `405` with its own `Allow` set — unspecified by contract, cosmetic inconsistency (owner: engineering backlog).
 - ADR-010 exists only as a dangling reference; AC-05 amendment recorded inline in `AGENTS.md` + `API_CONTRACTS.md` — waiver expiry 2026-12-21: author the real ADR or drop the reference (owner: engineering).
-- `uv.lock` still records the previous version (line 744 `mcp-gway` `version = "2.11.3"`) after PSR writes 3.0.0 — `sync_version.py` (the `[tool.semantic_release]` `build_command`) does not own `uv.lock`, so a post-release `chore(lock)` sync commit is required (precedent `7591fff`); `uv sync` regenerates the hash locally in the interim (owner: engineering).
+- ~~`uv.lock` still records the previous version after PSR writes the release~~ **RESOLVED (post-3.0.1):** `sync_version.py` now owns `uv.lock` (root package `version = "X.Y.Z"` under `[[package]] name = "mcp-gway"`) and `uv.lock` joined `[tool.semantic_release].assets`, so every release bumps the lockfile in the same commit — gated by the `Verify version sync` step (`release.yml` `sync_version.py --check`). Standalone `chore(lock)` sync commits (precedent `7591fff`) are retired: `patch_tags` is also narrowed to `["fix", "perf"]`, so chore/docs merges no longer burn patch releases (`v3.0.1` was the last one). (owner: engineering)
 
 ## Rollback / Undo
 

@@ -34,6 +34,7 @@ assets = [
     "plugins/opencode/INSTALL.md",
     "README.md",
     "AGENTS.md",
+    "uv.lock",
 ]
 
 [tool.semantic_release.branches.main]
@@ -43,7 +44,7 @@ match_source = true
 [tool.semantic_release.commit_parser_options]
 allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
 minor_tags = ["feat"]
-patch_tags = ["fix", "perf", "refactor", "docs", "build", "chore", "style", "test", "ci", "revert"]
+patch_tags = ["fix", "perf"]
 
 [tool.ruff.lint]
 ignore = [
