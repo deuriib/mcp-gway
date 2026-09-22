@@ -1,10 +1,10 @@
 # Handoff: Engineering Specialist
 
-**Spec Reference:** SPEC-TEST-PERF-001  
-**Agent:** Engineering Specialist  
-**Date:** 2026-09-20  
-**Status:** complete  
-**Domains-Touched:** [engineering, automation]  
+**Spec Reference:** SPEC-TEST-PERF-001
+**Agent:** Engineering Specialist
+**Date:** 2026-09-20
+**Status:** complete
+**Domains-Touched:** [engineering, automation]
 
 ## Deliverables
 

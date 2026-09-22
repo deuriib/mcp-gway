@@ -1,8 +1,8 @@
 # Quality Gate Report: SPEC-TEST-PERF-001
 
-**Date:** 2026-09-20  
-**Gate Status:** OPEN  
-**Domains Touched:** [engineering, automation]  
+**Date:** 2026-09-20
+**Gate Status:** OPEN
+**Domains Touched:** [engineering, automation]
 
 ## Reviewer Verdicts
 

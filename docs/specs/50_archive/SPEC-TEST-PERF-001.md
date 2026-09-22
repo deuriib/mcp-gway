@@ -1,12 +1,12 @@
 # Spec: Test Suite Performance & Zero-Hang Optimization
 
-**ID:** SPEC-TEST-PERF-001  
-**Owner:** Engineering domain owner  
-**Domains-Touched:** [engineering, automation]  
-**Brief Reference:** BRIEF-TEST-PERF-001  
-**Status:** approved  
-**Priority:** P0  
-**Execution_Mode:** multi-subagents  
+**ID:** SPEC-TEST-PERF-001
+**Owner:** Engineering domain owner
+**Domains-Touched:** [engineering, automation]
+**Brief Reference:** BRIEF-TEST-PERF-001
+**Status:** approved
+**Priority:** P0
+**Execution_Mode:** multi-subagents
 
 ---
 

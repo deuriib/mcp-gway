@@ -66,7 +66,7 @@ gw.aclose() is declared sync def (gateway.py:338). The test calls it synchronou
 
 ### RC-3: Registry path misalignment in AC-012
 
-_broken_registry(tmp_path) creates 	mp_path / "servers" / "brokensrv.pyi". But serve --registry-dir tmp_path resolves servers_dir = Path(tmp_path) (cli.py:471-474). The registry at 	mp_path finds no .pyi files (they're at 	mp_path/servers/), so 
+_broken_registry(tmp_path) creates 	mp_path / "servers" / "brokensrv.pyi". But serve --registry-dir tmp_path resolves servers_dir = Path(tmp_path) (cli.py:471-474). The registry at 	mp_path finds no .pyi files (they're at 	mp_path/servers/), so
  = 0 → "no servers yet" instead of the degraded banner.
 
 **Fix**: Either change _broken_registry to create files directly in 	mp_path, or pass str(tmp_path / "servers") as --registry-dir.

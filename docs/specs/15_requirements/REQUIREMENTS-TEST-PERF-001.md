@@ -1,8 +1,8 @@
 # Requirements Index: Test Suite Performance & Zero-Hang Optimization
 
-**Owner:** Engineering domain owner  
-**Brief Reference:** BRIEF-TEST-PERF-001  
-**Domains-Touched:** [engineering, automation]  
+**Owner:** Engineering domain owner
+**Brief Reference:** BRIEF-TEST-PERF-001
+**Domains-Touched:** [engineering, automation]
 
 ## Functional Requirements
 

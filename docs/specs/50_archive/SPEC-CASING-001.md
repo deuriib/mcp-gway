@@ -1,12 +1,12 @@
 # Spec: Universal Casing Ingestion, Auto-Migration on Refresh & Canonical PascalCase Exposure
 
-**ID:** SPEC-CASING-001  
-**Owner:** vasquez (CTO)  
-**Domains-Touched:** [engineering, automation]  
-**Brief Reference:** BRIEF-CASING-001 (docs/briefs/BRIEF-casing-normalization.md)  
-**Status:** approved  
-**Priority:** P1  
-**Execution_Mode:** multi-subagents (inherited from BRIEF-CASING-001, frozen at frame-intent)  
+**ID:** SPEC-CASING-001
+**Owner:** vasquez (CTO)
+**Domains-Touched:** [engineering, automation]
+**Brief Reference:** BRIEF-CASING-001 (docs/briefs/BRIEF-casing-normalization.md)
+**Status:** approved
+**Priority:** P1
+**Execution_Mode:** multi-subagents (inherited from BRIEF-CASING-001, frozen at frame-intent)
 
 ---
 

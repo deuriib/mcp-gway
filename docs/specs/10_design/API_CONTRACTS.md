@@ -60,4 +60,3 @@
 
 - Engineering: vasquez approves normalizer, CLI resolution, and refresh migration logic (`src/mcp_gway/code_mode.py`, `src/mcp_gway/cli.py`, `src/mcp_gway/registry.py`, `src/mcp_gway/models.py`).
 - Automation: CI verification green across full suite.
-

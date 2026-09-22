@@ -1,10 +1,10 @@
 # Proposed Changes: Engineering Specialist — Test Suite Performance & Zero-Hang Optimization
 
-**Spec Reference:** [SPEC-TEST-PERF-001](file:///mnt/DATA/GitHub/mcp-gateway/docs/specs/20_backlog/SPEC-TEST-PERF-001.md)  
-**Agent:** Engineering Specialist  
-**Date:** 2026-09-20  
-**Execution_Mode:** multi-subagents (inherited from spec)  
-**Domains-Touched:** [engineering, automation]  
+**Spec Reference:** [SPEC-TEST-PERF-001](file:///mnt/DATA/GitHub/mcp-gateway/docs/specs/20_backlog/SPEC-TEST-PERF-001.md)
+**Agent:** Engineering Specialist
+**Date:** 2026-09-20
+**Execution_Mode:** multi-subagents (inherited from spec)
+**Domains-Touched:** [engineering, automation]
 
 ---
 
@@ -77,9 +77,9 @@ This proposal delivers targeted, zero-production-impact optimizations across 4 t
 
 # Risk Assessment: SPEC-TEST-PERF-001
 
-**Proposer:** Engineering Specialist  
-**Date:** 2026-09-20  
-**Domains-Touched:** [engineering, automation]  
+**Proposer:** Engineering Specialist
+**Date:** 2026-09-20
+**Domains-Touched:** [engineering, automation]
 
 ---
 
