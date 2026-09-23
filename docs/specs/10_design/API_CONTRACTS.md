@@ -20,6 +20,7 @@
   - `transport="http"` (default): `POST /mcp` (JSON-RPC) + `GET /mcp` → `405 Allow: POST`; `/mcp/messages` does not exist (404) — 6 routes
   - `transport="sse"`: `GET /mcp` (SSE stream) + `POST /mcp` → `405 Allow: GET` + `POST /mcp/messages?session_id=...` alias of `_mcp_post` — 7 routes
 - `app.state.transport` exposes the selected transport
+- Admin dashboard (added v3.1.0 Unreleased): 7 page routes (`GET /`, `/admin`, `/admin/servers`, `/admin/servers/{name}`, `/admin/tools`, `/admin/observability`, `/admin/policy`) + 17 `/admin/partials/*` htmx endpoints (24 `Route` objects, mounted on both transports) — loopback-only (`403` when `app.state.serve_host` is not loopback) and CSRF-protected (`app.state.csrf_token`, header `X-CSRF-Token` or field `_csrf`) on every mutation; legacy `/dashboard`, `/api/*`, `/static` remain 404
 
 ## Sign-off
 

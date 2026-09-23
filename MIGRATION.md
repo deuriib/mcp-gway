@@ -1,4 +1,21 @@
-# Migration Guide: Upgrading to v3.0.0
+# Migration Guide: Upgrading to v3.1.0 (admin dashboard)
+
+**From Version:** v3.0.1
+**To Version:** v3.1.0
+**Release Date:** 2026-09-23
+**Owner / Author:** engineering owner (admin-ui-3.1.0)
+**Migration Severity:** Low — contract notes only; standard CLI/stdio/mcp setups need no change
+
+**What changed:**
+
+- `/` now serves the admin dashboard index (404 since v2.0.0); `/admin*` added; `/dashboard` + catalog remain 404. Anything probing `/` for 404 must update (`ADR-014`).
+- CSP response header relaxes for the dashboard: `script-src` jsDelivr + cdn.tailwindcss.com (htmx SRI-pinned), `style-src 'unsafe-inline'`, `frame-ancestors 'none'`.
+- Admin routes (`/admin*`) validate `Host` fail-closed — only `{127.0.0.1, localhost, ::1, [::1]}`; a proxy sending a LAN/DNS `Host` gets 403 (anti-DNS-rebinding). `/mcp`, probes, and stdio are unaffected.
+- No registry schema, env var, or config-file changes. **Rollback:** `pip install mcp-gway==3.0.1` (full plan in `docs/specs/30_delivery/RELEASE_NOTES.md`).
+
+---
+
+# Migration Guide: Upgrading to v3.0.0 (historical)
 
 **From Version:** v2.11.3
 **To Version:** v3.0.0
