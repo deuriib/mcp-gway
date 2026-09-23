@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**MCP Gateway** — A standalone Python CLI that aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint with Code Mode (v2.4.0 interno, CLI-only, headless, sin dashboard/catalog).
+**MCP Gateway** — A standalone Python CLI that aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint with Code Mode, plus an admin web dashboard at `/` (htpy + htmx + Tailwind CDN, v3.1.0 Unreleased — reintroduces management UI; CLI sigue canónico, catalog permanece retirado).
 
 > **Nota interna:** ver `CHANGELOG.md` (al día hasta v3.0.0, 2026-09-22). Releases internos no publicados — no anuncio externo.
 
@@ -14,23 +14,25 @@
 - **HTTP Server**: Starlette + uvicorn
 - **MCP SDK**: mcp v2.0.0
 - **Sandbox**: starlark-pyo3
-- **Testing**: pytest + pytest-asyncio (570 tests)
+- **Testing**: pytest + pytest-asyncio (621 tests)
 - **Linting**: ruff
-- **Nota**: `htpy` retirado en v2.0.0; `httpx` v1 eliminado en favor de `httpx2` (dependencia directa, alineada con mcp v2 y starlette 1.6).
+- **Nota**: `htpy` reintroducido en v3.1.0 (Unreleased, `htpy==26.5.1`) como renderer del dashboard admin — retirado en v2.0.0, ahora re-admitido; `httpx` v1 eliminado en favor de `httpx2` (dependencia directa, alineada con mcp v2 y starlette 1.6).
+- **Dashboard**: htpy (server rendering) + htmx 2.0.10 + Tailwind — ambos vía CDN (`cdn.jsdelivr.net`, `cdn.tailwindcss.com`); CSP relajado en la constante única `CSP` de `gateway.py` (`script-src` CDNs, `style-src 'unsafe-inline'`, `frame-ancestors 'none'`).
 
 ## Project Structure
 
 ```
 src/mcp_gway/
-├── __init__.py          # Package version (3.0.1)
+├── __init__.py          # Package version (3.1.0)
 ├── models.py            # Pydantic models (MCPServerConfig OpenCode-only local|remote, ToolInfo, OAuthConfig)
 ├── registry.py          # .pyi file CRUD (servers/ directory) — única fuente de verdad
 ├── sandbox.py           # Starlark sandbox (hermetic execution)
 ├── server_proxy.py      # MCP server wrapper for sandbox
 ├── server_factory.py    # Server structs + sync call wrappers for the sandbox
 ├── code_mode.py         # 4 meta-tools orchestrator
-├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), headless, local-first 127.0.0.1 + CSP — rutas /mcp por transporte (gateway.py:320-340, mcp_routes condicional; app.state.transport; sin fallback): http = POST /mcp (GET → 405 Allow: POST) + /health, /ready, /live, /metrics → 6 entradas; sse = GET /mcp (SSE) + POST /mcp → 405 Allow: GET + /mcp/messages (alias POST al handler _mcp_post, no endpoint independiente) + probes → 7 entradas
+├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), local-first 127.0.0.1 + CSP — rutas /mcp por transporte (gateway.py:320-340, mcp_routes condicional; app.state.transport; sin fallback): http = POST /mcp (GET → 405 Allow: POST) + /health, /ready, /live, /metrics → 6 entradas; sse = GET /mcp (SSE) + POST /mcp → 405 Allow: GET + /mcp/messages (alias POST al handler _mcp_post, no endpoint independiente) + probes → 7 entradas
 ├── cli.py               # CLI commands (add/remove/update/list/inspect/refresh/serve --transport stdio|http|sse/mcp-hidden/local-unrestricted --host 127.0.0.1)
+├── admin/               # Admin dashboard: theme, components, icons (SVG authored), layout, data, routes + pages/{status,overview,servers,tools,observability,policy} (htpy+htmx, CDN)
 ├── oauth.py             # OAuth2 support (dynamic registration, token storage); usa httpx2 (dependencia directa)
 ├── transport.py         # Shim deprecado → mcp_gway.core.transport (DeprecationWarning; eliminar en next major)
 ├── stdio.py             # SERVIDOR-side NDJSON: lee JSON-RPC 2.0 de stdin, responde por stdout (`mcp-gway serve --transport stdio`; `mcp` alias deprecado)
@@ -49,7 +51,7 @@ src/mcp_gway/
     ├── metrics.py       # MetricsRegistry hand-rolled Prometheus exposition (counter/gauge/histogram)
     └── health.py        # /health, /ready, /live, /metrics (X-Warning: exposed gating)
 
-> **Retirado en v2.0.0 (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json`). Gestión CLI-only.
+> **Retirado en v2.0.0 (no servir):** dashboard legacy (`/dashboard`, `/api/servers`, `/static`) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json`). El alias `/` fue reactivado en v3.1.0 como índice del admin (`/admin*`) — superficie nueva, no el dashboard legacy.
 
 tests/
 ├── conftest.py                 # Fixtures compartidos
@@ -60,6 +62,7 @@ tests/
 ├── test_server_factory.py      # Server factory structs + call wrappers
 ├── test_code_mode.py           # Code mode tests
 ├── test_gateway.py             # HTTP/SSE server tests
+├── test_admin_dashboard.py     # Admin dashboard (pages, partials, CSRF, loopback gate, parity mutations)
 ├── test_cli.py                 # CLI command tests
 ├── test_integration.py         # End-to-end flow tests
 ├── test_transport.py           # Transport auto-detection tests
@@ -73,7 +76,7 @@ tests/
 └── test_observability_*.py     # metrics / logging / probes / instrumentation
 
 docs/
-├── specs/SPEC-UI-001.md (+ SCENARIOS/ACCEPTANCE)  # SUPERSEDED 2026-09-10 (retirado; headless, CLI-only)
+├── specs/SPEC-UI-001.md (+ SCENARIOS/ACCEPTANCE)  # SUPERSEDED 2026-09-10 (retirado; headless, CLI-only) — reversado parcial 2026-09-23: admin UI nueva en `/` + `/admin*` (v3.1.0 Unreleased, spec distinta)
 ├── adr/ADR-007-release-workflow-hybrid.md, ADR-008-catalog-mcp-001.md
 ├── architecture/adr-009-dynamic-local-commands.md, adr-010-unified-serve.md (referenciado, ausente en repo; enmienda ADR-010 AC-05 2026-09-22: http/sse comparten el entrypoint `_serve_http`, NO la app — rutas `/mcp` separadas por transporte, sin fallback)
 ├── sbtdd/specs/feat-006-dynamic-local-commands/   # spec + scenarios + acceptance + verify
@@ -88,7 +91,7 @@ docs/
 uv sync --all-groups                     # Install dependencies (dev group includes pre-commit)
 uv run pre-commit install                # Install git hooks (once per clone)
 uv run pre-commit run --all-files        # Run hooks on all files
-uv run pytest -v                         # Run tests (570 tests)
+uv run pytest -v                         # Run tests (621 tests)
 uv run ruff check src/ tests/            # Lint (CI parity)
 uv run ruff format --check src/ tests/   # Format check (CI parity)
 
@@ -97,9 +100,9 @@ uv run ruff format --check src/ tests/   # Format check (CI parity)
 mcp-gway add <name> --type remote --url <url> [--header "KEY=VALUE"] [--oauth-client-id ID] [--oauth-client-secret SECRET] [--oauth-scope SCOPE] [--timeout 5000] [--enabled] [--oauth-port 8989]
 # Shell-history warning: no secretos reales en --header/--oauth-client-secret; preferir `refresh --auth`.
 mcp-gway add <name> --type local --command "npx -y my-mcp" [--env KEY=VALUE] [--cwd /path] [--tools "*"]
-# Local default-deny: `local` requiere allow-list MCP_GWAY_ALLOW_LOCAL_COMMANDS="npx,uvx,python3,bunx" (vacío = deny); `*` inválido → deny + warn.
+# Local allow-list: `local` requiere MCP_GWAY_ALLOW_LOCAL_COMMANDS (CSV basenames); unset/blank → DEFAULT_ALLOW_LIST npx,bunx,uvx,pipx; `*` inválido → deny + warn.
 # feat-006 allow-list + break-glass 72h (ADR-009 docs/architecture/adr-009-dynamic-local-commands.md,
-#   src/mcp_gway/core/policy.py): default-deny empty MCP_GWAY_ALLOW_LOCAL_COMMANDS;
+#   src/mcp_gway/core/policy.py): MCP_GWAY_ALLOW_LOCAL_COMMANDS (unset/blank → DEFAULT_ALLOW_LIST npx,bunx,uvx,pipx);
 #   CSV basenames, `*` inválido; UNRESTRICTED_TTL 72*3600; break-glass MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1
 #   + marker ~/.config/mcp-gway/.local_unrestricted (epoch, 0o600, 72h TTL); vars MCP_GWAY_ALLOW_LOCAL_COMMANDS
 #   / MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL (no renombrar).
@@ -138,14 +141,14 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
   - `push v*` → `uv build` + `pypi-publish` determinístico (GA interno `v2.0.0` via tag, nota interna no publicada — no anuncio externo)
   - `workflow_run` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para patches automáticos `fix/perf` → minor/patch sin tag manual (línea v2.0.1..v2.4.0 ya liberada así)
   - Condición: `if: push || workflow_run.conclusion == 'success'` + `concurrency: release` + `fetch-depth: 0`
-- **Version**: `3.0.1` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` + `uv.lock` (vía `sync_version.py`, `build_command` + `assets`) (`[tool.semantic_release]`)
+- **Version**: `3.1.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` + `uv.lock` (vía `sync_version.py`, `build_command` + `assets`) (`[tool.semantic_release]`)
 - **Build**: `uv_build` backend — sin Node en CI (`ruff` único linter)
 
 ## Key Patterns
 
 ### Endpoints vivos + Retiro dashboard/catalog
 
-- **Vivos (v2.4.0; rutas `/mcp` por transporte, enmienda 2026-09-22):** probes `/health`, `/ready`, `/live`, `/metrics` siempre presentes; `/mcp` según `Gateway(registry, transport=...)` (`gateway.py:320-340`, `mcp_routes` condicional): **http** → `POST /mcp` (JSON-RPC) con `GET /mcp` → 405 `Allow: POST` = 6 entradas, `/mcp/messages` no existe (404); **sse** → `GET /mcp` (SSE) con `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages` alias POST al mismo handler `_mcp_post`, no endpoint independiente = 7 entradas. Sin fallback cruzado; `app.state.transport` expuesto. Gestión CLI-only.
+- **Vivos (v2.4.0; rutas `/mcp` por transporte, enmienda 2026-09-22):** probes `/health`, `/ready`, `/live`, `/metrics` siempre presentes; `/mcp` según `Gateway(registry, transport=...)` (`gateway.py:320-340`, `mcp_routes` condicional): **http** → `POST /mcp` (JSON-RPC) con `GET /mcp` → 405 `Allow: POST` = 6 entradas, `/mcp/messages` no existe (404); **sse** → `GET /mcp` (SSE) con `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages` alias POST al mismo handler `_mcp_post`, no endpoint independiente = 7 entradas. Sin fallback cruzado; `app.state.transport` expuesto. **+ 24 rutas admin** (`/` índice, `/admin` alias, `/admin/servers[/{name}]`, `/admin/tools`, `/admin/observability`, `/admin/policy`, `/admin/partials/*`) en ambos transports → 30 entradas (http) / 31 (sse); admin es loopback-only + CSRF por proceso, CSP único `CSP` en `gateway.py`. Gestión CLI + dashboard admin.
 - **Retirados (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json` — borrar caché vieja manualmente).
 
 ### Registry (.pyi + .json) — Única fuente
@@ -158,11 +161,12 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
 
 - `serve --host 127.0.0.1` default. Desvío requiere `MCP_GWAY_ALLOW_REMOTE=1`; si no → `sys.exit(2)`.
 - `remote --url` con SSRF-guard (`models.py:115-163`): hosts privados/loopback/link-local rechazados; ejemplo vivo `https://api.example.com/mcp`.
+- Admin dashboard (`/`, `/admin*`): `_gate` en `admin/routes.py` — 403 si `app.state.serve_host` no es loopback (aunque el bind sea `0.0.0.0`), CSRF obligatorio en toda mutación (header `X-CSRF-Token` o campo `_csrf`, token por proceso `app.state.csrf_token`), valores de headers/OAuth enmascarados en la vista detalle, OAuth nunca corre inline (task en background con paridad `refresh --auth`), CSP único relajado (constante `CSP` en `gateway.py`).
 - Si `host not in (127.0.0.1, ::1, localhost)` → log `warning` + banner consola; `X-Warning: exposed` solo en `GET /metrics` → `403` (observability/health.py:127-139).
 - feat-006 allow-list + break-glass 72h (`src/mcp_gway/core/policy.py`, ADR-009):
-  - default-deny con `MCP_GWAY_ALLOW_LOCAL_COMMANDS` vacío; ejemplo recomendado `"npx,uvx,python3,bunx"`.
+  - Allow-list: `MCP_GWAY_ALLOW_LOCAL_COMMANDS` CSV basenames; unset/blank → `DEFAULT_ALLOW_LIST {"npx","bunx","uvx","pipx"}` (policy.py:23, docstring "Replaces the old default-deny"); valor explícito sobresuelve.
   - CSV basenames case-insensitive, `*`/paths inválidos → deny + warn.
-  - Nota CISO opt-in: `bunx` solo recomendado en docs (no default en código, default-deny vacío se mantiene), solo opt-in con pin + owner + regate 90d; `bun` runtime fuera; denylist EXACT PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED + PREFIXES DYLD_,NPM_CONFIG_,BUN_,UV_ + PATH controlado (`NODE_ENV` permitido, no denylisted); prohibido `*`, paths o shell.
+  - Nota CISO opt-in: `bunx` está en `DEFAULT_ALLOW_LIST` (runner shim); ampliar el allow-list exige pin + owner + regate 90d; `bun` runtime fuera; denylist EXACT PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED + PREFIXES DYLD_,NPM_CONFIG_,BUN_,UV_ + PATH controlado (`NODE_ENV` permitido, no denylisted); prohibido `*`, paths o shell.
   - Break-glass `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1` + marker `~/.config/mcp-gway/.local_unrestricted` (epoch, `0o600`, 72h TTL).
   - No renombrar `MCP_GWAY_ALLOW_LOCAL_COMMANDS` / `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL`.
 

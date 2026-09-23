@@ -21,7 +21,11 @@ def gateway(registry: Registry) -> Gateway:
 
 @pytest.mark.asyncio
 async def test_csp_header(gateway: Gateway) -> None:
+    from mcp_gway.gateway import CSP
+
     transport = ASGITransport(app=gateway.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/health")
-        assert r.headers.get("content-security-policy") == "default-src 'self'"
+        assert r.headers.get("content-security-policy") == CSP
+        assert CSP.startswith("default-src 'self'")
+        assert "https://cdn.jsdelivr.net" in CSP

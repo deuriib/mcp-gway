@@ -80,7 +80,8 @@ class Registry:
                 result.append(name)
         return result
 
-    def add(self, config: MCPServerConfig, tools: list[ToolInfo]) -> None:
+    def _config_data(self, config: MCPServerConfig) -> dict[str, Any]:
+        """JSON-serializable config payload (shared by add and set_config)."""
         config_data: dict[str, Any] = {
             "name": config.name,
             "type": config.type,
@@ -107,6 +108,10 @@ class Registry:
                     config_data["oauth"] = config.oauth.model_dump()
             if config.resolved_transport:
                 config_data["resolved_transport"] = config.resolved_transport
+        return config_data
+
+    def add(self, config: MCPServerConfig, tools: list[ToolInfo]) -> None:
+        config_data = self._config_data(config)
         json_path = self._safe_path(config.name, ".json")
         self._atomic_write_text(json_path, json.dumps(config_data, indent=2))
 
@@ -114,6 +119,14 @@ class Registry:
         content = self._generate_pyi(config, tools)
         self._atomic_write_text(pyi_path, content)
         self._inc_registry_metric("add")
+
+    def set_config(self, config: MCPServerConfig) -> None:
+        """Atomic config-only write (`.json`); the `.pyi` is never touched —
+        discovered tools sync exclusively through add/refresh paths."""
+        config_data = self._config_data(config)
+        json_path = self._safe_path(config.name, ".json")
+        self._atomic_write_text(json_path, json.dumps(config_data, indent=2))
+        self._inc_registry_metric("set_config")
 
     def rename(self, old: str, new: str) -> None:
         """Atomically rename a saved server stem (`.json` + `.pyi` pair).

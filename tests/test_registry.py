@@ -209,3 +209,16 @@ def test_get_config_not_found(registry):
 def test_read_pyi_not_found(registry):
     with pytest.raises(FileNotFoundError):
         registry.read_pyi("nonexistent")
+
+
+def test_set_config_writes_json_only(tmp_path) -> None:
+    """set_config rewrites .json atomically and never touches the .pyi —
+    tools sync exclusively through add/refresh paths."""
+    reg = Registry(servers_dir=tmp_path / "srv")
+    cfg = MCPServerConfig(name="Demo", type="remote", url="https://api.example.com/mcp")
+    reg.add(cfg, [ToolInfo(name="ping", description="ping it")])
+    pyi_before = (tmp_path / "srv" / "Demo.pyi").read_bytes()
+    cfg.timeout = 1234
+    reg.set_config(cfg)
+    assert reg.get_config("Demo").timeout == 1234
+    assert (tmp_path / "srv" / "Demo.pyi").read_bytes() == pyi_before

@@ -244,11 +244,10 @@ async def test_execute_code_with_server_struct_via_gateway(gateway, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_removed_dashboard_routes_404(gateway):
+async def test_removed_dashboard_routes_404_index_serves_dashboard(gateway):
     transport = ASGITransport(app=gateway.app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
         for path in (
-            "/",
             "/dashboard",
             "/dashboard/servers",
             "/api/servers",
@@ -256,6 +255,9 @@ async def test_removed_dashboard_routes_404(gateway):
         ):
             response = await client.get(path)
             assert response.status_code == 404
+        index = await client.get("/")
+        assert index.status_code == 200
+        assert "MCP Gateway" in index.text
 
 
 @pytest.mark.asyncio

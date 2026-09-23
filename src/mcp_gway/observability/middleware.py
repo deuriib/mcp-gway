@@ -39,6 +39,23 @@ def path_template(path: str) -> str:
         if path.startswith("/mcp/messages"):
             return "/mcp/messages"
         return "/mcp"
+    if path.startswith("/admin"):
+        # admin pages are a fixed set; only per-server detail and partial
+        # endpoints carry variable segments — collapse them so metric label
+        # cardinality stays bounded.
+        if path.startswith("/admin/partials"):
+            return "/admin/partials"
+        if path.startswith("/admin/servers/"):
+            return "/admin/servers/{name}"
+        if path in (
+            "/admin",
+            "/admin/servers",
+            "/admin/tools",
+            "/admin/observability",
+            "/admin/policy",
+        ):
+            return path
+        return "/admin"
     return path
 
 

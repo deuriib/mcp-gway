@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -17,6 +18,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from mcp_gway import __version__
+from mcp_gway.admin.routes import create_admin_routes
 from mcp_gway.code_mode import CodeMode
 from mcp_gway.models import SSRF_IDLE_TIMEOUT, SSRF_MAX_BODY
 from mcp_gway.observability.health import (
@@ -33,13 +35,27 @@ from mcp_gway.observability.middleware import (
 )
 from mcp_gway.registry import Registry
 
+# WHY relaxed: the admin dashboard (htpy + htmx + Tailwind) loads its two
+# runtime libraries from CDNs and renders one inline <style> block plus
+# inline style attributes. Everything else stays same-origin; frame-ancestors
+# keeps clickjacking off. Tests import this constant — edit in one place.
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net https://cdn.tailwindcss.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'"
+)
+
 
 class _SecurityMiddleware(BaseHTTPMiddleware):
     """Single security middleware (CSP + nosniff + DENY in one place)."""
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Content-Security-Policy"] = CSP
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         return response
@@ -340,6 +356,7 @@ class Gateway:
                 Route("/live", handle_live, methods=["GET"]),
                 Route("/metrics", handle_metrics, methods=["GET"]),
                 *mcp_routes,
+                *create_admin_routes(),
             ],
             lifespan=_lifespan,
         )
@@ -355,6 +372,7 @@ class Gateway:
         self.app.state.metrics = self.metrics  # type: ignore[attr-defined]
         self.app.state.gateway = self  # type: ignore[attr-defined]
         self.app.state.start_time = self.start_time  # type: ignore[attr-defined]
+        self.app.state.csrf_token = secrets.token_urlsafe(32)  # type: ignore[attr-defined]
         try:
             loop = asyncio.get_running_loop()
             self._heartbeat_task = loop.create_task(self._heartbeat())

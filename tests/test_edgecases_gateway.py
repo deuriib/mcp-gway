@@ -59,7 +59,10 @@ def test_live_paths_health_ready_live_metrics(tmp_path):
     c = TestClient(gw.app)
     r = c.get("/health")
     assert r.status_code == 200 and r.json()["status"] == "ok"
-    assert r.headers.get("Content-Security-Policy") == "default-src 'self'"
+    from mcp_gway.gateway import CSP
+
+    assert r.headers.get("Content-Security-Policy") == CSP
+    assert "cdn.jsdelivr.net" in CSP
     assert "nosniff" in r.headers.get("X-Content-Type-Options", "nosniff")
     assert c.get("/ready").status_code == 200
     assert c.get("/live").json()["status"] == "alive"
@@ -318,8 +321,11 @@ async def test_sse_stream_and_post_to_session(tmp_path):
 
 
 def test_csp_and_security_headers(tmp_path):
+    from mcp_gway.gateway import CSP
+
     gw = _gw(tmp_path)
     c = TestClient(gw.app)
     r = c.get("/health")
-    assert r.headers.get("Content-Security-Policy") == "default-src 'self'"
+    assert r.headers.get("Content-Security-Policy") == CSP
+    assert "cdn.tailwindcss.com" in CSP
     assert r.headers.get("X-Frame-Options") == "DENY"

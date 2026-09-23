@@ -562,6 +562,9 @@ def _serve_http(
         f"  {_c('Health'.ljust(label_w), dim=True)} {_c(glyph_arr, dim=True)} {_c(f'{base_url}/health', fg='cyan')}"
     )
     click.echo(
+        f"  {_c('Dashboard'.ljust(label_w), dim=True)} {_c(glyph_arr, dim=True)} {_c(f'{base_url}/', fg='cyan')}"
+    )
+    click.echo(
         f"  {_c('Code Mode', fg='green')} {_c('·', dim=True)} local-first {_c('·', dim=True)} CSP enabled"
     )
     if not is_loopback:
