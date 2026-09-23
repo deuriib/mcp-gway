@@ -84,3 +84,87 @@ hygiene/backlog material and do not block the gate on their own.
 
 Findings are reported for the owning team; no fixes were made by this reviewer
 (report severity + location + owner only). No secrets or PII appear in this artifact.
+
+---
+
+## Re-gate addendum 2026-09-23
+
+**Reviewer:** review-readability (engineering domain) — re-verification after the
+remediation cycle (scope: gate Highs H1–H3 + CE-001 only; this reviewer's Mediums
+explicitly deferred to backlog by the user).
+
+**Re-gate verdict:** **pass** — with the 4 Mediums recorded below as
+*accepted-deferred* (owner: engineering, backlog), not fixed.
+
+**Assumption behind the judgment call (stated per guardrails):** readability Mediums
+are non-blocking severity (only Critical/High block release), and the user's explicit
+deferral of RD-001..RD-004 to backlog is the documented waiver path my original
+condition allowed ("addressed *or explicitly waived*"). Pass = no readability
+blocker for this cycle — it does not mean the 19 open findings are resolved.
+
+**Counts:** 1 fixed · 16 persisting from prior 17 (4 Medium deferred + 12 Low) ·
+3 NEW Low. Regressions: none. Severity after re-gate: 4 Medium (deferred),
+15 Low (12 prior + 3 new). Total open: 19.
+
+**Verification commands run (this re-gate):**
+
+- `uv run ruff check src/ tests/` → exit 0, no findings
+- `uv run ruff format --check src/ tests/` → `89 files already formatted`
+- `grep -cE '^(async )?def test_' tests/test_admin_dashboard.py` → `48` (14 new tests)
+- `grep -rn 'data =' src/mcp_gway/admin/` → only `routes.py:28` (import) and `routes.py:903` (shadow)
+- `grep -rn 'notice=' src/` → 9 hits; no producer for `added|updated|refreshed|auth-started`
+- `grep -rn 'oauth_port' src/` → zero `form.get("oauth_port")`; field still rendered `servers.py:288`
+- `grep -rn 'HX-Retarget' src/mcp_gway/admin/` → identical header dicts `routes.py:847` and `routes.py:1112`
+
+### Updated finding table (status re-verified against current tree)
+
+| ID | Severity | Status | Current location (line shifts from remediation) |
+|----|----------|--------|--------------------------------------------------|
+| RD-001 | Medium | **persisting** (moved) | Shadow now `src/mcp_gway/admin/routes.py:903` (`data = config.model_dump()`) vs module import `routes.py:28`; module `data` used at `routes.py:261,297,338,476,623,648`. Latent, not live: `p_set_config` stops touching module `data` after `:903` (row lookup goes through `_find_row` at `:975`). Owner: engineering. |
+| RD-002 | Medium | **persisting** (moved) | Field still rendered `src/mcp_gway/admin/pages/servers.py:288`; `p_add_server` (`routes.py:480-638`) reads only `oauth_client_id/secret/scope` (`:574-576`). Port hardcoded in 3 places, user input still dropped: `routes.py:685` (default param) and `routes.py:773` (literal in `p_auth`). Owner: engineering. |
+| RD-003 | Medium | **persisting** (moved, slightly worse) | `p_add_server` `routes.py:480-638` = 159 lines (unchanged, 4x budget); `p_set_config` `routes.py:864-985` = 122 lines — grew +3 from the OAuth merge (was 119). Owner: engineering. |
+| RD-004 | Medium | **persisting** (moved) | `_type_badge` verbatim incl. docstring: `servers.py:85-91` = `overview.py:37-43`; `_field` body: `servers.py:80-82` = `tools.py:50-52`; uptime formatter body: `routes.py:157-165` `_fmt_uptime` = `policy.py:35-44` `_fmt_seconds` (routes copy lacks the docstring the policy copy has); `_LOOPBACK` ×3: `routes.py:47`, `pages/observability.py:20`, `pages/policy.py:20`. Owner: engineering. |
+| RD-005 | Low | **persisting** (moved) | Four pill-base sources: `components.py:31-40,79-85`, `servers.py:44-48`, `policy.py:22-26`, `overview.py:19-29`. Verified drift: `policy._PILL_BASE` omits `transition-colors disabled:opacity-50 disabled:pointer-events-none` present in `servers._PILL_BASE` and `components.pill_button`. Correction: the prior `font-bold` sub-claim is **not reproducible** in the current tree (both `components._VARIANTS["green"]` `:33` and `overview._GREEN_PILL` `:25-29` contain `font-bold`) — that sub-claim is refuted on re-check; the structural duplication + disabled-utility drift stand. Owner: engineering. |
+| RD-006 | Low | **persisting** (unchanged) | 8 unreferenced icons still dead: `icons.py:35,91,103,113,122,126,130,153` (grep: definitions only, no callers outside `icons.py`). Owner: engineering. |
+| RD-007 | Low | **persisting** (moved) | Dead keys now `routes.py:57` (`added`), `:59` (`updated`), `:60` (`refreshed`), `:63-66` (`auth-started`) — `grep notice= src/` yields no producer. Positive: the new `exec-timeout` key (`routes.py:68-71`) IS live via `routes.py:1114`. Owner: engineering. |
+| RD-008 | Low | **persisting** (moved) | `_form_token` alias at `routes.py:235-236`; split call sites persist: `_form_token` at `:350,:371,:448,:982` vs `_csrf_token` at `:97,:205`. Owner: engineering. |
+| RD-009 | Low | **persisting** (moved) | Inverted-tone pair at `routes.py:743-744` (`"red" if not success else "green"` then `tone = "green" if success else "red"`). Owner: engineering. |
+| RD-010 | Low | **FIXED** | `p_empty` now delegates to the gate: `routes.py:1197-1201` = `denied = await _gate(request)` → return; the hand-rolled loopback branch is gone (one source of truth). Evidence: full read of `p_empty` + REQ-H2 gate restructure. |
+| RD-011 | Low | **persisting** (moved, expanded) | Health try/except: `routes.py:176-179` (`_status_node`) = `routes.py:272-275` (`h_index`). 6-key `stats` dict + exposition try/except: `routes.py:396-417` (`h_observability`) = `routes.py:1179-1193` (`p_metrics`). **New duplicate pair added by remediation:** identical `HX-Retarget` toast-response construction at `routes.py:845-848` (`_reject`) vs `routes.py:1110-1113` (`_exec_timeout_response`) — the new helper's docstring declares it "mirroring `_reject`", which documents but does not deduplicate. Owner: engineering. |
+| RD-012 | Low | **persisting** (moved) | `add_server_form(csrf_token="", ...)` at `servers.py:227`; hidden `_csrf` input at `servers.py:253` still carries the empty value. Owner: engineering. |
+| RD-013 | Low | **persisting** (unchanged) | Missing docstrings: `components.py:168` (`label_text`), `:212` (`textarea`), `:233` (`select`), `:246` (`checkbox`) vs documented siblings `badge:141`, `stat_card:118`, `section_title:151`; `ServerRow` + fields `data.py:11-19`. Owner: engineering. |
+| RD-014 | Low | **persisting** (moved) | Direct import `routes.py:312` (`h_server_detail`) vs wrapper `_resolve_name` `routes.py:641-644` used at `:690,:739,:753,:809,:827,:882,:993`; no WHY note on the pattern. Owner: engineering. |
+| RD-015 | Low | **persisting** (moved) | `monkeypatch: object` now `tests/test_admin_dashboard.py:340` with `# type: ignore[attr-defined]` at `:343-344`; correct typing at `:181-183`. Owner: engineering. |
+| RD-016 | Low | **persisting** (unchanged) | WHAT section labels `theme.py:11,14,21,26,31,36,41,45,48`; WHY comments (`:41-46`) exemplary and to stay. Owner: engineering. |
+| RD-017 | Low | **persisting** (unchanged) | `admin/__init__.py:1` and `admin/pages/__init__.py:1-3` still omit `from __future__ import annotations`. Owner: engineering. |
+| RD-018 | Low | **NEW** | `src/mcp_gway/admin/routes.py:47-48` — two loopback host constants in one module with different membership: `_LOOPBACK = ("127.0.0.1", "::1", "localhost")` vs `_ALLOWED_HOSTS = frozenset({..., "[::1]"})`, consumed two lines apart in `_gate` (`:136` then `:142`) with no comment explaining why both exist (answer is only discoverable by reading `_normalize_host`: it can return the bracketed form). Compounds RD-004's triple `_LOOPBACK`. Owner: engineering. |
+| RD-019 | Low | **NEW** | `src/mcp_gway/admin/routes.py:137-140` vs `:143-146` — REQ-H2 introduced the identical 403 `HTMLResponse` literal twice on adjacent branches of `_gate`; copy-paste within one new function. Owner: engineering. |
+| RD-020 | Low | **NEW** | `tests/test_admin_dashboard.py:532-546` — `_seed_oauth` re-builds the exact Demo config + tool of `_seed_demo` (`:33-41`) verbatim instead of reusing it, and hardcodes the OAuth credential literals at `:542-544` while module constants for the same values sit 6 lines below (`_OAUTH_CID`/`_OAUTH_SECRET`, `:549-550`) and are what the assertions use — two sources of truth for one test credential (drift ⇒ confusing assertion failures). Values are synthetic; no real secrets. Owner: engineering. |
+
+### New-code readability review (remediation helpers) — positive evidence
+
+- `_oauth_field` (`routes.py:854-861`): intention-revealing name, docstring explains
+  the WHY of mask sentinels; per-field merge at `:945-955` reads top-down.
+- `_normalize_host` (`routes.py:104-126`): docstring states the fail-closed contract
+  and every branch; nesting ≤ 3.
+- `_exec_timeout` (`routes.py:1090-1101`) + named bounds `routes.py:52-54`: no magic
+  numbers, clamp logic explicit; `_exec_timeout_response` (`:1104-1114`) documents its
+  mirroring of `_reject`.
+- Toolbar floors (`pages/servers.py:211-231`): plain composition, classes asserted by
+  the named test `test_toolbar_flex_children_share_identical_floors`
+  (`tests/test_admin_dashboard.py:841-854`).
+- The 14 new tests follow house style: purpose-revealing names, synthetic-only
+  credentials, matrix tests (`test_normalize_host_fails_closed_matrix:701`,
+  `test_exec_timeout_clamps_and_defaults:814`) keep per-case asserts readable.
+
+### Verdict Rationale (re-gate)
+
+**pass.** The remediation code itself is readable: helpers are small, single-purpose,
+documented with WHY, and introduced only 3 Low findings (RD-018–RD-020) plus one
+duplicate pair folded into RD-011 — hygiene, not blockers. 1 of 17 prior findings is
+fixed (RD-010); 16 persist with updated line numbers, of which the 4 Mediums
+(RD-001..RD-004) are *accepted-deferred to backlog by explicit user decision,
+recorded here with owner=engineering* — they remain open findings and must be
+re-surfaced if the deferral expires. ruff check/format stay green; the admin test
+module is at 48 tests. No regressions, no Critical/High from this reviewer.
+No source edits, no commits; no secrets or PII in this artifact.

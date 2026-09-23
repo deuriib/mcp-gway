@@ -62,3 +62,72 @@ No real secrets or PII appear in this artifact; test credentials are synthetic p
 ## Verdict Rationale
 
 **Conditional.** The store's integrity foundations are solid — atomic symlink-safe writes, fail-closed validation before every persist, `.pyi` contract isolated, masking correct on every read path, and zero secret leakage into logs/toasts. The gate does not pass because **DAT-001 (High)** is a silent credential-loss defect on an invited UI action with a clear fix-forward, and **DAT-002 + DAT-003 (Medium)** prove the payload schema drifts from the model schema with no versioning — the exact checklist failure this lens exists to catch. **Conditions to clear:** fix DAT-001 (per-field oauth merge + partial-edit test); fix the `_config_data` drift for DAT-002/003 (one root cause); declare purpose/TTL/deletion/owner for the credential store (DAT-004) with privacy-engineer consult. Lows (DAT-005..007) may ride the same PR but do not block. Residual risk if shipped unfixed: stored OAuth secret silently dropped on partial edit (High) and resilience flag opt-in that never persists (Medium).
+
+---
+
+## Re-gate addendum 2026-09-23
+
+**Reviewer:** review-data (data lens, independent re-run)
+**New verdict:** **conditional — narrowed**. The sole blocking High (**DAT-001**) is **CLOSED with fresh proof**. Open conditions are now Medium-tier waiver candidates (DAT-002/003/004, owner-deferred) plus one **newly found Medium (DAT-008)** surfaced while validating the DAT-001 fix. The line-5 header (`conditional`) remains the accurate verdict; its rationale above is superseded by this section.
+**Method:** independent live probe against the check instance `http://127.0.0.1:8090` (temp registry `/tmp/opencode/gw-admin-check/servers`, seeded by me and self-cleaned to its original 3 servers), plus static file:line re-verification of every row. No source edits, no commits, no touch of `~/.config/mcp-gway`. Remediation scope reviewed: 3 gate Highs + CE-001; DAT-002/003/004 were owner-deferred by the orchestrator.
+
+**Counts:** 7 original findings → **fixed 1** (DAT-001), **persisting 6** (DAT-002..007), **new 1** (DAT-008) = 8 rows total. **0 High open**, 4 Medium, 3 Low.
+
+### Findings — re-verified status (updated rows)
+
+| ID | Severity | Status | Evidence (file:line / command output) | Owner |
+|----|----------|--------|---------------------------------------|-------|
+| DAT-001 | High → *closed* | **CLOSED** | Fix: `_oauth_field` treats blank + bullet/asterisk sentinels as keep-stored (`src/mcp_gway/admin/routes.py:854-861`); per-field merge — blank keeps stored per field, non-blank replaces that field only (`routes.py:945-954`). Tests: 4 round-trip tests `tests/test_admin_dashboard.py:553-648` (scope-only byte-identical, all-blank keep, no-stored-stays-None, mask-sentinel). My live probe: P1/P2/P3/P5 below — all PASS. Remediation author's fails-before log `/tmp/opencode/h1_before.txt` (2 of 5 failed pre-fix) vs `h1_after.txt` (5 passed) consistent with my results. | engineering owner (admin UI) — **done** |
+| DAT-002 | Medium | **PERSISTING** | `_config_data` still omits `retry_on_transport_error`: `grep -n "retry_on_transport_error\|schema_version" src/mcp_gway/registry.py` → **no match (exit 1)**; whitelist at `src/mcp_gway/registry.py:83-111`, consumed by `add` (`registry.py:114`) and `set_config` (`registry.py:126`). Checkbox read at `admin/routes.py:515,552,592`, control `admin/pages/servers.py:315`, model field `models.py:720`, runtime consumer `server_factory.py:77,119`. Operator opts in → 200 → flag absent after reload (unchanged from first review). | engineering owner (registry) — waiver candidate, expiry 2026-10-23 or v3.1.1 first |
+| DAT-003 | Medium | **PERSISTING** | Destructive rewrite without schema versioning unchanged: `set_config` rewrites from whitelist `registry.py:123-129` + `83-111`; `schema_version` absent repo-wide (same grep, exit 1). Consume side: `routes.py:903` (`data = config.model_dump()`), `routes.py:967-968`. Any unknown/legacy key in an on-disk JSON is destroyed at first dashboard save; escalates to High the moment any writer legitimately persists a whitelisted-out key (DAT-002 is that writer-in-waiting). | engineering owner (registry) — waiver candidate, expiry 2026-10-23 or v3.1.1 first |
+| DAT-004 | Medium | **PERSISTING** | Purpose/TTL/deletion/owner still undeclared: credential fields written at `registry.py:98-99` (environment), `registry.py:102-103` (headers), `registry.py:104-108` (oauth); at-rest `0o600` `secureio.py:43,59,82`; deletion = `p_remove` `routes.py:988-1011` incl. token unlink-only `routes.py:998-1007`. Requirements cite unchanged: `docs/specs/15_requirements/REQUIREMENTS-PERF-001.md:28` (REQ-NF-005, "Purpose+TTL+deletion por store") + `docs/briefs/BRIEF-performance.md:53`. `grep -rniE "purpose\|propósito\|TTL" docs/` for this store → only `GATE_REPORT.md:60` and this artifact — **no data-map declaration exists**. | engineering owner + privacy-engineer consult — waiver candidate, expiry 2026-10-23 |
+| DAT-005 | Low | **PERSISTING** | Success path still re-renders from the in-memory model: `routes.py:978-980` (`config=updated`), no fresh `registry.get_config` after write. | engineering owner (admin UI) — backlog |
+| DAT-006 | Low | **PERSISTING** | Timeout still unbounded: int-parse only `routes.py:891-895`; no range validator `models.py:716`. | engineering owner — backlog |
+| DAT-007 | Low | **PERSISTING** | Docstring still overclaims "live DNS … on every save" `routes.py:865-869` vs `SSRF_CACHE_TTL = 60.0` `models.py:27` + `use_cache=True` `models.py:749`. Fail-closed gate itself unchanged (still runs every save). | engineering owner (admin UI) — backlog |
+| **DAT-008** | **Medium (new)** | **NEW — input-side sibling of DAT-001** | **A user-typed non-UUID `clientId` is NOT persistable: it is silently replaced by a random `uuid4()` at construction.** Proof (live probe P4): typed value sha256 `197e333c518c…` → stored sha256 `1b99c6da29d6…`, stored parses as a UUID → silent replacement, HTTP 200, no warning. Code: `models.py:692-701` (`validate_client_id` returns `uuid4()` on any non-UUID — fires first, at the merge construction `routes.py:950`); second net `models.py:751-778` (`validate_oauth` dict/instance paths). Impact made real by the consumer: `oauth.py:451-466` — the replacement value IS a UUID → `is_manual=True` → the **random** UUID is used as pre-registered `client_id` → manual OAuth flow fails against the AS, while the UI accepted and "saved" the operator's real client ID. Affects AS-issued non-UUID client IDs (Google/GitHub/Okta style); dynamic-registration flows unaffected; no previously stored credential destroyed. **Pre-existing at HEAD** (`models.py` unmodified per `git status`; the same rotation was cited inside the original DAT-001 location), out of approved remediation scope this cycle. | engineering owner (models) — waiver candidate, expiry 2026-10-23 or v3.1.1 first |
+
+**Checklist deltas:** PII/masking re-confirmed PASS (below); schema-versioning + migration path remain FAIL (DAT-003); lineage/quality remain PARTIAL (DAT-005/006). No checklist item regressed.
+
+### DAT-001 closure proof — fresh live probe (hashes only, no values)
+
+Script `/tmp/opencode/gw_data_recheck.py`, log `/tmp/opencode/gw_data_recheck.log` — **30 checks, 0 FAIL**. Synthetic credentials seeded into the temp registry, then removed (registry restored to its original 3 servers).
+
+- **P1 scope-only PUT** (only `oauth_scope` non-blank, HTTP 200): stored `clientId` sha256 `11e594f48195…` → `11e594f48195…` (**byte-identical**); `clientSecret` sha256 `226f1770655c…` → `226f1770655c…` (**byte-identical**); scope updated to the typed value; all non-oauth fields equal; whole file changed by scope only; `.pyi` sha256 unchanged; response body contains neither secret nor header value.
+- **P2 all-blank PUT** (HTTP 200): whole-file sha256 `6633a4bd8fc8…` → `6633a4bd8fc8…` — **byte-identical**, credentials kept.
+- **P3 mask-sentinel PUT** (`••••••••` / `********`, HTTP 200): whole file **byte-identical** (`6633a4bd8fc8…`), no bullet/asterisk string persisted.
+- **P5 no-stored-stays-None** on a server without oauth (HTTP 200): no `oauth` key created, whole file **byte-identical**.
+- **Masking on read (G1–G7):** detail page HTTP 200; header value, `clientSecret`, and `clientId` all **absent** from rendered HTML (form prefill never echoes any of them — write-only inputs with placeholder only, `admin/pages/servers.py:553-571`); masked bullets rendered (`pages/servers.py:436-439`); OAuth shown as badge only (`pages/servers.py:440-447`); "blank keeps current" promise present.
+- **Hygiene:** store perms `0o600` after all PUTs; zero `.tmp` leftovers; seeds self-removed.
+
+**Verdict on DAT-001: fully closed as filed** (stored-credential wipe on partial edit — output side). The input-side sibling observed during closure is carved out as **DAT-008** (pre-existing, separately owned, Medium).
+
+### Verified PASS — re-confirmed after this cycle's routes.py/registry churn
+
+- **Atomicity:** unchanged single impl `secureio.py:15-84` — `O_EXCL 0o600` (:43), `fsync` (:49), `chmod 0o600` (:59,:82), symlink fail-closed at every step (:16-32, :62-75), fixed `.tmp` name (`:26`) → concurrent writers fail loudly (last-write-wins preserved).
+- **Masking:** probe G2–G7 above; test parity `tests/test_admin_dashboard.py:204-213, 363-383`.
+- **`.pyi` untouched by config save:** `set_config` writes only `json_path` (`registry.py:123-129`); probe P1 byte-identical `.pyi`.
+- **Token store:** `p_remove` unlink-only, contents never read/written (`routes.py:998-1007`), dialog discloses token removal (`pages/servers.py:487`).
+- **Zero secrets in logs:** post-churn grep of every `extra={…}` in `admin/routes.py` → only `server` / `tools` count / `reason` (exception type) / `timeout_s`; no config values logged.
+- **Validation before persist:** SSRF re-gate inside model build every save (`routes.py:955-958` → `models.py:744-749`); local allow-list re-gate + audit (`routes.py:959-966`); rejection paths never write (probes returned error paths untouched store in suite).
+- **Tests (my run):** `uv run pytest tests/test_admin_dashboard.py tests/test_registry.py -q` → **71 passed** (was 57; +14 incl. the 4 new OAuth round-trip tests). Full suite 619 + ruff clean: orchestrator re-run (cited, not mine).
+
+### Evidence log (commands, masked)
+
+```
+.venv/bin/python /tmp/opencode/gw_data_recheck.py    # live 127.0.0.1:8090, temp registry → 30 checks, 0 FAIL
+  G1..G7 masking PASS | P1 scope-only: cid 11e594f48195..= csec 226f1770655c..= byte-identical, .pyi unchanged
+  P2 all-blank: file 6633a4bd8fc8..= byte-identical | P3 sentinels: byte-identical, no bullet persisted
+  P4 non-UUID cid typed 197e333c518c.. → stored 1b99c6da29d6.. (random UUID) — NOT persisted
+  P5 no-stored stays None, byte-identical | H1 0o600 | H2 no .tmp | cleanup: registry restored (3 servers)
+grep -n "retry_on_transport_error\|schema_version" src/mcp_gway/registry.py   # no match, exit 1 (DAT-002/003)
+grep -rn "extra={" src/mcp_gway/admin/routes.py | grep -v "server|tools|reason|timeout_s"   # empty (no secrets in logs)
+grep -rniE "purpose|propósito|TTL" docs/ | grep <store>                        # only GATE_REPORT + this artifact (DAT-004)
+uv run pytest tests/test_admin_dashboard.py tests/test_registry.py -q          # 71 passed
+git status --porcelain -- src/                                                # models.py unmodified → DAT-008 pre-existing
+```
+
+No real secrets or PII appear in this artifact; all credential material is recorded as sha256 prefixes (12 hex chars) or masked forms of synthetic test placeholders only.
+
+### Updated verdict rationale
+
+**Conditional (narrowed).** DAT-001 — the High that blocked the gate — is closed with a fresh, independent live probe: per-field merge holds byte-identical under scope-only, all-blank, and mask-sentinel saves, masking never echoes on any read path, and `.pyi`/atomic-write/token/log PASS items survived this cycle's churn. The gate still does not pass cleanly because three owner-deferred Mediums persist exactly as filed: **DAT-002 + DAT-003** (payload schema drift with no versioning — top persisting risk: the checkbox offers an opt-in that deterministically never persists, 200 OK, same silent-loss class as DAT-001 at config-flag level) and **DAT-004** (REQ-NF-005 purpose/TTL/deletion/owner declaration still absent — regulatory exposure under Ley 172-13). Additionally, validating the fix exposed **DAT-008 (Medium)**: non-UUID user-entered `clientId` silently uuid4-replaced and then used as a "pre-registered" client — broken manual OAuth with accepted-then-discarded input. **Conditions to clear (waiver candidates, owner + expiry assigned in rows):** DAT-002/003 one-root fix (registry owner) by 2026-10-23 or v3.1.1; DAT-004 data-map declaration + privacy-engineer consult by 2026-10-23; DAT-008 reject-or-preserve non-UUID clientId (models owner) by 2026-10-23 or v3.1.1; Lows DAT-005..007 backlog, non-blocking. Residual risk if shipped with waivers: resilience flag silently non-persisting (Medium), unknown-key destruction on save (Medium), undeclared credential-store governance (Medium), manual OAuth broken for non-UUID client IDs (Medium). Zero Highs remain open.

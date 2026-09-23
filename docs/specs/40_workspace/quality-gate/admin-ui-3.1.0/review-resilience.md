@@ -1,8 +1,8 @@
 # Resilience Review: admin-ui-3.1.0
 
 **Reviewer:** review-resilience (engineering domain)
-**Date:** 2026-09-23
-**Verdict:** conditional
+**Date:** 2026-09-23 (re-gated same day — current verdict: **conditional**, F-7 High open; see "Re-gate addendum 2026-09-23")
+**Verdict:** conditional (initial run — findings F-1..F-6 below stand as written)
 **Scope:** read-only; live probes against `mcp-gway serve --transport http --host 127.0.0.1 --port 8099 --registry-dir /tmp/opencode/rr/servers` (isolated registry). No source edits, no commits. Zero secrets in this artifact.
 
 ## Checklist
@@ -68,3 +68,57 @@
 **Conditional.** Core degradation promises hold under live chaos: empty registry, corrupt config, unreachable upstream, and 403/404/405 all degrade to honest UI states with probes serving throughout (RS-101..104 verified live; 34 admin tests green; suite 605 green on record). Three Medium findings keep this from a clean pass: the CDN single point of failure (F-1), the unbounded aggregate refresh window with inline 300 s OAuth wait (F-2), and false-green probes masking registry corruption (F-3). None is Critical/High — no exploit, no data loss, no outage. Gate stays conditional until each Medium is either remediated or recorded as an accepted risk with owner + justification + expiry (per guardrails §"Accepted risks"). Lows (F-4/F-5/F-6) go to backlog.
 
 **Side note for the orchestrator:** during evidence gathering, `mcp-gway add Demo` was run without realizing `cli.py:22` pins the default registry (`~/.config/mcp-gway/servers`); it was removed immediately (`Removed Demo.`) and the user's 6 pre-existing servers verified intact. The live gateway ran against an isolated `--registry-dir` under `/tmp/opencode/rr`. Own-forward: disclosed here so the record is clean.
+
+## Re-gate addendum 2026-09-23
+
+**Reviewer:** review-resilience (engineering domain) — re-run sign-off
+**Verdict:** conditional — gate **must not close** while F-7 (High) is open; F-1..F-3 (Medium) also remain pending waiver/backlog records.
+**Scope:** read-only. Live GET/HEAD probes against the orchestrator's temp instance `http://127.0.0.1:8090` (registry `/tmp/opencode/gw-admin-check/servers`), source/test reads, plus exactly two sanctioned execute POSTs with **bounded** Starlark (2e7 / 5e7-iteration loops that self-recover — no infinite code; the server was never killed or restarted; no `mcp-gway` CLI invocations; no `~/.config/mcp-gway` access; no source edits; no commits). Zero secrets in this artifact (the ephemeral per-process CSRF token used for the probe is not recorded).
+Own-forward: the first execute POST returned 403 `CSRF token mismatch` because my token extraction left the `X-CSRF-Token&#34;: &#34;` prefix in the value — extraction bug on my side, not a product defect; corrected extraction then passed the gate (43-char token). Disclosed for a clean record.
+
+### Remediation verification — gate 3 Highs + CE-001
+
+| Item | Status | Evidence (file:line / command output) |
+|------|--------|----------------------------------------|
+| REQ-H1 per-field OAuth merge | **verified** | `_oauth_field` blank+mask-sentinel→keep (`admin/routes.py:854-861`); per-field merge, all-blank leaves `data["oauth"]` untouched (`routes.py:945-954`); omission-safe (form.get→None→blank); every failure path exits via `_reject` toast/redirect, never 500 (`routes.py:840-851,888-889,955-958,967-970`); tests `test_admin_dashboard.py:553,578,604,627`. Static+test evidence (no live mutation — read-only posture). Degradation story: fail-closed toasts, no 500s — sound. |
+| REQ-H2 fail-closed Host gate | **verified** | `_ALLOWED_HOSTS` (`routes.py:48`), `_normalize_host` fail-closed (`routes.py:104-126`), `_gate` Host check **before** CSRF/body parsing (`routes.py:129-146`). Live: `Host: evil.example.com` → **403** `<!doctype html><title>403</title><p>Admin is loopback-only.</p>` on `/admin`; `Host: 127.0.0.1:8090` and bare `127.0.0.1` → **200**; probes deliberately ungated: evil-Host `/health` → 200, `/metrics` → 200, `/mcp` GET → 405 `Allow: POST` (design-asserted `test_admin_dashboard.py:728-736`). Degradation semantics: distinct 403 body, gateway/MCP/probes keep serving while admin fails closed — correct. An already-open tab cannot carry a non-loopback Host (page render is gated too), so the 403 is forged-request-only; htmx swallows non-2xx silently — acceptable, no finding. Tests `:651,685,701`. |
+| REQ-H3 execute timeout | **partial — refuted for CPU-bound code → F-7** | Branch exists: clamp (`routes.py:52-54,1090-1101`), `asyncio.wait_for(asyncio.to_thread(...))` (`routes.py:1156-1159`), toast/retarget surface (`routes.py:1104-1114`), warning log (`routes.py:1161-1165`); tests `:747,773,790,814,827`. Live probes show the bound does not hold — see F-7. |
+| REQ-CE-001 toolbar floors | **verified** | Row `shrink-0`, both children `flex-1 md:flex-none` (`admin/pages/servers.py:211-231`); live `GET /admin/servers` contains the floor markup (1 match); test `test_admin_dashboard.py:841`. |
+
+### Findings — updated rows (prior F-1..F-6: **fixed 0 / persisting 6**, of which 2 line-anchors moved)
+
+| ID | Status | Sev | Location @ 2026-09-23 | Note |
+|----|--------|-----|------------------------|------|
+| F-1 | persist | Medium | `admin/layout.py:36-40` (CDN constants; rendered tags confirmed live: `GET /` → `https://cdn.tailwindcss.com`, `https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/...`) | No local fallback added. **No in-repo accepted-risk record** (owner+justification+expiry) found — `CHANGELOG.md:5` documents the CDNs as a feature, not as a risk acceptance. Waiver, if any, must live in the gate packet. |
+| F-2 | persist (**moved**) | Medium | loop now `p_refresh_all` `routes.py:712-731` (sequential `await _refresh_one` at `:721-724`) via `_refresh_one` `routes.py:684-709` (`refresh_server` awaited `:700`); anchors unchanged: `core/client.py:353-356` (empty-discovery→needs_auth), `oauth.py:532` (`wait_for_callback(timeout=SSRF_IDLE_TIMEOUT)`), `models.py:28` (300.0 s) | Still no aggregate deadline; inline OAuth wait unchanged. Prior evidence stands. |
+| F-3 | persist | Medium | `observability/health.py:13-27` — get_config failure swallowed `:19-24`, `return "ok"` `:25` | Unchanged; no live re-corruption this run (read-only mandate). RS-104 observation from the first run still stands. |
+| F-4 | persist (**moved**) | Low | read `routes.py:883` → write `routes.py:968`; `registry.py:123` (`set_config`), `registry.py:178` (`update` re-read) | Accepted risk, documented last-write-wins. Line anchors updated from prior run (826/910). |
+| F-5 | persist | Low | token `gateway.py:375` (unchanged); CSRF compare now `routes.py:96-101,147-153` | Backlog item (reload hint on CSRF 403) unchanged. |
+| F-6 | persist — **restate as condition** | Low | `tests/test_admin_dashboard.py` now 48 tests; the 14 new ones are exactly the fix-scoped set: OAuth merge `:553,578,604,627`, Host gate `:651,685,701,728`, execute timeout `:747,773,790,814,827`, toolbar `:841` | **Zero new RS-style chaos tests**: no probe-health-during-corruption test (F-3 parity), no bounded/aggregate refresh test (F-2 parity), no CDN-degradation test (F-1 parity). `test_edgecases_observability.py:23` (`check_registry`) is pre-existing and list()-only; CDN tests (`test_admin_dashboard.py:47`, `test_edgecases_gateway.py:65,330`, `test_wave2_api.py:31`) only assert CDN *presence*. Condition unchanged: add RS-103/RS-104-parity tests when F-2/F-3 are remediated. |
+
+### New findings
+
+### F-7 — High — Execute "timeout" does not bound CPU-bound snippets; the whole gateway stalls for the full eval duration
+**Location:** `admin/routes.py:1156-1159` (`wait_for(to_thread(...))`); `sandbox.py:99-101,110-113` (`sl.eval` inside inner `ThreadPoolExecutor`); claim refuted: `routes.py:1093-1094` ("neither pin the route open nor starve it") and `routes.py:1108` ("the snippet was abandoned").
+**Evidence (live, temp instance):** POST `/admin/partials/codemode` `mode=execute`, `timeout=0.5`, Starlark `for i in range(50000000)` → response wall **11 890 ms** with `HX-Retarget: #toast` and body `Execution timed out after 0.5s — the snippet was abandoned.` — the toast arrived only at eval end, not at 0.5 s. Concurrent `GET /health` issued 0.7 s into the run took **11 194 ms** (blocked until eval end); the next health call took 3 ms (loop recovered immediately). A 2e7-iteration run showed the same pattern (wall 4 440 ms for a 0.5 s timeout). Interpretation: `asyncio.wait_for` cannot fire while the event loop is starved for the eval — consistent with starlark eval holding the GIL across `sandbox.py:110-113` — so for CPU-bound code neither the route bound nor loop liveness holds; probes, `/mcp`, and all admin surfaces stall together (RS-101's "probes serve throughout" breaks during execute). No in-repo recovery bound for an unbounded snippet; whether `starlark-pyo3` (`pyproject.toml:15`, `>=2026.1.1`) has an internal step/interrupt limit is **unverified** (package not importable from the ambient interpreter; not re-checked via env-mutating commands under the read-only mandate) — treat as unbounded until the owner confirms. Secondary facet: for GIL-releasing slow work the timeout *does* fire (test `:747` sleep-path), but the abandoned `to_thread` worker plus the inner sandbox thread keep running until completion (`sandbox.py:110` `shutdown(wait=True)` waits on it) — an orphan bounded by the snippet's own duration.
+**Impact:** gateway-wide availability stall triggerable by one pasted long loop; contradicts the remediation's own claim. Trigger requires loopback + CSRF (operator-triggered, conditional), but impact is unbounded → High.
+**Owner:** engineering. Verify `starlark-pyo3` interrupt support; enforce the bound at a layer that does not depend on a live event loop (e.g., a sandbox-level step/time limit before or inside eval that can actually interrupt); reword the toast/docstring until then. Reporting only — no fix attempted (no freelance fixes).
+
+### O-1 — Low (observation; out of admin-ui-3.1.0 scope — route to security/gateway domain) — Host gate deliberately excludes `/mcp` and probes
+**Location:** design-asserted `tests/test_admin_dashboard.py:728-736`; live: evil-Host `/mcp` GET → 405 (not 403), `/metrics` → 200.
+**Evidence:** DNS-rebinding page (Host = attacker domain → 127.0.0.1) is blocked on every admin surface (verified) but reaches the MCP transport under the loopback-auth model. Pre-existing design, **not introduced** by REQ-H2; residual-risk note for the security reviewer, no gate condition raised from this domain.
+**Owner:** security/gateway.
+
+### Stress scenario rows — re-run 2026-09-23
+
+| ID | Scenario | Expected | Observed | Pass? |
+|----|----------|----------|----------|-------|
+| RS-101 | Probes/index during normal ops | 200s | `health=200 index=200`, post-probe `health 2-3 ms` | yes |
+| RS-105 | CDN dependence | — | live `GET /` still references `cdn.tailwindcss.com` + `cdn.jsdelivr.net` only | no (F-1 persists) |
+| RS-106 | Refresh-all aggregate deadline | — | static re-read: loop unchanged, no budget (`routes.py:721-724`) | no (F-2 persists) |
+| RS-108 (new) | Host-gate degradation semantics | evil Host → 403 on admin; probes/MCP unaffected; loopback ±port → 200 | `evil-admin=403` (distinct body), `evil-health=200`, `evil-metrics=200`, `evil-mcp-get=405`, `port-admin=200`, `bare-admin=200` | yes |
+| RS-109 (new) | Execute-timeout bound + probe liveness under load | response ≈ 0.5 s; probes keep answering | response **11 890 ms**; health blocked **11 194 ms** (5e7 iters); toast text correct but late | **no (F-7)** |
+
+### Verdict rationale (re-gate)
+
+**Conditional.** Three of four remediations are sound and verified (REQ-H1 merge, REQ-H2 Host gate, CE-001 floors — source + 14 fix-scoped tests + live probes). REQ-H3 delivers the response surface but its core resource-bound claim is **empirically refuted for CPU-bound snippets** (F-7, High: measured 11.9 s response for a 0.5 s timeout and an 11.2 s full-gateway stall). Prior findings: **0 fixed, 6 persisting** (F-2/F-4 line-anchors moved; F-1..F-3 Mediums still lack in-repo accepted-risk records with owner+justification+expiry; F-6 restated as the standing condition tied to F-2/F-3). F-7 blocks closure: remediate, or orchestrator + engineering owner waive explicitly with recorded justification and expiry. This domain does not pass the gate while a High it verified as refuted remains open.

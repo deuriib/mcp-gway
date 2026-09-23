@@ -75,3 +75,121 @@ They do **not** yet hold the *boundary itself*: SEC-001 shows the loopback gate 
 **Residual risk after remediation (explicit):** admin remains unauthenticated to anything that can reach loopback (SEC-006 accepted, single-operator assumption); CDN trust remains until assets are vendored (SEC-003 — until then a Tailwind/jsdelivr compromise bypasses all app-layer controls); DNS-rebinding fix does not replace CSRF (both stay); no CVE/SCA scan was executed inside this review — CI dependency scanning is assumed, not verified. No secrets, tokens, or PII appear in this artifact; all quoted credential values are masked test placeholders.
 
 **Evidence on record:** 34/34 `test_admin_dashboard.py`, 24/24 `test_wave2_api.py` + `test_registry.py`, live probes on `127.0.0.1:8090` (read-only + intentionally-rejected requests only), runtime config-save proofs executed in throwaway temp registries (no source files touched).
+
+---
+
+## Re-gate addendum 2026-09-23
+
+**Reviewer:** security-reviewer (independent re-verification)
+**Date:** 2026-09-23
+**Scope:** Re-prove or refute every prior finding against the remediated tree; hunt new attack surface introduced by the remediation; re-verify the scorecard; assess the execute-timeout abandoned-worker path. Update-in-place — history above preserved, nothing rewritten.
+**Verdict:** **conditional** — no Highs remain. SEC-001 (High) and SEC-002 (Medium) are **FIXED with fresh live proof**; the original rebinding exfil chain is **dead (proven)**. SEC-003 (Medium) persists → waiver candidate; SEC-004/005 (Low) persist to backlog; SEC-006 accepted risk stands; the abandoned-worker path cross-references risk gate RK-008 (Medium, engineering owner) — no duplicate finding opened.
+
+### Re-gate counts
+
+| Outcome | Count | IDs |
+|---------|-------|-----|
+| Fixed (re-proven live) | **2** | SEC-001 (High), SEC-002 (Medium) |
+| Persisting | **4** | SEC-003 (Medium, waiver candidate), SEC-004 (Low), SEC-005 (Low), SEC-006 (Low, accepted) |
+| New findings from the remediation surface | **0** | — (abandoned-worker overlaps risk RK-008, cross-referenced not duplicated) |
+
+### Open findings (severity table)
+
+| ID | Severity | Status | Location | Owner | Disposition |
+|----|----------|--------|----------|-------|-------------|
+| SEC-003 | **Medium** | Persisting — **waiver candidate** | `src/mcp_gway/gateway.py:42-50` (CSP), `src/mcp_gway/admin/layout.py:40` (unpinned Tailwind), `layout.py:242` (no integrity) | engineering owner | Vendor/self-host both CDN assets (then `script-src 'self'`) or pinned-version + SRI where feasible; add `form-action 'self'; base-uri 'self'`. Until waived or fixed: a CDN compromise bypasses every app-layer control (`form-action`/`base-uri` still absent from `CSP`). |
+| SEC-004 | **Low** | Persisting (latent trap) | `src/mcp_gway/admin/routes.py:215-224` (`_render` raw-`Markup`) | engineering owner | Backlog: narrow to Element/list input (fail closed). All current call sites element-only (re-audited this re-gate). |
+| SEC-005 | **Low** | Persisting (hygiene) | `src/mcp_gway/observability/health.py:64,108,123` | engineering owner | Backlog: delete the stale handler-level CSP literals; wire unaffected (middleware wins). |
+| SEC-006 | **Low** | Accepted risk | `src/mcp_gway/admin/routes.py:129-154` (gate design) | engineering owner + product | Single-operator local-first assumption; **expiry: v3.1.0 GA** re-evaluation; escalates to High if multi-user/host-shared deployment ships. |
+| RK-008 (cross-ref) | **Medium** | Owned by risk gate — not re-opened here | `src/mcp_gway/sandbox.py:110-119` + GIL behavior | engineering owner | See §Abandoned-worker path; tracked in `review-risk.md`. |
+
+### Re-proof of prior findings
+
+**SEC-001 (High) — FIXED.** Remediation: `_gate` now validates the request Host authority (`_ALLOWED_HOSTS` `routes.py:48`, `_normalize_host` `routes.py:104-126`, host check first in `_gate` `routes.py:129-154`) *before* CSRF; regression tests `test_admin_dashboard.py:651` (evil host → 403 on every admin surface), `:685` (legit variants pass), `:701` (fail-closed matrix), `:728` (non-admin unaffected).
+Live re-proof on this instance (`127.0.0.1:8090`, nothing killed/restarted):
+- Original PoC `curl -H 'Host: evil.attacker.example' http://127.0.0.1:8090/` → **403** (was 200 at first gate — the exact regression is closed).
+- Normalization matrix (live + unit `:701`): trailing-dot, IPv4-mapped `::ffff:127.0.0.1`, double-colon, decimal/octal/short-IP, NUL-byte, userinfo, whitespace-in-host → **all 403/denied**; mixed-case / port-suffixed / whitespace-stripped legitimate loopback forms → pass (`:685`).
+- Raw-socket **duplicate Host** headers → `400 Bad Request` (server rejects; the earlier "200" was curl collapsing duplicate headers — extraction artifact, not a bypass).
+- Absolute-form request line carrying an evil authority → `404`.
+- 403 body is static (63 bytes, byte-identical across paths): no host reflection, no token, no information leak.
+- Ordering proven: an evil-Host **mutation** request is answered by the Host gate (loopback text) before CSRF — not "CSRF token mismatch".
+- Gate coverage: enumeration of all **24 `Route(` entries → 23 unique handlers** (`h_index` shared by `/` + `/admin`) → **23/23 call `_gate` first**.
+
+**SEC-002 (Medium) — FIXED.** Remediation: per-field OAuth write-through (`_oauth_field` `routes.py:854-861`, merge `routes.py:945-955`) replaces the old group-replace.
+Live PoC (temp server `SecProof`, synthetic client id `11111111-1111-4111-8111-111111111111`, placeholder secret len 23; server deleted after the proof — registry back to Calendar/Notes/Weather):
+- Scope-only PUT → stored client id **byte-identical**, secret len **23 preserved**, scope updated.
+- Mask-sentinel PUT (`••••`/`****` bullets) → stored values **kept** (masks never overwrite real credentials).
+- Mass-assignment probe (extra `oauth.*` keys, `type=local`, `name=Hacked`, `command=...`) → all ignored; stored name/type/command unchanged.
+- Detail page + edit form: `secret_hits=0` (no credential material in HTML).
+- Fails-before/passes-after logs on record: `/tmp/opencode/h1_before.txt`, `/tmp/opencode/h1_after.txt`.
+
+**SEC-003 (Medium) — PERSISTS.** Wire `CSP` still `script-src 'self' https://cdn.jsdelivr.net https://cdn.tailwindcss.com` with no `form-action`/`base-uri` (re-read `gateway.py:42-50`); Tailwind tag still unpinned, no `integrity` (`layout.py:40`, used at `:242`); htmx still pinned — SRI re-extracted against the live CDN: `sri_match=YES` (`HTMX_INTEGRITY` `layout.py:36-38`, tag `:243-248`). Top open severity → waiver candidate.
+
+**SEC-004 (Low) — PERSISTS.** `_render` (`routes.py:215-224`) still coerces raw `str` → `Markup` unescaped; every current call site passes htpy elements (re-audited).
+
+**SEC-005 (Low) — PERSISTS.** Three stale CSP literals remain at `health.py:64,108,123`; wire still correct (`_SecurityMiddleware` `gateway.py:58` wins — re-verified on `/` and `/health`).
+
+**SEC-006 (Low) — ACCEPTED, unchanged.** Design stance; expiry v3.1.0 GA as recorded above.
+
+### Original rebinding exfil chain — DEAD (proven)
+
+Chain: rebind → read CSRF token from admin DOM → drive mutations → URL-swap exfil.
+- **Hop 1 (rebind → DOM):** every admin surface answers evil Host with **403 before CSRF** (matrix above; tests `:651`). The token lives only in admin HTML (`hx-headers`) → unreachable.
+- **Independent negative on hop 2 (token anywhere else):** value-grep of the live 43-char token (extracted from the DOM) across every non-admin response — `/metrics`, `/health`, `/ready`, `tools/list`, `executeToolCode` results, and all 403 bodies → **0 hits**.
+- **Independent negative on hop 3 (mutation via `/mcp`):** `/mcp` exposes only the 4 code-mode meta-tools (read/sandbox: `executeToolCode`, `getToolDocs`, `listToolFiles`, `readToolFile`) — grep confirms **no registry-write verbs**; no admin-equivalent mutation exists outside the gate.
+
+Verdict: the chain fails at hop 1 **and** has no fallback at hops 2–3. Dead and proven dead.
+
+### New-surface hunt (remediation-introduced)
+
+| Probe | Result |
+|-------|--------|
+| `_exec_timeout` hostile inputs (`routes.py:1090-1101`: injection strings, negatives, NaN/inf, huge values) | All clamp/default to safe floats — no injection |
+| `notice` query param (closed-set dict `routes.py:50-71`) | Unknown notice not reflected; exec-timeout notice renders fixed text — no reflected XSS |
+| CSRF-less POST to the new codemode-timeout path | **403** — CSRF coverage extends to the new handler |
+| Host-gate 403 body | Static 63 B, no token/host reflection — no info leak |
+| Host normalization edge forms | Fail-closed deny (`:701`), no 500s |
+| Secrets re-scan of `src/mcp_gway/admin/` | No hardcoded credential literals |
+
+### Scorecard re-verification
+
+| Control | Re-gate result |
+|---------|----------------|
+| C1 loopback + Host gate | **VERIFIED** — host now validated first in `_gate`; 24 routes / 23 handlers gated; tests `:651/:685/:701`; non-admin unaffected (`:728-736`) |
+| C2 CSRF on mutations | **VERIFIED** — incl. the new timeout path (CSRF-less → 403); `secrets.token_urlsafe(32)` per process (`gateway.py:375`) |
+| C3 secret masking | **VERIFIED live** — SecProof detail + edit form `secret_hits=0` |
+| C4a SSRF fail-closed | **VERIFIED live** — link-local PUT rejected, stored URL unchanged, toast = pydantic error |
+| C4c blank keeps secrets | **VERIFIED** (was refuted → SEC-002 now fixed; scope-only + mask-sentinel proofs) |
+| C6 tools read-only | **VERIFIED** — `PUT` → 405/404 |
+| C5 single CSP on wire | **VERIFIED** — constant on `/` + `/health`; stale literals persist → SEC-005 |
+| C7 escaping | **VERIFIED** for all current call sites; raw-`Markup` trap persists → SEC-004 |
+| htmx SRI | `sri_match=YES` (re-extracted against live CDN) |
+| Tailwind pin / `form-action` / `base-uri` | **ABSENT** → SEC-003 |
+| Audit coverage | `audit_local_action` present at `routes.py:557,615,678,962` |
+
+### Abandoned-worker / execute-timeout path
+
+Question: does returning a timeout toast abandon a still-running sandbox worker?
+- Mechanics: `sandbox.py:110-119` — `ThreadPoolExecutor(max_workers=1)` used as a context manager → `shutdown(wait=True)` joins the worker; the worker is never truly orphaned at scope exit.
+- Empirics: GIL experiment — `sl.eval` **holds the GIL** for the whole evaluation (event loop starved **6.32 s**). Live: 300M-iteration exec with a 0.1 s timeout returned the "timed out after 0.1 s" toast in **6.16 s**, and the sandbox counter incremented immediately after the response (worker completed; the loop was GIL-starved, not abandoned).
+- Impact: **availability/latency only** — a timeout does not bound response latency while a heavy eval runs, and process exit blocks on `wait=True`. No confidentiality/integrity impact; requires loopback + gate already passed (single-operator model).
+- Disposition: same root cause as risk gate **RK-008 (Medium, engineering owner, `review-risk.md`)** — cross-referenced, **no duplicate security finding opened**. Residual accepted until RK-008 lands.
+
+### Dependency scan (own rerun)
+
+`uvx pip-audit -r /tmp/opencode/pg-req.txt` → **"No known vulnerabilities found"** (29 packages). Independent scanner run by this reviewer — the first pass's "no CVE scan run" checklist gap is closed for this re-gate.
+
+### Test & lint evidence
+
+- Full suite: **619 passed**.
+- `ruff check src/ tests/` → `[]`; `ruff format --check` → **89 files clean**.
+
+### Residual risk after re-gate (explicit)
+
+- SEC-003 is the top open item: until assets are vendored/SRI'd (or waived), a Tailwind/jsdelivr compromise bypasses every app-layer control (`form-action`/`base-uri` still absent from `CSP`).
+- Admin remains unauthenticated beyond loopback+Host (SEC-006 accepted, single-operator; expires v3.1.0 GA).
+- RK-008 GIL/timeout latency is risk-owned (Medium, engineering owner) — availability only.
+- `/mcp`, `/metrics`, `/health`, `/ready`, `/live` stay intentionally outside the admin Host gate (design-asserted `test_admin_dashboard.py:728-736`); re-verified as no residual for the chain (token 0 hits; `/mcp` read-only meta-tools).
+- No secrets, tokens, or PII in this artifact — the token is referenced by length only (43), the OAuth client id is a synthetic all-`1`s test UUID, the secret by length/placeholder only; the test server was deleted from the temp registry.
+
+**Evidence on record:** 619-test suite green, `ruff check` `[]`, format 89 files clean, `pip-audit` clean (own rerun), live probes on `127.0.0.1:8090` (rejections + read-only; nothing killed or restarted), temp-registry PoCs cleaned up (`SecProof` removed), orchestrator fails-before/passes-after logs `/tmp/opencode/h1_{before,after}.txt`.

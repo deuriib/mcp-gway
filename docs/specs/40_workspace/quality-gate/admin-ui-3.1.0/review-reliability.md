@@ -4,6 +4,10 @@
 **Date:** 2026-09-23
 **Verdict:** closed (2 High findings block; remediate + re-run gate)
 
+> **Superseded 2026-09-23 (same day, re-run):** current verdict is **conditional** —
+> see "Re-gate addendum 2026-09-23" at the end of this file. Original review preserved
+> verbatim below as history.
+
 **Scope:** reliability only — route-handler correctness, error paths, failure modes,
 htmx vs non-htmx divergence, error surfacing, determinism, timeouts. Read-only: no
 source edits, no commits. Artifact is the only file written.
@@ -143,3 +147,166 @@ acknowledgment cannot pass. Re-run this review after RL-001..RL-006 are addresse
    dropped (RL-005, Med).
 6. `src/mcp_gway/admin/routes.py:834-849` — absent `tools_filter` widens allow-list to
    `*`, absent `enabled` disables: three semantics in one handler (RL-006, Med).
+
+---
+
+## Re-gate addendum 2026-09-23
+
+**Reviewer:** review-reliability (same reviewer, independent re-run)
+**New verdict:** **conditional**
+**Counts (all 13 prior findings):** fixed **1** (RL-001) · partial **1** (RL-002) ·
+persisting **11** (RL-003..RL-013: 4 Med + 7 Low) · regressed **0** ·
+**new defects introduced by the 4 approved fixes: 0 (explicit none)**
+
+**Approved remediation scope re-checked:** RL-001 (per-field OAuth merge),
+RL-002 admin-trigger part (bounded execute), CE-001 (host gate — other domain's
+High; reliability-side error paths spot-verified below). RL-003..RL-006 explicitly
+deferred by owner decision to backlog/waiver → re-stated as gate conditions.
+
+### Method & evidence (re-run, read-only + sanctioned curl probes)
+
+- Re-read checklist
+  `frame-ship/skills/quality-gate/references/engineering/reliability-review.md`.
+- Full re-read of `src/mcp_gway/admin/routes.py` (1249 L), `admin/pages/servers.py`,
+  `admin/pages/tools.py`, `admin/components.py` (toast region), `models.py:680-828`,
+  `registry.py:80-134`, `sandbox.py`, `gateway.py`/`middleware.py`/`cli.py` batch diffs
+  (`git diff HEAD -- ...`), `tests/test_admin_dashboard.py:540-854`.
+- `uv run pytest tests/test_admin_dashboard.py -q` → **48 passed** (independent).
+- `uv run pytest tests/test_admin_dashboard.py -q -k "oauth or timeout or host or normalize"`
+  → **14 passed** (independent).
+- Orchestrator fails-before/after logs re-read: `/tmp/opencode/h1_before.txt` →
+  `2 failed, 3 passed, 43 deselected`; `/tmp/opencode/h1_after.txt` →
+  `5 passed, 43 deselected` (RL-001 reproduction → remediation proven).
+- Live probes against the sanctioned temp instance `http://127.0.0.1:8090`
+  (execute-only mutations; temp registry verified pristine after —
+  3/3 JSON files, 0 `oauth` keys, health 200 @3.5ms; default registry untouched;
+  CSRF token handled in-shell only, never recorded):
+
+  | Probe | Result |
+  |---|---|
+  | A — fast execute (`result = 42`, HX) | `200 0.006711`, body has `42`, no `hx-retarget`, no "timed out" |
+  | B — 100M-iter loop, `timeout=0.1`, HX | single `200 0.628852` (repeat `0.654182`); headers `hx-retarget: #toast`, `hx-reswap: outerHTML`; body toast `timed out after 0.1s`; `hx-swap-oob` count **0**; no double response |
+  | B′ — `/health` issued **during** B's stall | `200 time=0.227283` vs post-stall `200 time=0.004666` → event loop starved for the eval duration (GIL residual confirmed live) |
+  | C — same loop, non-htmx | `303` + `location: /admin/tools?notice=exec-timeout`; landing renders "Code execution timed out — the snippet was abandoned." |
+  | D — `Host: evil.example.com` | `/admin/servers` → **403**, `/health` → **200** (gate scoped to admin, fail-closed) |
+
+### Updated rows — every prior finding
+
+| ID | Was | Now | Current location | Evidence |
+|----|-----|-----|------------------|----------|
+| RL-001 | High | **FIXED** | fix: `admin/routes.py:854-861` (`_oauth_field`), `:945-954` (per-field merge) | 4 OAuth-edit tests `tests/test_admin_dashboard.py:553-648` (scope-only byte-identical, all-blank, no-stored, mask sentinels) — independently **48 passed**; h1 logs 2 failed → 5 passed. Edges verified: `OAuthConfig` has exactly 3 fields (`models.py:687-690`) so fresh construction drops no extra keys; UI OAuth inputs render empty + placeholder (`servers.py:556/564/570`) so browsers submit `""`, sentinel path is belt-and-braces; `oauth=True`/`None` serialization guarded (`registry.py:104-108`); **no port key exists** in `OAuthConfig` or the JSON payload → merge loses nothing port-wise (the input discard itself remains RL-005); concurrent save = read `routes.py:883` → write `:967` last-write-wins — same window as pre-fix, atomic at file level (`registry.py:62`), accepted semantics |
+| RL-002 | High | **PARTIAL** (admin-scope fixed; residual documented + now live-confirmed) | fix: `admin/routes.py:52-54` (clamp consts), `:1090-1101` (`_exec_timeout`), `:1104-1114` (`_exec_timeout_response`), `:1154-1165` (`wait_for` + TimeoutError), `:68-71` (notice key); root cause unchanged `sandbox.py:110-119` | Live B/C probes above: timeout surface works, single response, htmx toast + non-htmx notice both correct. **Residual confirmed:** delivery deferred to eval end (`0.1s` timeout answered at `0.63s`; health 227ms vs 4.7ms during stall) — GIL/loop starvation; `asyncio.to_thread` cancel leaves the worker running until eval ends, and the default executor is shared with `gateway.py:474` (MCP tool calls) + `models.py:325,422` (DNS pinning) → repeated runaways can queue those. Owner split stands: admin routes (this batch) done; `sandbox.py` root cause = core-owner backlog per approved scope |
+| RL-003 | Med | **PERSISTS** (condition C1) | add `routes.py:620`, refresh write `:708`, toggle `:813`, remove `:994-997` (non-`FileNotFoundError`) | Unwrapped `registry.*` calls → raw 500, no htmx feedback; only `p_set_config` is wrapped (`:967-970`). Unchanged by approved scope |
+| RL-004 | Med | **PERSISTS** (condition C2) | `.pyi` read `routes.py:330-337` | Only `FileNotFoundError` handled → `PermissionError` still 500, vs config read degrade at `:316-329`. Unchanged |
+| RL-005 | Med | **PERSISTS** (condition C3) | input `admin/pages/servers.py:288`; handler `admin/routes.py:480-638` (never reads `oauth_port`); hardcodes `:685`, `:773` (8989) | Add-form port still rendered then discarded; every web OAuth flow still 8989. CLI parity gap unchanged |
+| RL-006 | Med | **PERSISTS** (condition C4) | `admin/routes.py:891-897` (timeout→keep `:891-895`; enabled absent→`False` `:896`; tools_filter absent→`"*"` `:897`) | Three absent-field semantics in one handler; fail-open direction on the policy field unchanged |
+| RL-007 | Low | **PERSISTS** | add form `admin/pages/servers.py:252` (no `method`/`action`); compounding: `:227` renders add form with `csrf_token=""` (htmx-only via global `hx-headers` `layout.py:255` — a native submit would hit 405 first, then CSRF 403 even after method/action is added) | Unchanged |
+| RL-008 | Low | **PERSISTS** | `admin/routes.py:199` (`_tone` discarded) | Unchanged |
+| RL-009 | Low | **PERSISTS** | `admin/routes.py:367-370`, `:1083-1086`, fallthrough `:1171` | Read/docs/execute errors now toast honestly (`:1138,1147-1149,1167` — improvement inside the fix), but the three cited sites unchanged |
+| RL-010 | Low | **PERSISTS** | orphaned endpoint `admin/routes.py:1248`; only refs: `components.py:344` docstring | No page emits `hx-get /admin/partials/empty` (grep re-run) |
+| RL-011 | Low | **PERSISTS** | buttons `admin/pages/servers.py:124-165` (no `hx-disabled-elt`); toggle RMW `admin/routes.py:813` | Forms have it (`servers.py:41,585`); row actions don't. Unchanged |
+| RL-012 | Low | **PERSISTS** | `admin/routes.py:509-513` (add), `:891-895` (edit); `models.py:716` (`timeout: int = 5000`, no `ge/le`) | int-parse only, no upper bound. Unchanged |
+| RL-013 | Low | **PERSISTS** | `admin/routes.py:790` (`asyncio.create_task(_run())`, no strong ref) | Unchanged |
+
+### Conditions of this verdict (owner-deferred + residuals)
+
+- **C1 (was RL-003, Med)** — wrap registry writes at `routes.py:620, 708, 813, 994-997`
+  → toast, never 500. Owner: engineering (admin routes). Backlog per owner decision.
+- **C2 (was RL-004, Med)** — handle non-`FileNotFoundError` on `.pyi` read at
+  `routes.py:330-337`. Owner: engineering (admin routes).
+- **C3 (was RL-005, Med)** — persist or remove the `oauth_port` input
+  (`servers.py:288` vs `routes.py:480-638, 685, 773`). Owner: engineering (admin).
+- **C4 (was RL-006, Med)** — unify absent-field semantics at `routes.py:891-897`
+  (fail-closed on `enabled`/`tools_filter`). Owner: engineering (admin routes).
+- **C5 (RL-002 residual)** — `sandbox.py:110-119` GIL root cause + lingering worker /
+  shared default-executor contention (`routes.py:1156-1159` vs `gateway.py:474`,
+  `models.py:325,422`). Owner: core. Backlog per approved scope; admin-scope bound
+  (`[0.1,30]s`, default 10) accepted as mitigation.
+- **C6 (RL-007..RL-013, 7 Lows)** — hygiene backlog, unchanged severity.
+
+### New-defect hunt (introduced by the 4 approved fixes) — result: NONE
+
+- **Merge edge cases:** extra OAuth keys impossible — `OAuthConfig` is exactly
+  3 fields (`models.py:687-690`, pydantic default `extra` ignore at load, pre-existing);
+  port: no port key exists anywhere in the OAuth payload (`registry.py:104-108`) →
+  nothing to lose (the discard is RL-005, persisting); concurrent save: window
+  `routes.py:883→967` identical to pre-fix, file-level atomic, last-write-wins —
+  unchanged, not a regression; `oauth=True` legacy normalized to `OAuthConfig` on save
+  (`models.py:756-757`) — equivalent truthiness downstream, not a defect.
+- **Host-gate error paths (CE-001 surface):** `_normalize_host` fails closed on
+  `None`/empty/malformed (`routes.py:104-126`, matrix test
+  `test_admin_dashboard.py:701-725`); gate ordered before body parse in **all 24**
+  handlers (`routes.py:256-1201`); live evil-Host → admin 403 / health 200;
+  non-admin routes unaffected (`:728-737`). No 500 path found.
+- **Timeout-path races:** every branch returns exactly one `Response`
+  (`routes.py:1160-1170`); the lingering executor thread has no path to a response
+  (result discarded, no callback) — live probe B: single 200, `hx-swap-oob` count 0;
+  notice-key coverage complete — every `notice=` redirect key
+  (`config-saved/not-saved/unreadable`, `exec-timeout`, `executed`, `removed`,
+  `policy-enabled/disabled`) is in `NOTICE_MESSAGES` (`routes.py:56-81`); live landing
+  for `exec-timeout` renders. Clamp handles `None`/garbage/`NaN`/`±inf`/negatives/
+  overflow (`routes.py:1090-1101`, tests `:814-824`).
+- **New helpers' error handling:** `_oauth_field` (`routes.py:854-861`) safe on
+  `None`/str (no file inputs exist); `_exec_timeout_response` mirrors the proven
+  `_reject`; `registry.set_config` (`registry.py:123-129`) atomic + `_safe_path` +
+  caller-wrapped (`routes.py:967-970`); `_config_data` oauth `isinstance` guard
+  (`registry.py:104-108`); metric-label collapse in
+  `observability/middleware.py:42-58` keeps cardinality bounded. No unhandled path found.
+
+### Newly observed (pre-existing, NOT caused by the fixes — owner: models/core)
+
+- **OBS-1 (Medium)** — `models.py:692-701` (+ `mode="before"` chain `:751-778`):
+  any non-UUID `clientId` is silently replaced with a fresh `uuid4()` at construction
+  *and* at load. A user-typed real-world OAuth client id (add form `servers.py:280`,
+  edit form `:554-557`, CLI `--oauth-client-id`) can never persist on any surface;
+  downstream auth then runs with a random id. The RL-001 merge itself is safe
+  (stored values are always UUID-shaped, so they round-trip byte-identical), but the
+  input side of the same contract silently discards user data. `models.py` is untouched
+  by this batch (`git status`: not modified) → pre-existing, newly observed by this
+  re-run (the old Proof-1 output showed the uuid4 and attributed it only to the
+  handler; the validator is the deeper mechanism). Needs core-owner confirmation:
+  intended dynamic-registration placeholder, or defect. No freelance fix proposed.
+
+### Re-gate checklist
+
+- [ ] **Error paths handled explicitly** — PARTIAL. Config-save honest
+      (`routes.py:967-970`); execute timeout honest (new); registry write paths +
+      `.pyi` read still raw-500 → C1/C2.
+- [ ] **No swallowed exceptions** — PARTIAL. Surfaced fallbacks fine; RL-009 trio
+      still maps errors to empty states.
+- [ ] **Input validation at boundaries** — PARTIAL. Execute timeout now clamped
+      `[0.1,30]s` (`routes.py:1090-1101`); `oauth_port` still discarded (C3),
+      absent-field trio unchanged (C4), no timeout upper bound (C6).
+- [ ] **Deterministic behavior** — PARTIAL. Notice keys allowlisted incl. new
+      `exec-timeout` (`routes.py:56-81`); double-click toggle still non-idempotent
+      (C6); concurrent config save = documented last-write-wins.
+- [x] **Edge cases tested** — OAuth edit (4 tests), execute timeout (5 tests),
+      host-gate matrix (3 tests) all added and independently rerun — **48 passed**.
+- [ ] **Idempotency where required** — PARTIAL (C6 toggle).
+- [ ] **Timeouts on external calls** — PARTIAL→improved. Admin execute now returns
+      within the clamp **code-wise**, but under GIL starvation delivery is deferred to
+      eval end (live B/B′: 0.63s for a 0.1s timeout, loop starved) → C5 residual;
+      detect/discover/OAuth remain bounded as before.
+
+### Verdict rationale (re-gate)
+
+**conditional.** Both prior Highs are addressed within approved scope: RL-001 is
+FIXED with byte-identical proof (before: 2 failed → after: 5 passed; independent
+rerun 48 passed) and its merge edge cases verified clean; RL-002's admin trigger is
+bounded and its timeout surfaces verified live on both htmx and non-htmx paths, with
+the sandbox-GIL residual explicitly documented and owned by core (C5). The 4 Mediums
+(RL-003..RL-006) persist by owner decision and are re-stated as conditions C1-C4
+with current file:line; the 7 Lows remain backlog (C6). The 4 approved fixes
+introduced **no new defects** (hunt above: merge edges, host-gate paths, timeout
+races, helper error handling — all clean). One pre-existing concern newly observed
+(OBS-1, `models.py:692-701`, Medium, models/core owner) — not caused by this batch,
+tracked forward. Gate: **conditional pass** — ship may proceed with C1-C6 recorded;
+re-verify C1-C2 when the error-surfacing backlog lands.
+
+**State assumptions declared:** live probes used execute-only requests (no config
+PUTs); a live RL-001 mutation was deliberately **skipped** because OAuth fields are
+now write-only-by-design (blank keeps stored → not clearable via sanctioned curl),
+making it irreversible on the shared temp instance — test-level byte-identical proof
++ before/after logs + independent rerun used instead. Temp registry verified pristine
+post-probe (3 JSONs, 0 oauth keys, health 200); server never killed/restarted;
+default registry never touched; no secrets recorded (CSRF stayed in-shell).
