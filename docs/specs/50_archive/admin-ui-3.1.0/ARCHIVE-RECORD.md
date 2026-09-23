@@ -3,8 +3,8 @@
 **Spec:** no source file existed (`20_backlog` empty — interactive lane; canonical record = GATE_REPORT + TEST_MATRIX promoted below)
 **Date:** 2026-09-23
 **Gate verdict:** OPEN
-**Commit(s):** `91dd912` (first-run CLOSED record), `fa2f404` (OPEN + C3 waivers W-01..W-13), `c5938d7` (handoff), archive commit itself (see `git log --oneline`)
-**Tag:** v3.1.0 — pending release decision (W-04: release commit + tag must land together; tree still uncommitted by standing instruction)
+**Commit(s):** `91dd912` (first-run CLOSED record), `fa2f404` (OPEN + C3 waivers W-01..W-13), `c5938d7` (handoff), `4a24a1d` (notes + archive), **release `eb8d5df`**
+**Tag:** `v3.1.0` — annotated, **local, unpushed** (push = `uv build` + `pypi-publish` via `release.yml`, needs an explicit go)
 **Ship type:** deploy
 
 ## Promoted (survive in `50_archive/admin-ui-3.1.0/`)
@@ -27,5 +27,6 @@ Per `RELEASE_NOTES.md` (v3.1.0): post-ship `git revert <release-commit>` restore
 ## Notes
 
 - Other SPEC lanes present in `40_workspace` during this archive: `architecture/` (antigravity/perf/mgw-alias reviews), `backend/` (SPEC-TEST-PERF-001 + READY-001), `quality-gate/{SPEC-MGW-001, SPEC-PERF-001, SPEC-SERVER-CAPS-001, SPEC-TEST-PERF-001}`, `verify-handoff/*` — none in-flight (specs already shipped/stalled; newest sibling write Sep 22; no concurrent session) → archive not aborted; purge allowlist = `admin-ui-3.1.0` only, zero sibling files touched.
-- Residual risk / open conditions: waivers **W-01..W-13** — full three-block records, owners and expiries in `quality-gate/GATE_REPORT.md` C3 (default expiry 2026-12-22; pre-tag: W-02 CDN vendoring, W-04 release commit, W-05 doc mirror; GA: W-13 multi-user auth; core-release: W-01 sandbox interrupt/step-limit).
+- Residual risk / open conditions: waivers **W-01..W-13** — full three-block records, owners and expiries in `quality-gate/GATE_REPORT.md` C3 (default expiry 2026-12-22; pre-tag: W-02 CDN vendoring, W-04 release commit (**satisfied** by `eb8d5df`), W-05 doc mirror; GA: W-13 multi-user auth; core-release: W-01 sandbox interrupt/step-limit).
 - Lows stay backlog (not waived): 320px toolbar Δ5.4 cosmetic, ragged button heights band, 404-vs-405 tools PUT, no `pytest-timeout`, empty-state copy, toast auto-dismiss.
+- Feature tree shipped in release commit `eb8d5df`; out-of-inventory untracked (`.impeccable/`, `PRODUCT.md`) excluded and still untracked — **W-04 expiry condition satisfied** (commit + tag landed together, before any push).
