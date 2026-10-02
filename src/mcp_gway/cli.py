@@ -14,12 +14,21 @@ import click
 
 from mcp_gway.core import detect_transport, discover_tools, parse_envs, parse_headers
 from mcp_gway.core.client import refresh_server
+from mcp_gway.core.policy import home_dir
 from mcp_gway.models import MCPServerConfig, OAuthConfig, ToolInfo
 from mcp_gway.registry import Registry
 
 
+def _config_servers_dir() -> Path:
+    return home_dir() / ".config" / "mcp-gway" / "servers"
+
+
+def _config_tokens_dir() -> Path:
+    return home_dir() / ".config" / "mcp-gway" / "tokens"
+
+
 def _get_registry() -> Registry:
-    return Registry(servers_dir=Path.home() / ".config" / "mcp-gway" / "servers")
+    return Registry(servers_dir=_config_servers_dir())
 
 
 # Single source of truth lives in mcp_gway.core.client; re-export here for
@@ -320,7 +329,7 @@ def remove(name: str) -> None:
     name = _resolve_saved_name(registry, name)
     try:
         registry.remove(name)
-        tokens_dir = Path.home() / ".config" / "mcp-gway" / "tokens"
+        tokens_dir = _config_tokens_dir()
         for suffix in ("", "_client"):
             token_file = tokens_dir / f"{name}{suffix}.json"
             if token_file.exists():
@@ -385,6 +394,133 @@ def inspect(name: str) -> None:
         sys.exit(1)
 
 
+@main.group(name="tools")
+def tools_group() -> None:
+    """Code Mode discovery + execution (list → read → docs → exec)."""
+
+
+@tools_group.command(name="list")
+@click.option(
+    "--binding",
+    type=click.Choice(["server", "tool"]),
+    default="server",
+    show_default=True,
+    help="Stub binding level (server = one .pyi per server).",
+)
+def tools_list(binding: str) -> None:
+    """List virtual .pyi stub files (same as listToolFiles)."""
+    from mcp_gway.code_mode import CodeMode
+
+    try:
+        listing = CodeMode(_get_registry()).list_tool_files(binding)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(listing)
+
+
+@tools_group.command(name="read")
+@click.option("--server", required=True, help="Server owning the stub.")
+@click.option("--tool", default=None, help="Tool name for a single-tool stub.")
+@click.option("--start-line", type=int, default=None, help="First line (1-based).")
+@click.option("--end-line", type=int, default=None, help="Last line (inclusive).")
+def tools_read(
+    server: str, tool: str | None, start_line: int | None, end_line: int | None
+) -> None:
+    """Read a server or single-tool stub (same as readToolFile)."""
+    from mcp_gway.code_mode import CodeMode
+
+    file_name = f"servers/{server}.pyi" if not tool else f"servers/{server}/{tool}.pyi"
+    try:
+        content = CodeMode(_get_registry()).read_tool_file(
+            file_name, startLine=start_line, endLine=end_line
+        )
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    click.echo(content)
+
+
+@tools_group.command(name="docs")
+@click.option("--server", required=True, help="Server owning the tool.")
+@click.option("--tool", required=True, help="Tool to document.")
+def tools_docs(server: str, tool: str) -> None:
+    """Show detailed docs for one tool (same as getToolDocs)."""
+    from mcp_gway.code_mode import CodeMode
+
+    try:
+        docs = CodeMode(_get_registry()).get_tool_docs(server, tool)
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    if docs.startswith("Tool '") and "not found" in docs:
+        click.echo(f"Error: {docs}", err=True)
+        sys.exit(1)
+    click.echo(docs)
+
+
+@tools_group.command(name="exec")
+@click.option("--code", default=None, help="Starlark snippet (assign `result`).")
+@click.option(
+    "--file",
+    "file_path",
+    type=click.Path(dir_okay=False, path_type=str),
+    default=None,
+    help="Path to a .star file to execute.",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=None,
+    help="Execution timeout in seconds (default 30).",
+)
+def tools_exec(code: str | None, file_path: str | None, timeout: float | None) -> None:
+    """Execute Starlark code via MCP tools (same as executeToolCode).
+
+    Local servers spawn only when core/policy.py allows — a denied
+    command fails here with the policy message, never silently.
+    """
+    _cli_start = time.monotonic()
+    if (code and file_path) or (not code and not file_path):
+        click.echo("Error: pass exactly one of --code or --file", err=True)
+        sys.exit(2)
+    if file_path:
+        try:
+            code = Path(file_path).read_text(encoding="utf-8")
+        except OSError as e:
+            click.echo(f"Error: cannot read file '{file_path}': {e}", err=True)
+            sys.exit(2)
+    assert code is not None
+    if not code.strip():
+        click.echo("Error: code is empty", err=True)
+        sys.exit(2)
+    from mcp_gway.code_mode import CodeMode
+
+    try:
+        output = CodeMode(_get_registry()).execute_tool_code(code, timeout=timeout)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        _log_cli_event(
+            "tools_exec",
+            "error",
+            duration_ms=int((time.monotonic() - _cli_start) * 1000),
+            detail=f"{type(e).__name__}",
+        )
+        sys.exit(1)
+    click.echo(output)
+    _log_cli_event(
+        "tools_exec",
+        "success",
+        duration_ms=int((time.monotonic() - _cli_start) * 1000),
+    )
+
+
 def _resolve_log_level(explicit: str | None) -> str:
     if explicit:
         return explicit.lower()
@@ -403,9 +539,7 @@ def _serve_stdio(log_level: str | None, registry_dir: str | None) -> None:
 
     setup_logging(resolved_level)
     servers_dir = (
-        Path(registry_dir).expanduser()
-        if registry_dir
-        else Path.home() / ".config" / "mcp-gway" / "servers"
+        Path(registry_dir).expanduser() if registry_dir else _config_servers_dir()
     )
     import logging as _logging
 
@@ -497,9 +631,7 @@ def _serve_http(
         )
         sys.exit(2)
     servers_dir = (
-        Path(registry_dir).expanduser()
-        if registry_dir
-        else Path.home() / ".config" / "mcp-gway" / "servers"
+        Path(registry_dir).expanduser() if registry_dir else _config_servers_dir()
     )
     from mcp_gway import __version__
 
@@ -678,7 +810,7 @@ def _rename_token_stems(old: str, new: str) -> None:
     Moves `<old>.json` / `<old>_client.json` to the `<new>` stems when the
     target is absent — never overwrites, never reads contents, never logs.
     """
-    tokens_dir = Path.home() / ".config" / "mcp-gway" / "tokens"
+    tokens_dir = _config_tokens_dir()
     for suffix in ("", "_client"):
         src = tokens_dir / f"{old}{suffix}.json"
         dst = tokens_dir / f"{new}{suffix}.json"
