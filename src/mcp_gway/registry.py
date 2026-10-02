@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -149,8 +150,17 @@ class Registry:
             raise FileNotFoundError(f"Server '{old}' not found")
         new_json = self._safe_path(new, ".json")
         new_pyi = self._safe_path(new, ".pyi")
-        if new_json.exists() or new_pyi.exists():
+        try:
+            same_stem_case_insensitive = (
+                str(new_json.resolve()).lower() == str(old_json.resolve()).lower()
+            )
+        except OSError:
+            same_stem_case_insensitive = old.lower() == new.lower()
+        if not same_stem_case_insensitive and (new_json.exists() or new_pyi.exists()):
             raise FileExistsError(f"Server '{new}' already exists")
+        if same_stem_case_insensitive and old != new:
+            self._rename_case_only(old, new, old_json, old_pyi, new_json, new_pyi)
+            return
         if old_json.exists():
             data = json.loads(old_json.read_text(encoding="utf-8"))
             data["name"] = new
@@ -163,6 +173,77 @@ class Registry:
             self._atomic_write_text(new_pyi, content)
         old_json.unlink(missing_ok=True)
         old_pyi.unlink(missing_ok=True)
+        self._inc_registry_metric("rename")
+
+    def _rename_case_only(
+        self,
+        old: str,
+        new: str,
+        old_json: Path,
+        old_pyi: Path,
+        new_json: Path,
+        new_pyi: Path,
+    ) -> None:
+        """Case-only stem rename, safe on case-insensitive filesystems.
+
+        Writes the new pair to a temp stem first, moves it onto the
+        canonical casing, then removes old-cased leftovers explicitly —
+        `glob` is case-sensitive and would miss them, leaving stale
+        `GITHUB.json` next to `Github.json` on Windows/macOS.
+        """
+        import time as _time
+
+        tmp_stem = f"{new}_rename_{os.getpid()}_{int(_time.time_ns())}"
+        tmp_json = self._safe_path(tmp_stem, ".json")
+        tmp_pyi = self._safe_path(tmp_stem, ".pyi")
+        if old_json.exists():
+            data = json.loads(old_json.read_text(encoding="utf-8"))
+            data["name"] = new
+            self._atomic_write_text(tmp_json, json.dumps(data, indent=2))
+        if old_pyi.exists():
+            content = old_pyi.read_text(encoding="utf-8")
+            content = content.replace(
+                f"# servers/{old}.pyi", f"# servers/{new}.pyi"
+            ).replace(f'server="{old}"', f'server="{new}"')
+            self._atomic_write_text(tmp_pyi, content)
+        if tmp_json.exists():
+            os.replace(tmp_json, new_json)
+        if tmp_pyi.exists():
+            os.replace(tmp_pyi, new_pyi)
+        stale_json = [
+            p
+            for p in self.servers_dir.iterdir()
+            if p.suffix == ".json"
+            and p.stem.lower() == new.lower()
+            and p.name.lower() != new_json.name.lower()
+        ]
+        stale_pyi = [
+            p
+            for p in self.servers_dir.iterdir()
+            if p.suffix == ".pyi"
+            and p.stem.lower() == new.lower()
+            and p.name.lower() != new_pyi.name.lower()
+        ]
+        # NOTE: on a case-insensitive FS `old_pyi`/`old_json` ARE the
+        # new-cased entries after the moves above — `Path.unlink` on them
+        # deletes the live files. So unlink the glob leftovers FIRST,
+        # then only unlink old→new paths that still name a DIFFERENT
+        # entry (compare resolved paths, not names).
+        for stale in stale_json + stale_pyi:
+            try:
+                stale.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for stale in (old_json, old_pyi):
+            try:
+                if (
+                    stale.exists()
+                    and stale.resolve()
+                    != (new_json if stale.suffix == ".json" else new_pyi).resolve()
+                ):
+                    stale.unlink(missing_ok=True)
+            except OSError:
+                pass
         self._inc_registry_metric("rename")
 
     def remove(self, name: str) -> None:
