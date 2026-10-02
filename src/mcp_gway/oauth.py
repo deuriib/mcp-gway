@@ -44,9 +44,11 @@ class FileTokenStorage:
     """File-based token storage for OAuth tokens."""
 
     def __init__(self, server_name: str, storage_dir: Path | None = None) -> None:
+        from mcp_gway.core.policy import home_dir
+
         _validate_server_name(server_name)
         self._storage_dir = (
-            storage_dir or Path.home() / ".config" / "mcp-gway" / "tokens"
+            storage_dir or home_dir() / ".config" / "mcp-gway" / "tokens"
         )
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         token_path = self._storage_dir / f"{server_name}.json"

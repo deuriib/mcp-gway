@@ -253,5 +253,11 @@ def test_refresh_renames_all_caps(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert (tmp_path / "servers" / "Github.json").exists()
     assert (tmp_path / "servers" / "Github.pyi").exists()
-    assert not (tmp_path / "servers" / "GITHUB.json").exists()
+    # NOTE: on a case-insensitive FS `GITHUB.json` and `Github.json` are
+    # the SAME directory entry — `os.listdir` is the ground truth.
+    import os as _os
+
+    listing = _os.listdir(tmp_path / "servers")
+    assert "Github.json" in listing
+    assert "GITHUB.json" not in listing
     assert "Renamed 'GITHUB' → 'Github'" in result.output

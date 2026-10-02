@@ -14,6 +14,20 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
+def home_dir() -> Path:
+    """Home dir honoring a HOME override (posix-style test isolation).
+
+    On Windows `Path.home()` reads USERPROFILE and ignores HOME, so tests
+    that `monkeypatch.setenv("HOME", tmp)` would leak into the real
+    profile. Every production call site below goes through `home_dir()`.
+    """
+    override = os.environ.get("HOME")
+    if override:
+        return Path(override)
+    return Path.home()
+
+
 ALLOW_LIST_ENV = "MCP_GWAY_ALLOW_LOCAL_COMMANDS"
 UNRESTRICTED_ENV = "MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL"
 
@@ -64,7 +78,7 @@ class UnrestrictedStatus:
 
 
 def config_dir() -> Path:
-    return Path.home() / ".config" / "mcp-gway"
+    return home_dir() / ".config" / "mcp-gway"
 
 
 def marker_path() -> Path:

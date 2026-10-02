@@ -16,7 +16,6 @@ import os
 import shlex
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 from markupsafe import Markup
@@ -41,6 +40,7 @@ from mcp_gway.admin.pages.servers import (
 )
 from mcp_gway.admin.pages.status import status_fragment
 from mcp_gway.admin.pages.tools import codemode_listing, codemode_output, tools_content
+from mcp_gway.core.policy import home_dir
 from mcp_gway.observability.health import check_registry, check_routes
 
 CSRF_HEADER = "X-CSRF-Token"
@@ -995,7 +995,7 @@ async def p_remove(request: Request) -> Response:
         registry.remove(name)
     except FileNotFoundError:
         return HTMLResponse(str(toast(f"Server '{name}' not found.", tone="red")))
-    tokens_dir = Path.home() / ".config" / "mcp-gway" / "tokens"
+    tokens_dir = home_dir() / ".config" / "mcp-gway" / "tokens"
     for suffix in ("", "_client"):
         token_file = tokens_dir / f"{name}{suffix}.json"
         try:
