@@ -1,15 +1,17 @@
 ---
 name: mcp-gway
-description: Manage MCP servers with the mcp-gway CLI (v4.0.0) — index over cli/mcp/core skills. Use when operating the gateway or wiring an agent to it; pick the focused skill below.
+description: Route to the right mcp-gway skill (v4.2.0) — mcp-gway-cli for terminal mgmt, mcp-gway-mcp for serve/protocol, mcp-gway-core for internals. Use when operating the gateway or wiring an agent to it; start here, then read the focused skill.
 ---
 
-# mcp-gway — index (v4.0.0)
+# mcp-gway — index (v4.2.0)
 
-This skill is an index. The focused skills carry the detail — start there:
+This skill routes. The focused skills carry the detail — read the one that matches your task:
 
-- **CLI + tool executions** → `mcp-gway-cli` (`skills/cli/SKILL.md`): `add/remove/update/list/inspect/refresh` plus `tools list|read|docs|exec` (Code Mode in the terminal, same `CodeMode` class as the gateway, policy-gated).
-- **MCP + serve** → `mcp-gway-mcp` (`skills/mcp/SKILL.md`): `serve --transport stdio|http|sse`, the 4 meta-tool protocol, admin dashboard parity, loopback + CSRF + CSP.
-- **Internals** → `mcp-gway-core` (`skills/core/SKILL.md`): registry `.pyi/.json`, `core/policy.py` gates (explicit allow-list, do not rename the env var), sandbox Starlark, transports, OAuth, observability.
+| Your task | Read | It covers |
+|-----------|------|-----------|
+| Add/remove/refresh servers, run tool calls from the terminal or CI | `mcp-gway-cli` (`skills/mcp-gway-cli/SKILL.md`) | `add/remove/update/list/inspect/refresh/serve/--version` + `tools list\|read\|docs\|exec`, every flag, per-command examples |
+| Start the gateway, wire an agent, run the 4-step discovery protocol, open the dashboard | `mcp-gway-mcp` (`skills/mcp-gway-mcp/SKILL.md`) | `serve --transport stdio\|http\|sse`, OpenCode/Claude/Pi wiring, `listToolFiles → readToolFile → getToolDocs → executeToolCode` with examples, probes, admin pages |
+| Debug execution/auth/discovery/policy, read config files or env vars | `mcp-gway-core` (`skills/mcp-gway-core/SKILL.md`) | Registry `.pyi/.json`, all six `MCP_GWAY_*` vars, allow-list + cwd/env gates, sandbox, transports, OAuth, metrics, admin backend |
 
 ## Quick commands
 
@@ -19,6 +21,8 @@ mcp-gway tools list
 mcp-gway tools exec --code 'result = Demo.ping()'
 mcp-gway serve --transport stdio
 ```
+
+Default habit across all three: `refresh` a server before trusting its stub — a signature with missing params is stale cache until re-discovered.
 
 ## Guards (all three skills)
 

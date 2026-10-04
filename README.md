@@ -299,4 +299,4 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 
 ## License
 
-MIT
+[MIT](LICENSE)
