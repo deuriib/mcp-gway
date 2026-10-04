@@ -1,6 +1,14 @@
 {
-  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "mcp-gateway",
   "version": "3.1.0",
-  "description": "MCP Gateway parity for Google Antigravity IDE: automatic mcp-gway skill load, gateway MCP registration over loopback, and Gateway Protocol reinjection that survives context compression."
+  "description": "MCP Gateway: automatic mcp-gway skill load, gateway MCP registration over loopback, and Gateway Protocol reinjection that survives context compaction. Requires node for the PreInvocation hook.",
+  "author": {
+    "email": "deuriib@gmail.com",
+    "name": "Deuri Vasquez",
+    "url": "https://github.com/deuriib"
+  },
+  "repository": "https://github.com/deuriib/mcp-gway",
+  "keywords": ["mcp", "gateway", "extension", "plugin", "agy", "antigravity"],
+  "license": "MIT"
 }
