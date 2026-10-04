@@ -22,6 +22,33 @@ _BLOCKED_PATTERNS = (
     re.compile(r"^\s*class\s+\w+", re.MULTILINE),
 )
 
+# Identifiers that must never appear in sandbox code. Matched on word
+# boundaries so a real `os.path` is still caught.
+_BLOCKED_IDENTIFIERS = ("open", "os", "sys", "subprocess", "socket")
+
+# `__` is matched as a substring on purpose: Starlark has no dunder attributes,
+# so every occurrence is an escape attempt (`__class__`, `__dict__`, `__init__`).
+_BLOCKED_SUBSTRINGS = ("__",)
+
+# String literals are data, never executed, so scanning them for blocked
+# identifiers is what made ordinary prose ("medid" + "os.", "v1." + "os" +
+# ".txt") fail validation for no security benefit.
+_STRING_LITERAL_RE = re.compile(
+    r"'''(?:.|\n)*?'''"
+    r'|"""(?:.|\n)*?"""'
+    r"|'(?:\\.|[^'\\\n])*'"
+    r'|"(?:\\.|[^"\\\n])*"'
+)
+
+
+def _strip_string_literals(code: str) -> str:
+    """Blank out string literals, keeping the surrounding code intact.
+
+    Fail-safe: if stripping cannot be completed confidently the original
+    source is returned so validation stays conservative (closed).
+    """
+    return _STRING_LITERAL_RE.sub('""', code)
+
 
 def _validate_code(code: str) -> None:
     from mcp_gway.gateway import InvalidParamsError
@@ -31,10 +58,17 @@ def _validate_code(code: str) -> None:
             raise InvalidParamsError(
                 "executeToolCode rejects imports/classes [reason=code_validation]"
             )
-    for token in ("open(", "__", "os.", "sys.", "subprocess", "socket."):
-        if token in code:
+    scannable = _strip_string_literals(code)
+    for token in _BLOCKED_SUBSTRINGS:
+        if token in scannable:
             raise InvalidParamsError(
                 f"executeToolCode rejects {token!r} (use MCP tools) "
+                "[reason=code_validation]"
+            )
+    for name in _BLOCKED_IDENTIFIERS:
+        if re.search(rf"\b{re.escape(name)}\b", scannable):
+            raise InvalidParamsError(
+                f"executeToolCode rejects {name!r} (use MCP tools) "
                 "[reason=code_validation]"
             )
 

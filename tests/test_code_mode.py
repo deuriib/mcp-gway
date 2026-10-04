@@ -242,6 +242,54 @@ def test_execute_rejects_classes(code_mode):
         code_mode.execute_tool_code("class X:\n  pass\nresult = 1")
 
 
+# --- L1 token validation: substring vs word boundary ---
+
+# Built indirectly on purpose: _validate_code scans the string handed to
+# execute_tool_code, so a literal occurrence would trip the validator under test.
+_OS = "o" + "s"
+
+# Prose that merely ends a word in the same letters as a blocked token, or that
+# embeds a dotted filename. None of these are sandbox escapes.
+_HARMLESS_STRINGS = [
+    'result = "medid' + _OS + '. un dato"',
+    'result = "cargad' + _OS + ". y deshabilitad" + _OS + '"',
+    'result = "pas' + _OS + '. tres revisados."',
+    'result = "el m" + "odulo code_mode.py no molesta"',
+    'result = "el Archivo es v1.' + _OS + '.txt"',
+]
+
+
+@pytest.mark.parametrize("code", _HARMLESS_STRINGS)
+def test_execute_allows_harmless_text_containing_token_lookalikes(code_mode, code):
+    """L1 tokens must match on code, not on string-literal content.
+
+    Regression: the validator scanned the whole source, so ordinary prose
+    ("medid" + "os.", "cargad" + "os.", "pas" + "os.", "v1." + "os" + ".txt")
+    and file paths were rejected for no security benefit.
+    """
+    # execute_tool_code returns a JSON string with a "result" key.
+    assert json.loads(code_mode.execute_tool_code(code))["result"]
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "result = os.path.join('a', 'b')",
+        "result = os.environ.get('HOME')",
+        "result = subprocess.run(['ls'])",
+        "result = socket.socket()",
+        "result = open('f.txt').read()",
+        "result = value.__class__",
+        "result = thing.__dict__",
+        "result = value._" + "_class__",
+    ],
+)
+def test_execute_still_rejects_real_blocked_tokens(code_mode, code):
+    """Word-boundary matching must not open a security hole."""
+    with pytest.raises(Exception, match="rejects"):
+        code_mode.execute_tool_code(code)
+
+
 # --- Agent Mode ---
 
 
