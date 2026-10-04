@@ -7,6 +7,14 @@
   "exports": {
     ".": "./plugins/opencode/mcp-gateway.ts"
   },
+  "pi": {
+    "extensions": [
+      "./.pi/extensions/"
+    ],
+    "skills": [
+      "./skills/"
+    ]
+  },
   "license": "MIT",
   "dependencies": {
     "@opencode/plugin": "2.0.9"
