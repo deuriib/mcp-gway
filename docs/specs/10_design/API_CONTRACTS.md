@@ -37,14 +37,14 @@
 - MCP entry: `{"mcpServers": {"gateway": {"serverUrl": "http://127.0.0.1:8080/mcp"}}}`;
   `headers.Authorization` manual user-side edit only, never committed
 - Hook I/O: stdin JSON (`invocationNum`, `transcriptPath`, common fields) → stdout
-  `{injectSteps: [{ephemeralMessage: "<!-- MCP-GWAY v3.1.0 -->\n<card>"}]}` or
+  `{injectSteps: [{ephemeralMessage: "<!-- MCP-GWAY v3.2.0 -->\n<card>"}]}` or
   `{injectSteps: []}` when MARKER present; handler `{type: "command", timeout ≤ 30}`
   invoked as `node ./plugins/antigravity/scripts/reinject.mjs` (Node ESM; no shell wrapper)
-- Marker/card: `MCP-GWAY v3.1.0` verbatim; substance ≡ OpenCode MCP_RULES
+- Marker/card: `MCP-GWAY v3.2.0` verbatim; substance ≡ OpenCode MCP_RULES
   (`plugins/opencode/mcp-gateway.ts:5-33`)
 - Env names: `MCP_GWAY_URL` / `MCP_GWAY_TOKEN` reused by default (no rename)
 
-## Pi Agent Contract (v3.1.0 — extension + declarative MCP)
+## Pi Agent Contract (v3.2.0 — extension + declarative MCP)
 
 - Package: `package.json` declares `pi.{extensions,skills,prompts}` so the repo is
   loadable as a Pi package (`pi install ./mcp-gway`, or `pi -e ./` for one run).

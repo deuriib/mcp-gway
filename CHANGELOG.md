@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [Unreleased]
+## [3.2.0] — 2026-10-04
 
 - **feat(pi)**: soporte del harness Pi (tercero tras OpenCode y Antigravity) — el repo queda cargable como Pi package (`package.json` declara `pi.{extensions,skills}`) y `.pi/extensions/mcp-gateway.ts` inyecta la Gateway Protocol card en `systemPromptOptions.sections` en cada `before_agent_start`, dedupeado por marker, leyendo el texto de `rules/mcp-gway.md` en runtime (fuente única compartida con Antigravity, sin copias que divergan). El registro MCP es **declarativo** vía `.mcp.json` en la raíz, autodescubierto por pi-mcp-adapter — no runtime `registerMcpServer()`, que fuerza `directTools: false` y lanza en nombres duplicados. La extensión es fail-soft: lee un archivo local acotado, no abre socket, no spawnea nada y traga sus propios errores, así no puede abortar un turno. Nueva guía `plugins/pi/INSTALL.md`.
 - **fix(manifest)**: `package.json` era JSON inválido — el bloque `pi` en el working copy tenía `"./.pi/prompts/"` como propiedad suelta fuera del array `prompts`, lo que invalidaba el JSON y rompía la carga del paquete. La clave `pi` se añade declarando solo los paths que existen (`extensions`, `skills`).
