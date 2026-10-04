@@ -31,6 +31,7 @@ from mcp_gway.admin.pages.observability import metrics_fragment, observability_c
 from mcp_gway.admin.pages.overview import overview_content
 from mcp_gway.admin.pages.policy import policy_content
 from mcp_gway.admin.pages.servers import (
+    add_server_form,
     detail_config_inner,
     server_detail_content,
     server_grid,
@@ -39,7 +40,12 @@ from mcp_gway.admin.pages.servers import (
     tools_panel,
 )
 from mcp_gway.admin.pages.status import status_fragment
-from mcp_gway.admin.pages.tools import codemode_listing, codemode_output, tools_content
+from mcp_gway.admin.pages.tools import (
+    codemode_listing,
+    codemode_output,
+    execute_form,
+    tools_content,
+)
 from mcp_gway.core.policy import home_dir
 from mcp_gway.observability.health import check_registry, check_routes
 
@@ -59,21 +65,21 @@ NOTICE_MESSAGES: dict[str, tuple[str, str]] = {
     "updated": ("Tools updated.", "green"),
     "refreshed": ("Refresh complete.", "green"),
     "auth-started": (
-        "Authentication started — authorize in the opened browser window, then refresh.",
+        "Authentication started — authorize in the opened browser window, then Refresh.",
         "blue",
     ),
     "executed": ("Code executed.", "blue"),
     "exec-timeout": (
-        "Code execution timed out — the snippet was abandoned.",
+        "Code execution timed out — the snippet was abandoned. Simplify it or raise the timeout, then run again.",
         "red",
     ),
     "config-unreadable": (
-        "Config unreadable — a saved host may no longer resolve. Check the registry JSON.",
+        "Config unreadable — a saved host may no longer resolve. Check the registry JSON, then try again.",
         "red",
     ),
     "config-saved": ("Config updated.", "green"),
     "config-not-saved": (
-        "Config was not saved — the submitted values were rejected.",
+        "Config was not saved — the submitted values were rejected. Fix the values, then try Save again.",
         "red",
     ),
 }
@@ -492,20 +498,26 @@ async def p_add_server(request: Request) -> Response:
     name_raw = str(form.get("name", "")).strip()
     conn_type = str(form.get("type", "local"))
     if not name_raw:
-        return _error("Name is required.")
+        return _error("Name is required. Type a name, then try Add again.")
     try:
         name = to_pascal_case_identifier(name_raw)
     except Exception:
-        return _error(f"Invalid server name '{name_raw}'.")
+        return _error(
+            f"Invalid server name '{name_raw}' — use letters, numbers, underscores, then try Add again."
+        )
     existing = registry.list()
     if name in existing or name_raw in existing:
-        return _error(f"Server '{name}' already exists.")
+        return _error(
+            f"Server '{name}' already exists — pick a different name or remove the existing server first."
+        )
 
     timeout_raw = str(form.get("timeout", "5000")).strip() or "5000"
     try:
         timeout = int(timeout_raw)
     except ValueError:
-        return _error("Timeout must be an integer (ms).")
+        return _error(
+            f"Timeout must be an integer (ms) — '{timeout_raw}' is not one. Enter milliseconds like 5000, then try Add again."
+        )
     enabled = str(form.get("enabled", "")) in ("on", "true", "1")
     retry = str(form.get("retry_on_transport_error", "")) in ("on", "true", "1")
     tools_raw = str(form.get("tools", "*")).strip() or "*"
@@ -518,11 +530,13 @@ async def p_add_server(request: Request) -> Response:
     if conn_type == "local":
         command = str(form.get("command", "")).strip()
         if not command:
-            return _error("Command is required for local servers.")
+            return _error(
+                "Command is required for local servers — fill the Local command field, then try Add again."
+            )
         try:
             cmd_parts = shlex.split(command, posix=sys.platform != "win32")
         except Exception:
-            return _error("Invalid command syntax.")
+            return _error("Invalid command syntax — fix quoting, then try Add again.")
         cwd = str(form.get("cwd", "")).strip() or None
         resolved_cwd = None
         if cwd:
@@ -557,7 +571,9 @@ async def p_add_server(request: Request) -> Response:
     else:
         url = str(form.get("url", "")).strip()
         if not url:
-            return _error("URL is required for remote servers.")
+            return _error(
+                "URL is required for remote servers — fill the Remote URL field, then try Add again."
+            )
         header_lines = [
             ln for ln in str(form.get("headers", "")).splitlines() if ln.strip()
         ]
@@ -620,16 +636,22 @@ async def p_add_server(request: Request) -> Response:
     if not discovered:
         message = (
             f"Added {name} with 0 tools — run Refresh to discover "
-            "(or authenticate first for OAuth servers)."
+            "(or authenticate first for OAuth servers). If it still finds none, check the server is running."
         )
         tone = "orange"
     else:
         message = f"Added {name} with {len(discovered)} tools."
         tone = "green"
+    fresh = add_server_form(
+        csrf_token=_form_token(request),
+        allow_env_value=_allow_env_display(),
+        oob_reset=True,
+    )
     return HTMLResponse(
         str(grid)
         + str(toast(message, tone=tone))
         + str(modal_closed("add-server-modal"))
+        + str(fresh)
     )
 
 
@@ -652,12 +674,18 @@ def _load_config(registry: Any, name: str) -> tuple[Any | None, str | None]:
     try:
         return registry.get_config(name), None
     except FileNotFoundError:
-        return None, f"Server '{name}' not found."
+        return (
+            None,
+            f"Server '{name}' not found — reload the Servers page to refresh the list.",
+        )
     except Exception as exc:
         logging.getLogger(_ADMIN_LOG).warning(
             "config unreadable", extra={"server": name, "reason": type(exc).__name__}
         )
-        return None, f"Config for '{name}' is unreadable ({type(exc).__name__})."
+        return (
+            None,
+            f"Config for '{name}' is unreadable ({type(exc).__name__}) — a saved host may no longer resolve. Check the registry JSON, then try again.",
+        )
 
 
 def _policy_gate_local(
@@ -687,7 +715,7 @@ async def _refresh_one(
     if config_error:
         return False, config_error
     if not getattr(config, "enabled", True):
-        return False, f"{name} is disabled — enable it first."
+        return False, f"{name} is disabled — enable it first, then try Refresh again."
     policy_error = _policy_gate_local(request, name, config, "admin_refresh")
     if policy_error:
         return False, policy_error
@@ -697,9 +725,15 @@ async def _refresh_one(
         logging.getLogger(_ADMIN_LOG).warning(
             "refresh failed", extra={"server": name, "reason": type(exc).__name__}
         )
-        return False, f"Refresh failed for {name}: {type(exc).__name__}."
+        return (
+            False,
+            f"Refresh failed for {name}: {type(exc).__name__} — check it is running, then try Refresh again.",
+        )
     if not discovered:
-        return False, f"No tools discovered for {name} — try authentication."
+        return (
+            False,
+            f"No tools discovered for {name} — authenticate first for OAuth servers, then try Refresh again.",
+        )
     registry.update(name, discovered)
     return True, f"Refreshed {name} with {len(discovered)} tools."
 
@@ -720,7 +754,10 @@ async def p_refresh_all(request: Request) -> Response:
     succeeded = len(names) - failed
     rows = data.server_rows(registry)
     if failed:
-        tone, message = "orange", f"Refreshed {succeeded}/{len(names)} servers."
+        tone, message = (
+            "orange",
+            f"Refreshed {succeeded}/{len(names)} servers — {failed} failed. Refresh the failed ones individually to see why.",
+        )
     else:
         tone, message = "green", f"Refreshed all {len(names)} servers."
     return _notice_frag(server_grid(rows), message, tone)
@@ -757,7 +794,10 @@ async def p_auth(request: Request) -> Response:
         return HTMLResponse(
             str(node)
             + str(
-                toast("Authentication requires a remote server with OAuth.", tone="red")
+                toast(
+                    "Authentication requires a remote server with OAuth — add OAuth client credentials to this server first.",
+                    tone="red",
+                )
             )
         )
 
@@ -789,7 +829,7 @@ async def p_auth(request: Request) -> Response:
         str(node)
         + str(
             toast(
-                "Authentication started — authorize in the opened browser window.",
+                "Authentication started — authorize in the opened browser window, then Refresh to discover tools.",
                 tone="blue",
             )
         )
@@ -887,7 +927,9 @@ async def p_set_config(request: Request) -> Response:
     try:
         timeout = int(timeout_raw) if timeout_raw else int(config.timeout)
     except (TypeError, ValueError):
-        return _error("Timeout must be an integer (ms).")
+        return _error(
+            f"Timeout must be an integer (ms) — '{timeout_raw}' is not one. Enter milliseconds like 5000, then try Save again."
+        )
     enabled = str(form.get("enabled", "")) in ("on", "true", "1")
     tools_raw = str(form.get("tools_filter", "")).strip() or "*"
     tool_filter = (
@@ -902,11 +944,13 @@ async def p_set_config(request: Request) -> Response:
     if config.type == "local":
         command_raw = str(form.get("command", "")).strip()
         if not command_raw:
-            return _error("Command is required for local servers.")
+            return _error(
+                "Command is required for local servers — fill the Command field, then try Save again."
+            )
         try:
             cmd_parts = shlex.split(command_raw, posix=sys.platform != "win32")
         except Exception:
-            return _error("Invalid command syntax.")
+            return _error("Invalid command syntax — fix quoting, then try Save again.")
         data["command"] = cmd_parts
         cwd = str(form.get("cwd", "")).strip()
         if cwd:
@@ -926,7 +970,9 @@ async def p_set_config(request: Request) -> Response:
     else:
         url = str(form.get("url", "")).strip()
         if not url:
-            return _error("URL is required for remote servers.")
+            return _error(
+                "URL is required for remote servers — fill the URL field, then try Save again."
+            )
         if url != config.url:
             data["resolved_transport"] = None
         data["url"] = url
@@ -950,7 +996,7 @@ async def p_set_config(request: Request) -> Response:
     try:
         updated = MCPServerConfig(**data)
     except Exception as exc:
-        return _error(f"Invalid config: {exc}")
+        return _error(f"Invalid config: {exc} — fix the values, then try Save again.")
     if updated.type == "local":
         command = list(updated.command or [])
         decision = check_local_command(command, require_binary=True)
@@ -962,14 +1008,18 @@ async def p_set_config(request: Request) -> Response:
     try:
         registry.set_config(updated)
     except Exception as exc:
-        return _error(f"Save failed: {exc}")
+        return _error(
+            f"Save failed ({type(exc).__name__}) — check the registry directory is writable, then try Save again."
+        )
     if not request.headers.get("HX-Request"):
         return RedirectResponse(
             f"/admin/servers/{name}?notice=config-saved", status_code=303
         )
     row = _find_row(registry, name)
     if row is None:
-        return _error(f"Server '{name}' not found.")
+        return _error(
+            f"Server '{name}' not found — reload the Servers page to refresh the list."
+        )
     inner = detail_config_inner(
         row=row,
         config=updated,
@@ -989,7 +1039,14 @@ async def p_remove(request: Request) -> Response:
     try:
         registry.remove(name)
     except FileNotFoundError:
-        return HTMLResponse(str(toast(f"Server '{name}' not found.", tone="red")))
+        return HTMLResponse(
+            str(
+                toast(
+                    f"Server '{name}' not found — reload the Servers page to refresh the list.",
+                    tone="red",
+                )
+            )
+        )
     tokens_dir = home_dir() / ".config" / "mcp-gway" / "tokens"
     for suffix in ("", "_client"):
         token_file = tokens_dir / f"{name}{suffix}.json"
@@ -1044,7 +1101,10 @@ def _exec_timeout_response(request: Request, seconds: float) -> Response:
     """Execute-timeout surface, mirroring `_reject`: htmx gets a 200 toast
     retargeted to #toast (the #cm-output swap target stays untouched); a
     non-htmx caller gets the structured redirect-with-notice fallback."""
-    message = f"Execution timed out after {seconds:g}s — the snippet was abandoned."
+    message = (
+        f"Execution timed out after {seconds:g}s — the snippet was abandoned. "
+        "Simplify it or raise the timeout, then run again."
+    )
     if request.headers.get("HX-Request"):
         return HTMLResponse(
             str(toast(message, tone="red", oob=False)),
@@ -1070,26 +1130,44 @@ async def p_codemode(request: Request) -> Response:
     if mode == "read":
         file_name = str(form.get("fileName", "")).strip()
         if not file_name:
-            return _output("", "fileName is required.")
+            return _output(
+                "",
+                "fileName is required — pick a stub from the listing, then try Open again.",
+            )
         try:
             return _output(code_mode.read_tool_file(fileName=file_name))
         except Exception as exc:
-            return _output("", f"Read failed: {type(exc).__name__}.")
+            return _output(
+                "",
+                f"Read failed ({type(exc).__name__}) — reload the listing, then pick the stub again.",
+            )
     if mode == "docs":
         server = str(form.get("server", "")).strip()
         tool = str(form.get("tool", "")).strip()
         if not server or not tool:
-            return _output("", "server and tool are required.")
+            return _output(
+                "",
+                "server and tool are required — fill both fields, then try Docs again.",
+            )
         try:
             return _output(code_mode.get_tool_docs(server=server, tool=tool))
         except FileNotFoundError:
-            return _output("", f"Server '{server}' not found.")
+            return _output(
+                "",
+                f"Server '{server}' not found — check the spelling, then try Docs again.",
+            )
         except Exception as exc:
-            return _output("", f"Docs failed: {type(exc).__name__}.")
+            return _output(
+                "",
+                f"Docs failed ({type(exc).__name__}) — check the tool name, then try Docs again.",
+            )
     if mode == "execute":
         source = str(form.get("code", ""))
         if not source.strip():
-            return _output("", "Code is required.")
+            return _output(
+                "",
+                "Code is required — type Starlark code, then try Run again.",
+            )
         exec_timeout = _exec_timeout(form.get("timeout"))
         try:
             result = await asyncio.wait_for(
@@ -1103,9 +1181,13 @@ async def p_codemode(request: Request) -> Response:
             )
             return _exec_timeout_response(request, exec_timeout)
         except Exception as exc:
-            return _output("", f"Execution failed: {type(exc).__name__}.")
+            return _output(
+                "",
+                f"Execution failed ({type(exc).__name__}) — fix the snippet, then try Run again.",
+            )
         if request.headers.get("HX-Request"):
-            return HTMLResponse(str(codemode_output(result)))
+            fresh = execute_form(csrf_token=_form_token(request), oob_reset=True)
+            return HTMLResponse(str(codemode_output(result)) + str(fresh))
         return RedirectResponse("/admin/tools?notice=executed", status_code=303)
     return _frag(codemode_listing("No servers connected."))
 

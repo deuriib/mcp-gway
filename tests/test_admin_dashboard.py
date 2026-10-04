@@ -923,3 +923,76 @@ def test_toolbar_flex_children_share_identical_floors(tmp_path: Path) -> None:
     assert 'hx-post="/admin/partials/refresh"' in servers
     assert 'for="add-server-modal"' in servers
     assert "md:flex-row md:items-end md:flex-wrap" in servers
+
+
+def test_success_toast_auto_dismisses_error_persists(tmp_path: Path) -> None:
+    from mcp_gway.admin.components import toast
+
+    good = str(toast("Saved.", tone="green"))
+    assert 'hx-trigger="load delay:4s"' in good
+    assert 'hx-get="/admin/partials/empty"' in good
+    assert "Dismiss notification" in good
+    bad = str(toast("Failed.", tone="red"))
+    assert 'hx-trigger="load delay:4s"' not in bad
+    assert "Dismiss notification" in bad
+    warn = str(toast("Partial.", tone="orange"))
+    assert 'hx-trigger="load delay:4s"' not in warn
+    assert "Dismiss notification" in warn
+
+
+def test_add_success_resets_form_error_keeps_it(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    c = _client(gw)
+    ok = c.post(
+        "/admin/partials/servers",
+        data={"name": "t1", "type": "local", "command": "npx -y demo"},
+        headers=_csrf(gw),
+    )
+    assert ok.status_code == 200
+    assert 'id="add-server-form"' in ok.text
+    assert 'hx-swap-oob="true"' in ok.text
+    bad = c.post(
+        "/admin/partials/servers",
+        data={"name": "", "type": "local"},
+        headers=_csrf(gw),
+    )
+    assert bad.status_code == 200
+    assert 'id="add-server-form"' not in bad.text
+    assert "Name is required." in bad.text
+    assert "Type a name, then try Add again." in bad.text
+
+
+def test_execute_success_resets_snippet_error_keeps_it(
+    tmp_path: Path,
+) -> None:
+    gw = _gw(tmp_path)
+    c = _client(gw)
+    ok = c.post(
+        "/admin/partials/codemode",
+        data={"mode": "execute", "code": "result = 42", "timeout": "5"},
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    assert ok.status_code == 200
+    assert 'id="cm-execute-form"' in ok.text
+    assert 'hx-swap-oob="true"' in ok.text
+    bad = c.post(
+        "/admin/partials/codemode",
+        data={"mode": "execute", "code": "", "timeout": "5"},
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    assert bad.status_code == 200
+    assert 'id="cm-execute-form"' not in bad.text
+    assert "Code is required" in bad.text
+    assert "try Run again." in bad.text
+
+
+def test_error_copy_names_action(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    c = _client(gw)
+    r = c.post(
+        "/admin/partials/codemode",
+        data={"mode": "read", "fileName": ""},
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert "try Open again." in r.text

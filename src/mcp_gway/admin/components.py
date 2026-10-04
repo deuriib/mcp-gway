@@ -325,23 +325,53 @@ def empty_state(title: str, hint: str = "", *, action: Node = None) -> Element:
 def toast(message: str, *, tone: str = "white", oob: bool = True) -> Element:
     """Toast element. `oob=True` (default) — include alongside any swap; htmx
     routes it to #toast. `oob=False` — plain element for HX-Retarget responses
-    targeting #toast, leaving the original swap target untouched."""
+    targeting #toast, leaving the original swap target untouched.
+
+    Success tones (green/blue/white) auto-dismiss after ~4s via an htmx
+    `load delay` self-swap to the empty target — no inline script, so the
+    strict CSP holds. Error tones (red/orange) persist until dismissed and
+    carry a close control instead."""
     tone_class = _TONES.get(tone, _TONES["white"])
+    persistent = tone in ("red", "orange")
     attrs: dict[str, str] = {
         "id": "toast",
         "role": "status",
         "class": (
-            f"fixed top-5 right-5 z-50 rounded-[8px] px-5 py-3 text-[14px] font-bold "
+            "fixed top-5 right-5 z-50 flex items-start gap-3 "
+            "max-w-[min(420px,calc(100vw-2.5rem))] "
+            "rounded-[8px] px-5 py-3 text-[14px] font-bold "
             f"shadow-[{theme.SHADOW_HEAVY}] {tone_class}"
         ),
     }
     if oob:
         attrs["hx-swap-oob"] = "true"
-    return div(attrs)[message]
+    if not persistent:
+        attrs["hx-get"] = "/admin/partials/empty"
+        attrs["hx-trigger"] = "load delay:4s"
+        attrs["hx-swap"] = "outerHTML"
+    close = button(
+        {
+            "type": "button",
+            "class": (
+                "grid shrink-0 place-items-center w-6 h-6 rounded-full "
+                "cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+            ),
+            "hx-get": "/admin/partials/empty",
+            "hx-target": "#toast",
+            "hx-swap": "outerHTML",
+            "aria-label": "Dismiss notification",
+            "title": "Dismiss",
+        }
+    )[icon_close(14)]
+    return div(attrs)[
+        span({"class": "min-w-0 flex-1 break-words"})[message],
+        close,
+    ]
 
 
 def toast_clear() -> Element:
-    """Empty toast target — returned by /admin/partials/empty after auto-dismiss."""
+    """Empty toast target — swapped in by /admin/partials/empty after the
+    auto-dismiss delay or a manual dismiss."""
     return div({"id": "toast", "role": "status"})
 
 

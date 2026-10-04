@@ -245,11 +245,22 @@ def servers_content(*, q: str, rows: list[ServerRow], allow_env_value: str) -> N
 
 
 def add_server_form(
-    *, csrf_token: str, allow_env_value: str, modal_id: str = "add-server-modal"
+    *,
+    csrf_token: str,
+    allow_env_value: str,
+    modal_id: str = "add-server-modal",
+    oob_reset: bool = False,
 ) -> Node:
     """Modal add form: shared fields plus Remote and Local sections that
-    show/hide off `select[name=type]` via the `:has()` rules in layout."""
-    return form({"class": "flex flex-col gap-5", **_ADD_HX})[
+    show/hide off `select[name=type]` via the `:has()` rules in layout.
+
+    The form owns `id="add-server-form"` so a successful add can OOB-swap a
+    fresh copy (clearing user input) while error responses leave the typed
+    values untouched."""
+    hx = dict(_ADD_HX)
+    if oob_reset:
+        hx["hx-swap-oob"] = "true"
+    return form({"id": "add-server-form", "class": "flex flex-col gap-5", **hx})[
         input(type="hidden", name="_csrf", value=csrf_token),
         div({"class": "flex items-center justify-between gap-3"})[
             feature_heading("Add MCP server"),
