@@ -28,7 +28,7 @@ build-backend = "uv_build"
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["src/mcp_gway/__init__.py:__version__"]
-build_command = "python scripts/sync_version.py --write"
+build_command = "node scripts/bump-version.mjs --write"
 assets = [
     "package.json",
     "plugins/opencode/mcp-gateway.ts",

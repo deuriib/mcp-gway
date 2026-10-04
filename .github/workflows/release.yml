@@ -53,7 +53,7 @@ jobs:
 
       - name: Verify version sync
         if: ${{ github.event_name == 'push' || steps.release.outputs.released == 'true' }}
-        run: uv run scripts/sync_version.py --check
+        run: node scripts/bump-version.mjs --check
 
       - name: Publish to PyPI
         if: ${{ github.event_name == 'push' || steps.release.outputs.released == 'true' }}

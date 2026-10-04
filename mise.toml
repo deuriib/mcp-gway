@@ -1,4 +1,4 @@
-# MCP Gateway — mise toolchain (Windows-compat, local-first, no Node)
+# MCP Gateway — mise toolchain (Windows-compat, local-first)
 #
 # Uso mínimo:
 #   mise trust && mise install && mise tasks
@@ -9,6 +9,8 @@
 #   mise run format-check # uv run ruff format --check src/ tests/  (CI parity)
 #   mise run ci           # lint + format-check + test (paridad con .github/workflows/test.yml)
 #   mise run serve        # uv run mcp-gway serve --transport http --host 127.0.0.1 --port 8080 (local-first)
+#   mise run bump minor   # node scripts/bump-version.mjs minor + --write (release)
+#   mise run version-check# node scripts/bump-version.mjs --check (CI parity)
 #
 # Notas:
 # - `mise.toml` es la única fuente de versiones (pin exacto). `.python-version`
@@ -51,3 +53,12 @@ depends = ["lint", "format-check", "test"]
 [tasks.serve]
 description = "Serve gateway local-first on 127.0.0.1:8080"
 run = "uv run mcp-gway serve --transport http --host 127.0.0.1 --port 8080"
+
+[tasks.bump]
+description = "Bump version: node scripts/bump-version.mjs <type> then sync owned surfaces"
+usage = "usage: bump [major|minor|patch] [--dry-run]"
+run = "node scripts/bump-version.mjs"
+
+[tasks."version-check"]
+description = "Verify version sync across owned surfaces (CI parity)"
+run = "node scripts/bump-version.mjs --check"
