@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin";
 
-const MARKER = "MCP-GWAY v3.2.0";
+const MARKER = "MCP-GWAY v4.0.0";
 
 const MCP_RULES = `## MCP Rules — Gateway Protocol
 

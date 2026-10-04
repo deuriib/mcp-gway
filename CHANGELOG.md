@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [4.0.0] — 2026-10-04
+
+- **feat(cli)!**: BREAKING — full break-glass kill. `mcp-gway local-unrestricted [enable|disable|status]` is gone (`No such command`); the marker engine is deleted from `core/policy.py` (`UNRESTRICTED_ENV`, `MARKER_NAME`, `UnrestrictedStatus`, `create/remove/unrestricted_status/is_unrestricted_active`, `marker_path`), and the admin `GET/POST/DELETE /admin/partials/policy/unrestricted` routes plus panel are removed. Local commands are gated by the explicit allow-list only (`MCP_GWAY_ALLOW_LOCAL_COMMANDS`, unset/blank → `npx,bunx,uvx,pipx`) — no bypass exists. Deny messages now point at the allow-list instead of `local-unrestricted enable`.
+- **feat(cli)**: `mcp-gway --version` / `-v` prints `mcp-gway <version>` via root-group `click.version_option` (`mgw` inherits it).
+- **docs(product)**: outcome-first positioning — README opens with one-endpoint/on-demand-schemas, adds Why/Who sections, drops the unverified 92% token claim, EN-only, diagram at v4.0.0. `pyproject`/`package.json`/`plugin.json` one-liners aligned; skill frontmatter at v4.0.0; `PRODUCT.md` gateway-first with the corrected parity list.
+
 ## [3.2.0] — 2026-10-04
 
 - **feat(pi)**: soporte del harness Pi (tercero tras OpenCode y Antigravity) — el repo queda cargable como Pi package (`package.json` declara `pi.{extensions,skills}`) y `.pi/extensions/mcp-gateway.ts` inyecta la Gateway Protocol card en `systemPromptOptions.sections` en cada `before_agent_start`, dedupeado por marker, leyendo el texto de `rules/mcp-gway.md` en runtime (fuente única compartida con Antigravity, sin copias que divergan). El registro MCP es **declarativo** vía `.mcp.json` en la raíz, autodescubierto por pi-mcp-adapter — no runtime `registerMcpServer()`, que fuerza `directTools: false` y lanza en nombres duplicados. La extensión es fail-soft: lee un archivo local acotado, no abre socket, no spawnea nada y traga sus propios errores, así no puede abortar un turno. Nueva guía `plugins/pi/INSTALL.md`.
