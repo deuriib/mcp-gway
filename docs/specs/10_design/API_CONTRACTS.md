@@ -31,16 +31,36 @@
 
 - Bundle: `plugins/antigravity/{plugin.json, mcp_config.json, hooks.json,
   skills/mcp-gway/SKILL.md, rules/<rule>.md, INSTALL.md}` — additive only
-- Manifest: `{"$schema": "https://antigravity.google/schemas/v1/plugin.json",
-  "name": "mcp-gateway", "description": "..."}`
+- Manifest: `{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mcp-gateway", "description": "...", "author": {...}, "repository": "...",
+  "keywords": [...], "license": "MIT"}`
 - MCP entry: `{"mcpServers": {"gateway": {"serverUrl": "http://127.0.0.1:8080/mcp"}}}`;
   `headers.Authorization` manual user-side edit only, never committed
 - Hook I/O: stdin JSON (`invocationNum`, `transcriptPath`, common fields) → stdout
-  `{injectSteps: [{ephemeralMessage: "<!-- MCP-GWAY v2.8.0 -->\n<card>"}]}` or
+  `{injectSteps: [{ephemeralMessage: "<!-- MCP-GWAY v3.1.0 -->\n<card>"}]}` or
   `{injectSteps: []}` when MARKER present; handler `{type: "command", timeout ≤ 30}`
-- Marker/card: `MCP-GWAY v2.8.0` verbatim; substance ≡ OpenCode MCP_RULES
+  invoked as `node ./plugins/antigravity/scripts/reinject.mjs` (Node ESM; no shell wrapper)
+- Marker/card: `MCP-GWAY v3.1.0` verbatim; substance ≡ OpenCode MCP_RULES
   (`plugins/opencode/mcp-gateway.ts:5-33`)
 - Env names: `MCP_GWAY_URL` / `MCP_GWAY_TOKEN` reused by default (no rename)
+
+## Pi Agent Contract (v3.1.0 — extension + declarative MCP)
+
+- Package: `package.json` declares `pi.{extensions,skills,prompts}` so the repo is
+  loadable as a Pi package (`pi install ./mcp-gway`, or `pi -e ./` for one run).
+- Card source: `.pi/extensions/mcp-gateway.ts` reads `rules/mcp-gway.md` at runtime —
+  the single source shared with the Antigravity plugin, so harnesses cannot drift.
+- Injection point: `before_agent_start` → `systemPromptOptions.sections["mcp-gateway"]`,
+  deduped by MARKER or heading. Pi re-enters the agent loop after compaction
+  (threshold/overflow/retry), so re-applying per run is what makes compression
+  survival structural rather than a post-hoc repair.
+- MCP registration is **declarative** via repo-root `.mcp.json`, NOT runtime
+  `registerMcpServer()` from pi-mcp-adapter: that API forces `directTools: false`
+  (proxy-only) and throws on a duplicate name, which would both downgrade and
+  break a pre-existing `gateway` registration.
+- Security: the extension reads one local file, opens no socket, spawns nothing, and
+  swallows its own failures so it can never abort a turn. No secrets in `.mcp.json`;
+  bearer auth uses the adapter's env-bound `bearerTokenEnv` so tokens stay in the env.
 
 ## Sign-off (v2 delta)
 

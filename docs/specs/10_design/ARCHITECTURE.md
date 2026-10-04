@@ -14,6 +14,20 @@ native Antigravity surfaces — `rules/` for persistent guidance, `PreInvocation
 reinject with MARKER dedupe for compression survival, `mcp_config.json` remote `serverUrl`
 for gateway registration. No gateway/CLI/transport change; additive bundle only.
 
+## Overview (v3.1.0 delta — Pi agent support)
+
+Third harness, same Gateway Protocol. The repo doubles as a Pi package: `package.json`
+declares `pi.{extensions,skills,prompts}`, and `.pi/extensions/mcp-gateway.ts` injects
+the card into `systemPromptOptions.sections` on every `before_agent_start`, deduped by
+MARKER. The card text is read from `rules/mcp-gway.md` at runtime — the same source the
+Antigravity plugin consumes — so the two harnesses share one canonical document instead
+of three hand-copied strings. Gateway registration is declarative via repo-root
+`.mcp.json` (auto-discovered by pi-mcp-adapter) rather than a runtime API call, because
+`registerMcpServer()` forces `directTools: false` and throws on duplicate names, which
+would downgrade a pre-existing `gateway` registration. The hook script was also migrated
+from `sh` to Node (`reinject.mjs`) so it resolves on Windows; the previous
+`sh /plugins/antigravity/scripts/reinject.sh` was an absolute POSIX path that never ran.
+
 ## Overview
 
 Auditoría de performance local-first para MCP Gateway v2.2.0 (CLI-only, headless, Code Mode + sandbox Starlark). Mide 5 paths vivos HTTP/SSE, overhead Code Mode/sandbox, recursos en 3 transportes, y produce SLO draft + runbook reproducible sin romper 255 tests ni seguridad.
@@ -53,15 +67,37 @@ Principio: medir con excelencia y dedicación; optimizar solo con datos.
 | Component | Responsibility | Interface |
 |-----------|---------------|-----------|
 | `plugins/antigravity/plugin.json` | Plugin manifest (`mcp-gateway`, `$schema`) | Antigravity plugin loader; workspace `.agents/plugins/` or global `~/.gemini/config/plugins/` |
-| `plugins/antigravity/rules/*.md` | Persistent Gateway Protocol card (mandatory order, Starlark convention, anti-patterns) | Always-on/glob/model-decision rules surface; MARKER `MCP-GWAY v2.8.0` verbatim |
-| `plugins/antigravity/hooks.json` + reinject script | `PreInvocation`/`PostInvocation` reinject with MARKER dedupe (≡ `systemHasRules`/`pushRules`) | stdin JSON → stdout `{injectSteps: [{ephemeralMessage}]}` or `{injectSteps: []}` |
+| `plugins/antigravity/rules/*.md` | Persistent Gateway Protocol card (mandatory order, Starlark convention, anti-patterns) | Always-on/glob/model-decision rules surface; MARKER `MCP-GWAY v3.1.0` verbatim |
+| `plugins/antigravity/hooks.json` + reinject script | `PreInvocation` reinject with MARKER dedupe (≡ `systemHasRules`/`pushRules`) | stdin JSON → stdout `{injectSteps: [{ephemeralMessage}]}` or `{injectSteps: []}`; run via `node ./plugins/antigravity/scripts/reinject.mjs` |
 | `plugins/antigravity/skills/mcp-gway/SKILL.md` | Skill body parity with `skills/mcp-gway/SKILL.md` | name+description frontmatter auto-load |
 | `plugins/antigravity/mcp_config.json` | Gateway remote registration (`serverUrl: http://127.0.0.1:8080/mcp`, secret-free) | Antigravity MCP surface (`mcpServers.gateway`) |
 | `plugins/antigravity/INSTALL.md` | Install + verify matrix + rollback (parity with `plugins/opencode/INSTALL.md`) | Docs |
 
 Data flow: session start → rules inject card (dedupe by MARKER) → pre-model invocation →
-reinject script greps `transcriptPath` for MARKER → injects `ephemeralMessage` only if
+reinject script reads `transcriptPath` for MARKER → injects `ephemeralMessage` only if
 absent → agent calls gateway tools in mandatory order via `mcp_config.json` registration.
+
+## Pi Agent Subsystem (v3.1.0)
+
+| Component | Responsibility | Interface |
+|-----------|---------------|-----------|
+| `package.json` `pi` key | Makes the repo loadable as a Pi package | `pi install ./mcp-gway`; `pi -e ./` for a single run |
+| `.pi/extensions/mcp-gateway.ts` | Card injection surviving compaction; reads `rules/mcp-gway.md` | `before_agent_start` → `systemPromptOptions.sections["mcp-gateway"]`, MARKER-deduped |
+| `.mcp.json` | Gateway remote registration (`http://127.0.0.1:8080/mcp`, secret-free) | pi-mcp-adapter discovery; `directTools: true`, `requestTimeoutMs: 5000` |
+| `skills/{mcp-gway,cli,mcp,core}` | Skill surface | loaded via the `pi.skills` key |
+| `plugins/pi/INSTALL.md` | Install + verify + troubleshooting + parity map | Docs |
+
+Data flow: each run → `before_agent_start` → read card → skip if MARKER already in the
+rendered prompt, else set the keyed section → model sees the Gateway Protocol.
+
+Invariants (v3.1.0 additions):
+
+- INV-009: The card has exactly one source of truth (`rules/mcp-gway.md`); OpenCode,
+  Antigravity, and Pi consume or reference it — no harness-local copies to drift.
+- INV-010: The Pi extension is fail-soft. It opens no socket, spawns nothing, reads one
+  bounded local file, and swallows its own errors, so it can never abort a turn.
+- INV-011: `.mcp.json` stays secret-free; bearer auth uses the adapter's env-bound
+  `bearerTokenEnv` so tokens never land in a committed file.
 
 Invariants (v2 additions):
 
