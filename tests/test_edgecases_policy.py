@@ -1,9 +1,6 @@
-"""Hermetic edge tests: allow-list / break-glass / denylist / cwd / env."""
+"""Hermetic edge tests: allow-list / denylist / cwd / env."""
 
 from __future__ import annotations
-
-import os
-import time
 
 import pytest
 
@@ -20,62 +17,6 @@ def test_allow_list_parsing(monkeypatch):
     assert P.get_allow_list() == {"npx"}
     monkeypatch.setenv(P.ALLOW_LIST_ENV, "Npx")
     assert P.get_allow_list() == {"npx"}
-
-
-def test_create_and_status_marker(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path)
-    monkeypatch.setenv(P.UNRESTRICTED_ENV, "1")
-    path = P.create_unrestricted_marker(now=time.time())
-    assert path.exists()
-    st = P.unrestricted_status()
-    assert st.active and st.state == "active" and st.marker_exists
-    assert P.is_unrestricted_active()
-    assert st.expires_in_seconds is not None and st.age_seconds is not None
-
-
-def test_status_disabled_no_env(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path)
-    monkeypatch.delenv(P.UNRESTRICTED_ENV, raising=False)
-    st = P.unrestricted_status()
-    assert st.state == "disabled" and not st.active
-
-
-def test_status_marker_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path / "nomarker")
-    monkeypatch.setenv(P.UNRESTRICTED_ENV, "1")
-    st = P.unrestricted_status()
-    assert st.state == "marker-missing" and not st.active
-
-
-def test_status_expired_future_invalid(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path)
-    monkeypatch.setenv(P.UNRESTRICTED_ENV, "1")
-    mp = P.marker_path()
-    mp.parent.mkdir(parents=True, exist_ok=True)
-
-    def _write(content: str) -> None:
-        mp.write_text(content, encoding="utf-8")
-        # unrestricted_status rejects non-0o600 markers on posix; write with
-        # the same mode create_unrestricted_marker enforces so this test
-        # exercises content states (expired/future/invalid), not permissions.
-        if os.name != "nt":
-            os.chmod(mp, 0o600)
-
-    _write(str(int(time.time()) - P.UNRESTRICTED_TTL_SECONDS - 10))
-    assert P.unrestricted_status().state == "expired"
-    _write(str(int(time.time()) + 1000))
-    assert P.unrestricted_status().state == "future"
-    _write("")
-    assert P.unrestricted_status().state == "marker-invalid"
-    _write("notanint")
-    assert P.unrestricted_status().state == "marker-invalid"
-
-
-def test_remove_marker(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path)
-    assert P.remove_unrestricted_marker() is False
-    P.create_unrestricted_marker()
-    assert P.remove_unrestricted_marker() is True
 
 
 @pytest.mark.parametrize(
@@ -122,7 +63,6 @@ def test_check_local_command_branches(monkeypatch):
     d = P.check_local_command(["bad!bin"])
     assert d.reason_code == "invalid_syntax"
     monkeypatch.setenv(P.ALLOW_LIST_ENV, "")
-    monkeypatch.delenv(P.UNRESTRICTED_ENV, raising=False)
     d = P.check_local_command(["somemissingbinary123"])
     assert not d.allowed and d.reason_code == "not_allowlisted"
     monkeypatch.setenv(P.ALLOW_LIST_ENV, "npx")
@@ -135,21 +75,16 @@ def test_check_local_command_branches(monkeypatch):
     assert d.reason_code == "allow_list"
 
 
-def test_check_basename_break_glass_details(monkeypatch, tmp_path):
-    monkeypatch.setattr(P, "config_dir", lambda: tmp_path)
-    monkeypatch.setenv(P.UNRESTRICTED_ENV, "1")
-    mp = P.marker_path()
-    mp.parent.mkdir(parents=True, exist_ok=True)
-    for content in ["", "xx"]:
-        mp.write_text(content, encoding="utf-8")
-        d = P.check_basename_allowed("whatever", host_loopback=True)
-        assert d.allowed is False
-        assert d.reason_code == "not_allowlisted"
+def test_check_basename_allow_list(monkeypatch, tmp_path):
     monkeypatch.setenv(P.ALLOW_LIST_ENV, "okbin")
     monkeypatch.setattr(P, "resolve_binary", lambda b: "/x/okbin")
     d = P.check_basename_allowed("okbin", host_loopback=True)
     assert d.allowed is True
     assert d.reason_code == "allow_list"
+    denied = P.check_basename_allowed("otherbin", host_loopback=True)
+    assert denied.allowed is False
+    assert denied.reason_code == "not_allowlisted"
+    assert "MCP_GWAY_ALLOW_LOCAL_COMMANDS" in denied.message
 
 
 def test_check_cwd_edges(tmp_path):
@@ -189,26 +124,5 @@ def test_check_environment_denylist():
 def test_audit_does_not_raise():
     P.audit_local_action(
         "act", "na/me..", "bin;name", P.PolicyDecision(True, "allow_list", "ok")
-    )
-    assert P._break_glass_detail(
-        P.UnrestrictedStatus(False, "marker-missing", False, None, None)
-    ).startswith("break-glass marker missing")
-    assert "expired" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "expired", True, 1.0, None)
-    )
-    assert "future" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "future", True, -1.0, None)
-    )
-    assert "insecure" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "marker-insecure", True, None, None)
-    )
-    assert "unreadable" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "marker-unreadable", True, None, None)
-    )
-    assert "invalid" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "marker-invalid", True, None, None)
-    )
-    assert "status" in P._break_glass_detail(
-        P.UnrestrictedStatus(False, "disabled", False, None, None)
     )
     assert P.resolve_binary("definitely-not-a-real-binary-xyz") is None

@@ -198,7 +198,6 @@ def test_client_default_on_noise(capsys):
 async def test_client_local_transport_denied(monkeypatch):
     # Setting env to a value that does NOT include the binary causes denial
     monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "otherbin")
-    monkeypatch.delenv("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False)
     cfg = MCPServerConfig(name="deny1", type="local", command=["npx", "x"])
 
     async def go():

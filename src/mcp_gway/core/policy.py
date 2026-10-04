@@ -1,4 +1,4 @@
-"""Local command policy — allow-list + unrestricted TTL + cwd/env gates."""
+"""Local command policy — allow-list + cwd/env gates."""
 
 from __future__ import annotations
 
@@ -6,9 +6,6 @@ import logging
 import os
 import re
 import shutil
-import stat
-import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,15 +26,11 @@ def home_dir() -> Path:
 
 
 ALLOW_LIST_ENV = "MCP_GWAY_ALLOW_LOCAL_COMMANDS"
-UNRESTRICTED_ENV = "MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL"
 
 # Default allow-list when MCP_GWAY_ALLOW_LOCAL_COMMANDS is unset or empty.
-# Replaces the old default-deny: npx/bunx/uvx/pipx runner shims are allowed
-# out of the box; set the env var to override, break-glass still bypasses.
+# npx/bunx/uvx/pipx runner shims are allowed out of the box; set the env
+# var to override with an explicit CSV.
 DEFAULT_ALLOW_LIST = frozenset({"npx", "bunx", "uvx", "pipx"})
-
-MARKER_NAME = ".local_unrestricted"
-UNRESTRICTED_TTL_SECONDS = 72 * 3600
 
 ENV_DENYLIST_EXACT = frozenset(
     {
@@ -68,21 +61,8 @@ class PolicyDecision:
     message: str
 
 
-@dataclass(frozen=True)
-class UnrestrictedStatus:
-    active: bool
-    state: str
-    marker_exists: bool
-    age_seconds: float | None
-    expires_in_seconds: float | None
-
-
 def config_dir() -> Path:
     return home_dir() / ".config" / "mcp-gway"
-
-
-def marker_path() -> Path:
-    return config_dir() / MARKER_NAME
 
 
 def get_allow_list() -> set[str]:
@@ -113,165 +93,6 @@ def get_allow_list() -> set[str]:
             continue
         result.add(p.lower())
     return result
-
-
-def create_unrestricted_marker(now: float | None = None) -> Path:
-    """Create break-glass marker with epoch content, atomic write, 0o600 on posix."""
-    epoch = int(now if now is not None else time.time())
-    path = marker_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".local_unrestricted-")
-    try:
-        try:
-            f = os.fdopen(fd, "w", encoding="utf-8")
-        except Exception:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            raise
-        with f:
-            f.write(str(epoch))
-        # Double-chmod: mkstemp mode is umask-dependent on replace targets,
-        # so enforce 0o600 on tmp before replace and on final path after.
-        if os.name != "nt":
-            os.chmod(tmp_name, 0o600)
-        os.replace(tmp_name, path)
-        if os.name != "nt":
-            os.chmod(path, 0o600)
-    except Exception:
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
-        raise
-    logger.info("unrestricted marker created path=%s", str(path))
-    return path
-
-
-def remove_unrestricted_marker() -> bool:
-    """Remove break-glass marker.
-
-    Returns True when a file was removed, False when missing.
-    Raises OSError when removal fails so CLI can distinguish missing vs failure.
-    """
-    path = marker_path()
-    if not path.exists():
-        return False
-    try:
-        path.unlink()
-    except OSError as e:
-        logger.warning(
-            "unrestricted marker remove failed, denied: %s", type(e).__name__
-        )
-        raise
-    logger.info("unrestricted marker removed path=%s", str(path))
-    return True
-
-
-def unrestricted_status(now: float | None = None) -> UnrestrictedStatus:
-    """Inspect break-glass state without side effects."""
-    current = time.time() if now is None else now
-    if os.environ.get(UNRESTRICTED_ENV) != "1":
-        return UnrestrictedStatus(
-            active=False,
-            state="disabled",
-            marker_exists=marker_path().exists(),
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    marker = marker_path()
-    if not marker.exists():
-        return UnrestrictedStatus(
-            active=False,
-            state="marker-missing",
-            marker_exists=False,
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    try:
-        st = marker.stat()
-        if os.name != "nt":
-            mode = stat.S_IMODE(st.st_mode)
-            if mode != 0o600:
-                logger.warning(
-                    "unrestricted marker insecure permissions %o, denied",
-                    mode,
-                )
-                return UnrestrictedStatus(
-                    active=False,
-                    state="marker-insecure",
-                    marker_exists=True,
-                    age_seconds=None,
-                    expires_in_seconds=None,
-                )
-    except OSError as e:
-        logger.warning("unrestricted marker stat failed, denied: %s", type(e).__name__)
-        return UnrestrictedStatus(
-            active=False,
-            state="marker-unreadable",
-            marker_exists=True,
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    try:
-        with marker.open("r", encoding="utf-8") as f:
-            text = f.read(64).strip()
-    except Exception as e:
-        logger.warning("unrestricted marker unreadable, denied: %s", type(e).__name__)
-        return UnrestrictedStatus(
-            active=False,
-            state="marker-unreadable",
-            marker_exists=True,
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    if not text:
-        return UnrestrictedStatus(
-            active=False,
-            state="marker-invalid",
-            marker_exists=True,
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    try:
-        epoch = int(text.split()[0])
-    except (ValueError, IndexError):
-        return UnrestrictedStatus(
-            active=False,
-            state="marker-invalid",
-            marker_exists=True,
-            age_seconds=None,
-            expires_in_seconds=None,
-        )
-    age = current - epoch
-    if age < 0:
-        return UnrestrictedStatus(
-            active=False,
-            state="future",
-            marker_exists=True,
-            age_seconds=age,
-            expires_in_seconds=None,
-        )
-    if age > UNRESTRICTED_TTL_SECONDS:
-        return UnrestrictedStatus(
-            active=False,
-            state="expired",
-            marker_exists=True,
-            age_seconds=age,
-            expires_in_seconds=None,
-        )
-    return UnrestrictedStatus(
-        active=True,
-        state="active",
-        marker_exists=True,
-        age_seconds=age,
-        expires_in_seconds=UNRESTRICTED_TTL_SECONDS - age,
-    )
-
-
-def is_unrestricted_active(now: float | None = None) -> bool:
-    return unrestricted_status(now=now).active
 
 
 def validate_command_syntax(command: list[str]) -> str:  # noqa: TRY004
@@ -319,59 +140,20 @@ def _not_allowlisted_message(basename: str, detail: str) -> str:
     return f"command not allowed: {basename} ({detail}) [reason=not_allowlisted]"
 
 
-def _break_glass_detail(status: UnrestrictedStatus) -> str:
-    """Human-readable break-glass hint for deny messages (no raw enum leak)."""
-    if status.state == "marker-missing":
-        return (
-            "break-glass marker missing; run `mcp-gway local-unrestricted enable` "
-            f"with {UNRESTRICTED_ENV}=1"
-        )
-    if status.state == "expired":
-        return "break-glass marker expired; re-run `mcp-gway local-unrestricted enable`"
-    if status.state == "future":
-        return (
-            "break-glass marker timestamp in the future; re-run "
-            "`mcp-gway local-unrestricted enable`"
-        )
-    if status.state == "marker-insecure":
-        return (
-            "break-glass marker has insecure permissions; re-run "
-            "`mcp-gway local-unrestricted enable`"
-        )
-    if status.state == "marker-unreadable":
-        return (
-            "break-glass marker unreadable; re-run `mcp-gway local-unrestricted enable`"
-        )
-    if status.state == "marker-invalid":
-        return "break-glass marker invalid; re-run `mcp-gway local-unrestricted enable`"
-    return "break-glass inactive; run `mcp-gway local-unrestricted status`"
-
-
 def check_basename_allowed(basename: str, *, host_loopback: bool) -> PolicyDecision:
     _ = host_loopback  # reserved for future host-gating; basename policy is host-independent
-    status = unrestricted_status()
-    if status.active:
-        return PolicyDecision(
-            allowed=True, reason_code="unrestricted", message="allowed (unrestricted)"
-        )
     allow = get_allow_list()
     if basename.lower() in allow:
         return PolicyDecision(
             allowed=True, reason_code="allow_list", message="allowed (allow-list)"
         )
-    if status.state != "disabled":
-        detail = _break_glass_detail(status)
-    elif not allow:
+    if not allow:
         detail = (
             f"{ALLOW_LIST_ENV} has no valid entries (defaults are "
-            "npx,bunx,uvx,pipx); set it to include the binary or run "
-            f"`mcp-gway local-unrestricted enable` with {UNRESTRICTED_ENV}=1"
+            "npx,bunx,uvx,pipx); set it to include the binary"
         )
     else:
-        detail = (
-            f"add to {ALLOW_LIST_ENV} or run `mcp-gway local-unrestricted enable` "
-            f"with {UNRESTRICTED_ENV}=1"
-        )
+        detail = f"add to {ALLOW_LIST_ENV} to allow this binary"
     return PolicyDecision(
         allowed=False,
         reason_code="not_allowlisted",

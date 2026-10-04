@@ -119,12 +119,12 @@ def test_metrics_partial_exposes_exposition(tmp_path: Path) -> None:
     assert "process_start_time_seconds" in r.text
 
 
-def test_policy_panel_partial(tmp_path: Path) -> None:
+def test_policy_page_renders_allow_list(tmp_path: Path) -> None:
     gw = _gw(tmp_path)
     c = _client(gw)
-    r = c.get("/admin/partials/policy/unrestricted")
+    r = c.get("/admin/policy")
     assert r.status_code == 200
-    assert "Break-glass" in r.text
+    assert "Local command allow-list" in r.text
 
 
 def test_codemode_partials(tmp_path: Path) -> None:
@@ -342,25 +342,15 @@ def test_notice_renders_server_side_toast(tmp_path: Path) -> None:
     assert "Server removed." in r.text
 
 
-def test_policy_enable_disable_uses_marker_patch(
-    tmp_path: Path, monkeypatch: object
-) -> None:
-    marker = tmp_path / ".local_unrestricted"
-    monkeypatch.setattr(policy, "marker_path", lambda: marker)  # type: ignore[attr-defined]
-    monkeypatch.delenv(  # type: ignore[attr-defined]
-        "MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False
-    )
+def test_policy_unrestricted_routes_gone(tmp_path: Path) -> None:
     gw = _gw(tmp_path)
     c = _client(gw)
     hx = {**_csrf(gw), "HX-Request": "true"}
-    on = c.post("/admin/partials/policy/unrestricted", headers=hx)
-    assert on.status_code == 200
-    assert "Break-glass marker created" in on.text
-    assert marker.exists()
-    off = c.delete("/admin/partials/policy/unrestricted", headers=hx)
-    assert off.status_code == 200
-    assert "Break-glass marker removed." in off.text
-    assert not marker.exists()
+    assert c.get("/admin/partials/policy/unrestricted").status_code == 404
+    assert c.post("/admin/partials/policy/unrestricted", headers=hx).status_code == 404
+    assert (
+        c.delete("/admin/partials/policy/unrestricted", headers=hx).status_code == 404
+    )
 
 
 def test_path_template_collapses_admin_cardinality() -> None:
@@ -476,7 +466,6 @@ def test_local_config_put_allowed_command_saves_and_audits_admin_update(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: Any
 ) -> None:
     monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "python3")
-    monkeypatch.delenv("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False)
     monkeypatch.setattr(
         policy, "resolve_binary", lambda basename: f"/usr/bin/{basename}"
     )
@@ -516,7 +505,6 @@ def test_local_config_put_denied_command_rejected_registry_unchanged(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: Any
 ) -> None:
     monkeypatch.delenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", raising=False)
-    monkeypatch.delenv("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False)
     gw = _gw(tmp_path)
     _seed_local(gw.registry)
     before = gw.registry.get_config("Loc1")

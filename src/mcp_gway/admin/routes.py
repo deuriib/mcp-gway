@@ -29,7 +29,7 @@ from mcp_gway.admin.components import modal_closed, toast, toast_clear
 from mcp_gway.admin.layout import base_layout
 from mcp_gway.admin.pages.observability import metrics_fragment, observability_content
 from mcp_gway.admin.pages.overview import overview_content
-from mcp_gway.admin.pages.policy import policy_content, unrestricted_panel
+from mcp_gway.admin.pages.policy import policy_content
 from mcp_gway.admin.pages.servers import (
     detail_config_inner,
     server_detail_content,
@@ -58,8 +58,6 @@ NOTICE_MESSAGES: dict[str, tuple[str, str]] = {
     "removed": ("Server removed.", "white"),
     "updated": ("Tools updated.", "green"),
     "refreshed": ("Refresh complete.", "green"),
-    "policy-enabled": ("Break-glass marker created — active for 72h.", "orange"),
-    "policy-disabled": ("Break-glass marker removed.", "white"),
     "auth-started": (
         "Authentication started — authorize in the opened browser window, then refresh.",
         "blue",
@@ -435,17 +433,14 @@ async def h_policy(request: Request) -> Response:
     denied = await _gate(request)
     if denied:
         return denied
-    from mcp_gway.core.policy import get_allow_list, unrestricted_status
+    from mcp_gway.core.policy import get_allow_list
 
-    status = unrestricted_status()
     content = policy_content(
         allow_env_value=_allow_env_display(),
         allow_set=get_allow_list(),
-        unrestricted=status,
         serve_host=getattr(request.app.state, "serve_host", "127.0.0.1"),
         transport=getattr(request.app.state, "transport", "http"),
         remote_env=os.environ.get("MCP_GWAY_ALLOW_REMOTE", ""),
-        csrf_token=_form_token(request),
     )
     return _page(
         request,
@@ -1012,66 +1007,6 @@ async def p_remove(request: Request) -> Response:
 
 
 # --------------------------------------------------------------------------
-# Partials — policy
-# --------------------------------------------------------------------------
-
-
-async def p_policy_panel(request: Request) -> Response:
-    denied = await _gate(request)
-    if denied:
-        return denied
-    from mcp_gway.core.policy import unrestricted_status
-
-    env_set = os.environ.get("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL") == "1"
-    return _frag(unrestricted_panel(unrestricted_status(), env_set=env_set))
-
-
-async def p_policy_enable(request: Request) -> Response:
-    denied = await _gate(request)
-    if denied:
-        return denied
-    from mcp_gway.core.policy import create_unrestricted_marker, unrestricted_status
-
-    try:
-        create_unrestricted_marker()
-    except OSError as exc:
-        return _notice_frag(
-            unrestricted_panel(unrestricted_status(), env_set=False),
-            f"Marker create failed: {exc}",
-            "red",
-        )
-    env_set = os.environ.get("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL") == "1"
-    node = unrestricted_panel(unrestricted_status(), env_set=env_set)
-    message = "Break-glass marker created — active for 72h."
-    if not env_set:
-        message += " Set MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1 to activate."
-    if request.headers.get("HX-Request"):
-        return _notice_frag(node, message, "orange")
-    return RedirectResponse("/admin/policy?notice=policy-enabled", status_code=303)
-
-
-async def p_policy_disable(request: Request) -> Response:
-    denied = await _gate(request)
-    if denied:
-        return denied
-    from mcp_gway.core.policy import remove_unrestricted_marker, unrestricted_status
-
-    try:
-        remove_unrestricted_marker()
-    except OSError as exc:
-        return _notice_frag(
-            unrestricted_panel(unrestricted_status(), env_set=False),
-            f"Marker remove failed: {exc}",
-            "red",
-        )
-    env_set = os.environ.get("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL") == "1"
-    node = unrestricted_panel(unrestricted_status(), env_set=env_set)
-    if request.headers.get("HX-Request"):
-        return _notice_frag(node, "Break-glass marker removed.", "white")
-    return RedirectResponse("/admin/policy?notice=policy-disabled", status_code=303)
-
-
-# --------------------------------------------------------------------------
 # Partials — Code Mode + metrics
 # --------------------------------------------------------------------------
 
@@ -1231,21 +1166,6 @@ def create_admin_routes() -> list[Route]:
         ),
         Route("/admin/partials/servers/{name}/enabled", p_enabled, methods=["PATCH"]),
         Route("/admin/partials/servers/{name}", p_remove, methods=["DELETE"]),
-        Route(
-            "/admin/partials/policy/unrestricted",
-            p_policy_panel,
-            methods=["GET"],
-        ),
-        Route(
-            "/admin/partials/policy/unrestricted",
-            p_policy_enable,
-            methods=["POST"],
-        ),
-        Route(
-            "/admin/partials/policy/unrestricted",
-            p_policy_disable,
-            methods=["DELETE"],
-        ),
         Route("/admin/partials/codemode/list", p_codemode_list, methods=["GET"]),
         Route("/admin/partials/codemode", p_codemode, methods=["POST"]),
         Route("/admin/partials/metrics", p_metrics, methods=["GET"]),

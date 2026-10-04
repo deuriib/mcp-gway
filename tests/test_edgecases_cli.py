@@ -1,4 +1,4 @@
-"""Hermetic edge tests: CLI 13 flags + serve guards + local-unrestricted."""
+"""Hermetic edge tests: CLI flags + serve guards + version."""
 
 from __future__ import annotations
 
@@ -136,7 +136,6 @@ def test_add_local_cwd_error():
 def test_add_local_policy_denied(monkeypatch):
     # Setting env to a value that does NOT include npx causes denial
     monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "otherbin")
-    monkeypatch.delenv("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False)
     with (
         patch("mcp_gway.cli._get_registry") as gr,
         patch("mcp_gway.core.discover_tools", new=AsyncMock(return_value=[])),
@@ -286,22 +285,25 @@ def test_refresh_local_denied_continues(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "_get_registry", lambda: reg)
     # Setting env to a value that does NOT include npx causes denial
     monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "otherbin")
-    monkeypatch.delenv("MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL", raising=False)
     reg.add(MCPServerConfig(name="loc9", type="local", command=["npx", "y"]), [])
     r = _runner().invoke(C.main, ["refresh", "loc9"])
     assert r.exit_code == 0
 
 
-def test_local_unrestricted_status_enable_disable(monkeypatch, tmp_path):
+def test_version_flag():
+    from mcp_gway import __version__
+
+    for flag in ("--version", "-v"):
+        r = _runner().invoke(C.main, [flag])
+        assert r.exit_code == 0
+        assert __version__ in r.output
+
+
+def test_local_unrestricted_removed(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    r = _runner().invoke(C.main, ["local-unrestricted", "status"])
-    assert r.exit_code == 0 and "env" in r.output
-    r = _runner().invoke(C.main, ["local-unrestricted", "enable"])
-    assert r.exit_code == 0 and "marker" in r.output.lower()
-    r = _runner().invoke(C.main, ["local-unrestricted", "disable"])
-    assert r.exit_code == 0
-    r = _runner().invoke(C.main, ["local-unrestricted", "disable"])
-    assert "not present" in r.output
+    r = _runner().invoke(C.main, ["local-unrestricted"])
+    assert r.exit_code != 0
+    assert "No such command" in r.output
 
 
 def test_mcp_deprecated_alias(tmp_path):
