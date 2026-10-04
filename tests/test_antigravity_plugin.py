@@ -61,7 +61,7 @@ def test_plugin_manifest():
         data = json.load(f)
 
     assert data.get("name") == "mcp-gateway"
-    assert data.get("version") == "4.0.0"
+    assert data.get("version") == "4.1.0"
     assert "$schema" in data
     assert "description" in data
 
@@ -77,7 +77,7 @@ def test_rules_content():
     """REQ-F-004: Assert rules contain Gateway Protocol guidance and marker."""
     content = RULES_PATH.read_text()
 
-    assert "<!-- MCP-GWAY v4.0.0 -->" in content
+    assert "<!-- MCP-GWAY v4.1.0 -->" in content
     assert "gateway_listToolFiles" in content
     assert "gateway_readToolFile" in content
     assert "gateway_executeToolCode" in content
@@ -123,12 +123,12 @@ def test_reinject_script_execution(tmp_path: Path):
     out = json.loads(res.stdout)
     assert "injectSteps" in out
     assert len(out["injectSteps"]) == 1
-    assert "MCP-GWAY v4.0.0" in out["injectSteps"][0]["ephemeralMessage"]
+    assert "MCP-GWAY v4.1.0" in out["injectSteps"][0]["ephemeralMessage"]
 
     # 2. With marker already in transcript -> dedupe, empty injectSteps
     marked_transcript = tmp_path / "transcript_marked.jsonl"
     marked_transcript.write_text(
-        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v4.0.0 -->"}\n'
+        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v4.1.0 -->"}\n'
     )
 
     payload_marked = json.dumps(

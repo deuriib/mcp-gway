@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [4.1.0] — 2026-10-04
+
+- **feat(admin)**: toast lifecycle, form reset, actionable errors. Success toasts (green/blue/white) auto-dismiss after ~4s via htmx `load delay:4s` self-swap to `/admin/partials/empty` (no inline script, strict CSP holds); red/orange persist with a close control. Add-server and Code Mode execute forms OOB-swap a fresh copy on success and keep user input on error. Every error keeps its searchable head and appends the next action (`test_admin_dashboard.py` 54 tests).
+
 ## [4.0.0] — 2026-10-04
 
 - **feat(cli)!**: BREAKING — full break-glass kill. `mcp-gway local-unrestricted [enable|disable|status]` is gone (`No such command`); the marker engine is deleted from `core/policy.py` (`UNRESTRICTED_ENV`, `MARKER_NAME`, `UnrestrictedStatus`, `create/remove/unrestricted_status/is_unrestricted_active`, `marker_path`), and the admin `GET/POST/DELETE /admin/partials/policy/unrestricted` routes plus panel are removed. Local commands are gated by the explicit allow-list only (`MCP_GWAY_ALLOW_LOCAL_COMMANDS`, unset/blank → `npx,bunx,uvx,pipx`) — no bypass exists. Deny messages now point at the allow-list instead of `local-unrestricted enable`.
