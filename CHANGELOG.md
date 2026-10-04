@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [4.2.0] — 2026-10-04
+
+- **docs(skills)**: product-first rewrite of all four skills with per-command variants and live examples. `skills/cli` → `skills/mcp-gway-cli` (via `git mv`, history preserved): every command gets its own section — `add` documents all 12 flags with remote/local/OAuth variants, `tools exec` shows three variants (`--code` inline, `--file` script, `refresh && read && exec` chain). `skills/mcp` → `skills/mcp-gway-mcp`: transport picker table, four `serve` variants, three agent-wiring variants (OpenCode stdio, Claude HTTP, Pi `.mcp.json`), 4-step protocol with real Context7/ParallelSearch output, Starlark DO/DON'T cookbook. `skills/core` → `skills/mcp-gway-core`: config-files table (`servers/*.json|pyi`, `tokens/`), complete six-var `MCP_GWAY_*` table, three policy gates with allow/deny examples, execution stack, OAuth, observability series, admin-backend route table. `skills/mcp-gway` becomes a routing table (task → skill → coverage). All frontmatter bumped to v4.2.0; `plugins/pi/INSTALL.md` naming aligned; `README.md` LICENSE link corrected to `LICENSE`.
+
 ## [4.1.0] — 2026-10-04
 
 - **feat(admin)**: toast lifecycle, form reset, actionable errors. Success toasts (green/blue/white) auto-dismiss after ~4s via htmx `load delay:4s` self-swap to `/admin/partials/empty` (no inline script, strict CSP holds); red/orange persist with a close control. Add-server and Code Mode execute forms OOB-swap a fresh copy on success and keep user input on error. Every error keeps its searchable head and appends the next action (`test_admin_dashboard.py` 54 tests).
