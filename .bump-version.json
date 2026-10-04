@@ -1,0 +1,10 @@
+{
+  "files": [
+    "pyproject.toml",
+    "package.json"
+  ],
+  "updateSubpackage": false,
+  "requireVersion": false,
+  "tagAnnotation": "v",
+  "preRelease": false
+}
