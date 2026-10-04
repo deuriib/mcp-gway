@@ -1,6 +1,6 @@
 ---
 name: mcp-gway-core
-description: Internals of the gateway (v3.1.0) — registry .pyi/.json, policy gates, sandbox, transports, OAuth. Use when debugging execution, auth, discovery, or the allow-list.
+description: Internals of the gateway (v4.0.0) — registry .pyi/.json, local-command policy gates, sandbox, transports, OAuth. Use when debugging execution, auth, discovery, or the allow-list.
 ---
 
 # mcp-gway core internals
@@ -13,8 +13,7 @@ Legacy `#` comments only for fallback migration. Kept by CLI (`add`/`refresh`/`u
 
 ## Policy gates (`core/policy.py`, ADR-009)
 
-- Allow-list `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames, case-insensitive); unset/blank → `DEFAULT_ALLOW_LIST {npx,bunx,uvx,pipx}` (`policy.py:23`). Explicit value overrides. `*`/paths invalid → deny + warn. Do NOT rename `MCP_GWAY_ALLOW_LOCAL_COMMANDS` / `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL`.
-- Break-glass: `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1` + marker `~/.config/mcp-gway/.local_unrestricted` (epoch, `0o600`, 72h TTL `UNRESTRICTED_TTL_SECONDS`). Env alone never activates; `local-unrestricted enable|disable|status` manages the marker explicitly.
+- Allow-list `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames, case-insensitive); unset/blank → `DEFAULT_ALLOW_LIST {npx,bunx,uvx,pipx}` (`policy.py:23`). Explicit value overrides. `*`/paths invalid → deny + warn. Do NOT rename `MCP_GWAY_ALLOW_LOCAL_COMMANDS`.
 - cwd/env gates: `--cwd` must be absolute (`check_cwd`); denylist EXACT `PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED` + prefixes `DYLD_,NPM_CONFIG_,BUN_,UV_` + controlled `PATH` (`NODE_ENV` allowed). `*`, paths, shell prohibited. `bunx` is in `DEFAULT_ALLOW_LIST` (runner shim); widening the list needs pin + owner + 90d re-gate; `bun` runtime stays out.
 - Every local spawn (`add`/`refresh`/`tools exec` → `client.py`/`server_factory.py`) runs `check_local_command(…, require_binary=True)` + `audit_local_action`. Denied → `PermissionError`/exit 1 with the policy message.
 

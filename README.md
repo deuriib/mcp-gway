@@ -4,15 +4,28 @@
 [![Python](https://img.shields.io/pypi/pyversions/mcp-gway)](https://pypi.org/project/mcp-gway/)
 [![License](https://img.shields.io/pypi/l/mcp-gway)](https://github.com/deuriib/mcp-gateway/blob/main/LICENSE)
 
-A standalone CLI gateway that aggregates multiple MCP (Model Context Protocol) servers behind a single headless HTTP/SSE endpoint with **Code Mode** — reducing LLM input token usage by up to 92% when using multiple MCP servers. Manage it from the CLI or from the built-in admin dashboard (**v3.1.0**): `mcp-gway serve --transport http`, then open `http://127.0.0.1:8080/`.
+One endpoint for every MCP server your agent needs — so it reads tool schemas on demand instead of loading them all upfront.
+
+MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint. Its **Code Mode** exposes 4 meta-tools (`listToolFiles → readToolFile → getToolDocs → executeToolCode`) so the agent discovers signatures lazily and executes in a hermetic Starlark sandbox. Manage it from the CLI (`mcp-gway`, alias `mgw`) or the built-in admin dashboard: `mcp-gway serve --transport http`, then open `http://127.0.0.1:8080/`.
+
+## Why this exists
+
+- **Fewer wasted tokens** — agents fetch only the schemas they use, when they use them.
+- **One connection to manage** — add/remove/refresh servers in one registry; agents see one endpoint.
+- **Safe local defaults** — binds `127.0.0.1`, screens local commands through an allow-list, masks secrets, CSRF-protects the dashboard.
+
+## Who it is for
+
+- **Agent developers** wiring OpenCode, Pi, Antigravity, Claude Desktop, or Cursor to many MCP servers through one gateway.
+- **Operators** running local-first infrastructure who want a CLI + dashboard with health probes, Prometheus metrics, and JSON logs.
 
 ## Features
 
-- **Multi-Server Aggregation** — Connect to multiple MCP servers (`remote` / `local`, OpenCode format) and expose them through a single endpoint
-- **Code Mode** — 4 meta-tools that let LLMs discover and use tools dynamically without loading all schemas upfront
+- **Multi-Server Aggregation** — Connect to multiple MCP servers (`remote` / `local`, OpenCode format) and expose them through a single endpoint — one URL for every agent, one registry to manage
+- **Code Mode** — 4 meta-tools that let LLMs discover schemas on demand and execute in a sandbox, instead of loading every tool definition into context
 - **OAuth 2.0 Support** — Built-in OAuth flow with dynamic client registration (RFC 7591) and token storage
 - **Hermetic Sandbox** — Starlark-based sandbox for safe code execution
-- **MCP Protocol Compliant** — Works with Claude Desktop, Cursor, and any MCP-compatible client
+- **MCP Protocol Compliant** — Works with OpenCode, Pi, Antigravity, Claude Desktop, Cursor, and any MCP-compatible client
 
 ## Installation
 
@@ -38,7 +51,7 @@ OpenCode schema — `remote` / `local` with transport auto-detection. This is th
 ```bash
 # Remote — auto-detects transport (streamable-http → sse → http)
 mcp-gway add youtube --type remote --url https://api.example.com/mcp
-# SSRF-guard: private/loopback/link-local hosts rejected (src/mcp_gway/models.py:115-163); localhost solo en tests.
+# SSRF-guard: private/loopback/link-local hosts rejected (src/mcp_gway/models.py:115-163); localhost only in tests.
 
 # Remote with headers
 mcp-gway add supabase --type remote --url https://mcp.supabase.com/mcp --header "Authorization=Bearer TOKEN"
@@ -46,7 +59,7 @@ mcp-gway add supabase --type remote --url https://mcp.supabase.com/mcp --header 
 # Remote with pre-registered OAuth
 mcp-gway add supabase --type remote --url https://mcp.supabase.com/mcp --oauth-client-id ID --oauth-client-secret SECRET --oauth-scope "openid profile"
 
-> **Shell-history warning:** no pases secretos reales en `--header` / `--oauth-client-secret` (quedan en `~/.bash_history` / `ps`). Prefiere `mcp-gway refresh <name> --auth` o variables de entorno efímeras.
+> **Shell-history warning:** never pass real secrets via `--header` / `--oauth-client-secret` (they persist in shell history and process lists). Prefer `mcp-gway refresh <name> --auth` or short-lived env vars.
 
 # Remote with timeout and enable toggle
 mcp-gway add api --type remote --url https://api.example.com/mcp --timeout 10000 --enabled
@@ -59,7 +72,7 @@ mcp-gway add tools --type local --command "npx -y my-mcp" --env KEY=VALUE --env 
 
 # List and serve (local-first)
 mcp-gway list
-mcp-gway serve --transport http --port 8080         # bindea 127.0.0.1 por defecto
+mcp-gway serve --transport http --port 8080         # binds 127.0.0.1 by default
 mcp-gway serve --transport http --host 127.0.0.1 --port 8080
 curl -s http://127.0.0.1:8080/health | jq
 ```
@@ -70,21 +83,21 @@ curl -s http://127.0.0.1:8080/health | jq
 
 ## Management — CLI + Admin Dashboard
 
-Server management (`add`/`remove`/`list`/`inspect`/`refresh`/`local-unrestricted`) lives in the CLI with full parity in the admin dashboard: `mcp-gway serve --transport http`, then open `http://127.0.0.1:8080/` (pages `/admin/*`, htmx partials `/admin/partials/*`).
+Server management (`add`/`remove`/`list`/`inspect`/`refresh`/`--version`) lives in the CLI with full parity in the admin dashboard: `mcp-gway serve --transport http`, then open `http://127.0.0.1:8080/` (pages `/admin/*`, htmx partials `/admin/partials/*`).
 One `Gateway(registry, host)` process serves `/mcp`, `/health`, `/ready`, `/live`, `/metrics` and the admin routes on the same `Starlette` app. Registry (`servers/*.json` + `servers/*.pyi`) is the single source of truth. The dashboard is loopback-only and CSRF-protected; the legacy `/dashboard` + catalog surfaces stay retired.
 
 ### Local-First Security
 
 ```bash
-# Default seguro — solo loopback
-mcp-gway serve --transport http --port 8080   # bindea 127.0.0.1
+# Secure default — loopback only
+mcp-gway serve --transport http --port 8080   # binds 127.0.0.1
 
-# Exponer en 0.0.0.0 requiere opt-in explícito
+# Binding 0.0.0.0 requires explicit opt-in
 MCP_GWAY_ALLOW_REMOTE=1 mcp-gway serve --transport http --host 0.0.0.0 --port 8080
 # └─ log warning "server exposed on non-loopback host"
-# Protege con firewall + auth reversa: nunca expongas 0.0.0.0 sin firewall/auth delante.
+# Shield with a firewall + reverse-proxy auth: never expose 0.0.0.0 without both in front.
 
-# Sin opt-in → error controlado
+# Without opt-in → controlled error
 mcp-gway serve --transport http --host 0.0.0.0
 # Error: binding to non-loopback host '0.0.0.0' requires MCP_GWAY_ALLOW_REMOTE=1
 # exit 2
@@ -92,7 +105,7 @@ mcp-gway serve --transport http --host 0.0.0.0
 
 ## Observability — Logs + Metrics + Health (Approach C, v2.4.0)
 
-> **Zero vendor lock-in:** stdlib `json` logs (no `structlog`), vendored `MetricsRegistry` (no `prometheus_client`), correlation via `X-Request-ID` + `contextvars`, health probes `/health|/ready|/live` + Prometheus text `/metrics`. Local-first + masking `***` preserved; `X-Warning: exposed` solo en `GET /metrics` → `403`.
+> **Zero vendor lock-in:** stdlib `json` logs (no `structlog`), vendored `MetricsRegistry` (no `prometheus_client`), correlation via `X-Request-ID` + `contextvars`, health probes `/health|/ready|/live` + Prometheus text `/metrics`. Local-first + masking `***` preserved; `X-Warning: exposed` only on `GET /metrics` → `403`.
 
 **Health & Metrics:**
 
@@ -116,7 +129,7 @@ uv run mcp-gway serve --transport http --port 8080 2>&1 | head   # each line val
 ```
 
 - `X-Request-ID` or `X-Correlation-ID` accepted, sanitized to `^[A-Za-z0-9_-]{1,64}$`, truncated; auto `uuid4` if absent.
-- Labels bounded: `path` collapsed to `/mcp` or `/mcp/messages` (alias SSE al mismo handler `_mcp_post`, no endpoint independiente; all other routes recorded as-is), server sanitized `[^A-Za-z0-9_]`→`_` 32 chars.
+- Labels bounded: `path` collapsed to `/mcp` or `/mcp/messages` (SSE alias to the same `_mcp_post` handler, not a separate endpoint; all other routes recorded as-is), server sanitized `[^A-Za-z0-9_]`→`_` 32 chars.
 - Metrics: `http_requests_total`, `http_request_duration_seconds` (buckets 0.005..5), `mcp_tool_calls_total{server,tool,status}`, `discovery_duration_seconds`, `sandbox_execute_total{status}`, `registry_operations_total{op}`, `gateway_sessions_active`.
 
 **FEAT-007 hardening (v2.2.1):** process/build lifecycle, stdio coverage, upstream telemetry, cardinality cap.
@@ -150,45 +163,45 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `mcp-gway add --type remote\|local` | Add an MCP server and generate `.pyi` stub (OpenCode format, primary) |
-| `mcp-gway remove` | Remove an MCP server |
-| `mcp-gway update` | Update tools for a server |
-| `mcp-gway list` | List all connected servers |
-| `mcp-gway inspect` | Show tool signatures for a server |
-| `mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]` | Refresh connection and re-discover tools |
-| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). Per-transport `/mcp` (apps separadas, sin fallback): `http` → `POST /mcp` only (6 routes; `GET` → 405 `Allow: POST`), `sse` → `GET /mcp` + `POST /mcp/messages` (7 routes; `POST` → 405 `Allow: GET`); probes shared; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` necesita `MCP_GWAY_ALLOW_REMOTE=1`. v2.x → v3.0.0 breaking: [MIGRATION.md](MIGRATION.md) |
-| `mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]` | DEPRECATED hidden alias: `serve --transport stdio` equiv `mcp` — mismo loop NDJSON y mismos args a `_serve_stdio`, modulo aviso de deprecacion en stderr (solo `mcp`). Prefer `command: [mcp-gway, serve, --transport, stdio]` for OpenCode `type: local` |
-| `mcp-gway local-unrestricted enable\|disable\|status` | Break-glass marker 72h (explicit only) — enable/remove, or status without side effects |
+| Command                                                                                                                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp-gway add --type remote\|local`                                                                                          | Add an MCP server and generate `.pyi` stub (OpenCode format, primary)                                                                                                                                                                                                                                                                                                                                                                               |
+| `mcp-gway remove`                                                                                                            | Remove an MCP server                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `mcp-gway update`                                                                                                            | Update tools for a server                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `mcp-gway list`                                                                                                              | List all connected servers                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `mcp-gway inspect`                                                                                                           | Show tool signatures for a server                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]`                                                                   | Refresh connection and re-discover tools                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>] [--log-level LEVEL] [--registry-dir PATH]` | Start gateway (default `stdio`; `--host/--port` only with `http\|sse`). Per-transport `/mcp` (separate apps, no fallback): `http` → `POST /mcp` only (6 routes; `GET` → 405 `Allow: POST`), `sse` → `GET /mcp` + `POST /mcp/messages` (7 routes; `POST` → 405 `Allow: GET`); probes shared; stdio keeps stdout pure NDJSON. Default `127.0.0.1`; `0.0.0.0` requires `MCP_GWAY_ALLOW_REMOTE=1`. v2.x → v3.0.0 breaking: [MIGRATION.md](MIGRATION.md) |
+| `mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]`                                                                     | DEPRECATED hidden alias: equivalent to `serve --transport stdio` — same NDJSON loop and same args to `_serve_stdio`, except for the deprecation notice on stderr (only under `mcp`). Prefer `command: [mcp-gway, serve, --transport, stdio]` for OpenCode `type: local`                                                                                                                                                                             |
+| `mcp-gway --version` / `-v`                                                                                                  | Print the package version                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 > **Types:** only `--type local|remote` (`cli.py:50`). Legacy `http|stdio|sse|streamable-http` are rejected by click. There is no `--args` / `--docs-url`.
 
 Options for `add` (OpenCode) — 13 flags (cli.py:45-95):
 
-| Option | Description |
-|--------|-------------|
-| `--type remote\|local` | Server type (primary) |
-| `--url <url>` | URL for `remote` |
-| `--header "KEY=VALUE"` | HTTP header for `remote` (repeatable) |
-| `--command "<cmd>"` | Command for `local` (e.g. `"npx -y my-mcp"`) |
-| `--env KEY=VALUE` | Environment variable for `local` (repeatable) |
-| `--cwd <path>` | Working directory for `local` |
-| `--oauth-client-id ID` | Pre-registered OAuth client ID |
-| `--oauth-client-secret SECRET` | Pre-registered OAuth client secret |
-| `--oauth-scope SCOPE` | OAuth scope |
-| `--oauth-port <port>` | Local port for OAuth callback (default 8989) |
-| `--timeout <ms>` | Connection timeout in ms (default 5000) |
-| `--enabled / --no-enabled` | Enable/disable without removal (default enabled) |
-| `--tools <list>` | Comma-separated tool filter (default `*` = all) |
+| Option                         | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `--type remote\|local`         | Server type (primary)                            |
+| `--url <url>`                  | URL for `remote`                                 |
+| `--header "KEY=VALUE"`         | HTTP header for `remote` (repeatable)            |
+| `--command "<cmd>"`            | Command for `local` (e.g. `"npx -y my-mcp"`)     |
+| `--env KEY=VALUE`              | Environment variable for `local` (repeatable)    |
+| `--cwd <path>`                 | Working directory for `local`                    |
+| `--oauth-client-id ID`         | Pre-registered OAuth client ID                   |
+| `--oauth-client-secret SECRET` | Pre-registered OAuth client secret               |
+| `--oauth-scope SCOPE`          | OAuth scope                                      |
+| `--oauth-port <port>`          | Local port for OAuth callback (default 8989)     |
+| `--timeout <ms>`               | Connection timeout in ms (default 5000)          |
+| `--enabled / --no-enabled`     | Enable/disable without removal (default enabled) |
+| `--tools <list>`               | Comma-separated tool filter (default `*` = all)  |
 
 ## Local Commands — Dynamic Allow-List (feat-006)
 
 > **Dynamic-no-static:** no hardcoded binaries. Operators allow-list once via env; see [ADR-009](docs/architecture/adr-009-dynamic-local-commands.md).
 
-**Default-deny:** empty `MCP_GWAY_ALLOW_LOCAL_COMMANDS` denies every `local` command (vacío = deny, se mantiene).
+**Allow-list:** `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames; unset/blank → defaults `npx,bunx,uvx,pipx`); `*`/paths/invalid entries → deny + warn.
 
-Recomendado: `MCP_GWAY_ALLOW_LOCAL_COMMANDS="npx,uvx,python3,bunx"`.
+Recommended: `MCP_GWAY_ALLOW_LOCAL_COMMANDS="npx,uvx,python3,bunx"`.
 
 ```bash
 # Allow-list (CSV basenames, `*` = invalid → deny + warn)
@@ -196,31 +209,11 @@ export MCP_GWAY_ALLOW_LOCAL_COMMANDS="npx,uvx,python3,bunx"
 mcp-gway add fs --type local --command "npx -y @anthropic/mcp-filesystem" --cwd /srv/mcp/workdir
 ```
 
-### Break-glass 72h (bootstrap only, time-boxed) — marker required, env alone never activates
+- CISO opt-in note: `bunx` is docs-recommended only (not a code default; empty allow-list still denies); opt-in only with pin + owner + 90-day re-gate; `bun` runtime stays out; denylist EXACT PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED + PREFIXES DYLD_,NPM_CONFIG_,BUN_,UV_ + controlled PATH (`NODE_ENV` allowed, not denylisted); `*`, paths, and shell are prohibited.
+- Internal tag `v2.0.0` — not published, no external announcement. After upgrading, delete the stale cache manually: `rm ~/.config/mcp-gway/catalog.json`.
 
-```powershell
-$env:MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL="1"
-mcp-gway local-unrestricted enable
-mcp-gway local-unrestricted status
-mcp-gway refresh
-```
-
-### Disable — both steps required (explicit only, never auto-created on add/refresh/spawn)
-
-```powershell
-mcp-gway local-unrestricted disable  # 1. removes marker file
-Remove-Item Env:\MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL  # 2. unsets env, returns to allow-list mode
-```
-
-- Nota CISO opt-in: `bunx` solo como recomendado en documentación (no default en código, default-deny vacío se mantiene); solo opt-in con pin + owner + regate 90d; `bun` runtime sigue fuera; denylist EXACT PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED + PREFIXES DYLD_,NPM_CONFIG_,BUN_,UV_ + PATH controlado (`NODE_ENV` permitido, no denylisted); prohibido `*`, paths o shell.
-- Tag `v2.0.0` interno no publicado — no anuncio externo. Tras actualizar, borra la caché vieja manualmente: `rm ~/.config/mcp-gway/catalog.json`.
-
-- Marker `~/.config/mcp-gway/.local_unrestricted` (epoch, `0o600`, 72h TTL) — fail-closed: missing, expired, future, insecure, unreadable, or invalid → deny. States via `mcp-gway local-unrestricted status`: `disabled` (env unset), `marker-missing`, `expired`, `future` (timestamp in the future), `marker-insecure` (permissions != `0o600` on posix), `marker-unreadable`, `marker-invalid`, `active`.
-- Allow-list still applies when break-glass inactive: env alone never activates; allow-listed binaries remain allowed when marker missing/expired/etc. Final deny carries an actionable hint (`local-unrestricted enable` / `status`).
-- Disable requires both steps: `local-unrestricted disable` removes the marker file, plus `Remove-Item Env:\MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL` unsets the env and returns to allow-list mode.
-- Any syntactically valid basename allowed while marker fresh; otherwise deny.
 - `unset` returns to allow-list mode.
-- CLI `add`/`refresh` enforces allow-list/unrestricted plus re-validation before persist.
+- CLI `add`/`refresh` enforces the allow-list plus re-validation before persist.
 - `cwd` must be absolute + real + `is_dir`, else `reason_code=invalid_cwd`. Env denylist (`PATH`, `LD_PRELOAD`, `PYTHONPATH`, …) → `reason_code=denied_env`.
 - Spawn only resolved via PATH lookup (`shutil.which(basename)`); never `shell=True` / `cmd /c` / `sh -c`. Errors carry `reason_code` (`not_allowlisted`, `binary_not_found`, …).
 
@@ -228,11 +221,11 @@ Remove-Item Env:\MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL  # 2. unsets env, returns to 
 
 When connected, the gateway exposes 4 meta-tools:
 
-| Tool | Description |
-|------|-------------|
-| `listToolFiles` | List all available `.pyi` stub files |
-| `readToolFile` | Read function signatures from a stub |
-| `getToolDocs` | Get detailed documentation for a tool |
+| Tool              | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `listToolFiles`   | List all available `.pyi` stub files             |
+| `readToolFile`    | Read function signatures from a stub             |
+| `getToolDocs`     | Get detailed documentation for a tool            |
 | `executeToolCode` | Execute code in a sandboxed Starlark interpreter |
 
 ## OAuth Authentication
@@ -240,10 +233,10 @@ When connected, the gateway exposes 4 meta-tools:
 For servers requiring OAuth (e.g., Supabase):
 
 ```bash
-# Trigger OAuth flow (preferido — no deja secretos en shell-history)
+# Trigger the OAuth flow (preferred — keeps secrets out of shell history)
 mcp-gway refresh supabase --auth
 
-# Or store token manually (solo fallback; chmod 600 obligatorio)
+# Or store a token manually (fallback only; chmod 600 required)
 mkdir -p ~/.config/mcp-gway/tokens
 echo '{"access_token": "YOUR_TOKEN"}' > ~/.config/mcp-gway/tokens/supabase.json
 chmod 600 ~/.config/mcp-gway/tokens/supabase.json
@@ -262,7 +255,7 @@ uv run pytest -v  # 570 tests — CLI, MCP, Code Mode, stdio, OAuth, observabili
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
 
-# Verification probes (sin Node, sin build)
+# Verification probes (no Node, no build)
 curl -s http://127.0.0.1:8080/health | jq .status             # "ok"
 curl -s http://127.0.0.1:8080/ready | jq .status              # "ready"
 curl -s http://127.0.0.1:8080/metrics | head -n 5             # # HELP mcp_gway_...
@@ -277,7 +270,7 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        MCP Gateway v3.1.0                          │
+│                        MCP Gateway v4.0.0                          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  CLI (click)              │  Gateway (Starlette + uvicorn, CSP)      │
 │  - add remote/local       │  - POST /mcp (JSON-RPC)      [http]      │
@@ -292,10 +285,10 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
 │  - getToolDocs                 │                                      │
 │  - executeToolCode             │                                      │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Registry (única fuente)       │  OAuth2 (RFC 7591, reutilizado)      │
+│  Registry (single source)      │  OAuth2 (RFC 7591, reutilizado)      │
 │  - servers/*.pyi = signatures  │  - Dynamic registration              │
 │  - servers/*.json = config     │  - PKCE + FileTokenStorage           │
-│  - last-write-wins, atómico    │  - tokens/ no expuesto vía API       │
+│  - last-write-wins, atomic     │  - tokens/ never exposed via API     │
 └──────────────────────────────────────────────────────────────────────┘
          │                │                │
     ┌────┴────┐      ┌────┴────┐      ┌────┴────┐
@@ -303,9 +296,6 @@ Pre-commit is already in place (`.pre-commit-config.yaml` — `ruff` v0.16.4, `r
     │ (remote)│      │ (local) │      │ (remote)│
     └─────────┘      └─────────┘      └─────────┘
 ```
-
-- **Sin Node** en runtime ni CI: sin UI ni assets vendoreados, `ruff` único linter, `uv_build` backend.
-- **Release híbrido** (ADR-007): `push tags v*` → `uv build` + `pypi-publish` (GA `v2.0.0` tag manual, release interno no publicado) + `workflow_run Tests completed` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para `fix/perf` patches auto (línea v2.0.1..v2.4.0 ya liberada así). `concurrency: release`, `fetch-depth:0`, `[tool.semantic_release]` sync `pyproject.toml` + `__init__.py` + `uv.lock` (`3.1.0` exacta).
 
 ## License
 

@@ -31,7 +31,7 @@ src/mcp_gway/
 ├── server_factory.py    # Server structs + sync call wrappers for the sandbox
 ├── code_mode.py         # 4 meta-tools orchestrator
 ├── gateway.py           # HTTP/SSE server (JSON-RPC 2.0), local-first 127.0.0.1 + CSP — rutas /mcp por transporte (gateway.py:320-340, mcp_routes condicional; app.state.transport; sin fallback): http = POST /mcp (GET → 405 Allow: POST) + /health, /ready, /live, /metrics → 6 entradas; sse = GET /mcp (SSE) + POST /mcp → 405 Allow: GET + /mcp/messages (alias POST al handler _mcp_post, no endpoint independiente) + probes → 7 entradas
-├── cli.py               # CLI commands (add/remove/update/list/inspect/refresh/serve --transport stdio|http|sse/mcp-hidden/local-unrestricted --host 127.0.0.1)
+├── cli.py               # CLI commands (add/remove/update/list/inspect/refresh/serve --transport stdio|http|sse/mcp-hidden/--version --host 127.0.0.1)
 ├── admin/               # Admin dashboard: theme, components, icons (SVG authored), layout, data, routes + pages/{status,overview,servers,tools,observability,policy} (htpy+htmx, CDN)
 ├── oauth.py             # OAuth2 support (dynamic registration, token storage); usa httpx2 (dependencia directa)
 ├── transport.py         # Shim deprecado → mcp_gway.core.transport (DeprecationWarning; eliminar en next major)
@@ -40,7 +40,7 @@ src/mcp_gway/
 ├── core/
 │   ├── __init__.py      # Re-exports (create_client_transport, detect_transport, discover_tools, parse_envs/headers, refresh_server)
 │   ├── transport.py     # Auto-detección de transporte remote (streamable-http → sse → http)
-│   ├── policy.py        # Allow-list local + break-glass 72h (ADR-009), cwd/env gates, audit
+│   ├── policy.py        # Allow-list local (ADR-009), cwd/env gates, audit
 │   ├── parsing.py       # parse_headers / parse_envs (KEY=VALUE)
 │   ├── install.py       # Discovery + persist helpers (semáforo 3, oauth fallback)
 │   └── client.py        # create_client_transport (local|remote), discover_tools, refresh_server
@@ -69,7 +69,7 @@ tests/
 ├── test_stdio.py               # Server-side NDJSON (mcp-gway mcp) tests
 ├── test_stdio_transport.py     # Client-side filtered stdio tests
 ├── test_policy_local_commands.py  # feat-006 allow-list policy tests
-├── test_break_glass.py         # Break-glass marker TTL/permissions tests
+├── test_policy_local_commands.py  # feat-006 allow-list policy tests
 ├── test_feat006_harden.py      # feat-006 hardening tests (PATCH bypass, regates)
 ├── test_p0_fixes.py            # P0 regression fixes
 ├── test_wave2_api.py           # Wave-2 API asserts (CSP header etc.)
@@ -101,11 +101,9 @@ mcp-gway add <name> --type remote --url <url> [--header "KEY=VALUE"] [--oauth-cl
 # Shell-history warning: no secretos reales en --header/--oauth-client-secret; preferir `refresh --auth`.
 mcp-gway add <name> --type local --command "npx -y my-mcp" [--env KEY=VALUE] [--cwd /path] [--tools "*"]
 # Local allow-list: `local` requiere MCP_GWAY_ALLOW_LOCAL_COMMANDS (CSV basenames); unset/blank → DEFAULT_ALLOW_LIST npx,bunx,uvx,pipx; `*` inválido → deny + warn.
-# feat-006 allow-list + break-glass 72h (ADR-009 docs/architecture/adr-009-dynamic-local-commands.md,
+# feat-006 allow-list (ADR-009 docs/architecture/adr-009-dynamic-local-commands.md,
 #   src/mcp_gway/core/policy.py): MCP_GWAY_ALLOW_LOCAL_COMMANDS (unset/blank → DEFAULT_ALLOW_LIST npx,bunx,uvx,pipx);
-#   CSV basenames, `*` inválido; UNRESTRICTED_TTL 72*3600; break-glass MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1
-#   + marker ~/.config/mcp-gway/.local_unrestricted (epoch, 0o600, 72h TTL); vars MCP_GWAY_ALLOW_LOCAL_COMMANDS
-#   / MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL (no renombrar).
+#   CSV basenames, `*` inválido. No renombrar MCP_GWAY_ALLOW_LOCAL_COMMANDS.
 # Full options: 13 flags (cli.py:45-95): --type/--url/--command/--header/--env/--cwd/--oauth-client-id/--oauth-client-secret/--oauth-scope/--timeout/--enabled/--oauth-port/--tools
 # Only --type local|remote (cli.py:50). No --args, no --docs-url. Legacy http|stdio|sse|streamable-http rejected by click.
 mcp-gway remove <name>
@@ -114,7 +112,7 @@ mcp-gway inspect <name>
 mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]
 mcp-gway serve [--transport stdio|http|sse] [--host 127.0.0.1] [--port 8080] [--log-level LEVEL] [--registry-dir PATH]  # default --transport stdio; --host/--port only with http|sse (con stdio → exit 2); 0.0.0.0 requiere MCP_GWAY_ALLOW_REMOTE=1
 # mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]  # DEPRECATED hidden alias: avisa '[mcp] deprecated, use serve --transport stdio' y delega a _serve_stdio(); stdout puro NDJSON (usable como OpenCode type: local con command: [mcp-gway, serve, --transport, stdio])
-mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: crear/remover marker 72h (0o600), o status sin side effects
+mcp-gway --version | -v  # print package version
 ```
 
 > **Local-first warning:** `serve` bindea `127.0.0.1` por defecto. `--host 0.0.0.0` sin `MCP_GWAY_ALLOW_REMOTE=1` → `exit 2` + `Error: binding to non-loopback ...`. Con `MCP_GWAY_ALLOW_REMOTE=1` → `WARNING: server exposed on non-loopback` en log; `X-Warning: exposed` solo en `GET /metrics` → `403` cuando se expone sin opt-in. No exponer `0.0.0.0` sin firewall/auth delante.
@@ -163,12 +161,11 @@ mcp-gway local-unrestricted enable|disable|status  # break-glass explícito: cre
 - `remote --url` con SSRF-guard (`models.py:115-163`): hosts privados/loopback/link-local rechazados; ejemplo vivo `https://api.example.com/mcp`.
 - Admin dashboard (`/`, `/admin*`): `_gate` en `admin/routes.py` — 403 si `app.state.serve_host` no es loopback (aunque el bind sea `0.0.0.0`), CSRF obligatorio en toda mutación (header `X-CSRF-Token` o campo `_csrf`, token por proceso `app.state.csrf_token`), valores de headers/OAuth enmascarados en la vista detalle, OAuth nunca corre inline (task en background con paridad `refresh --auth`), CSP único relajado (constante `CSP` en `gateway.py`).
 - Si `host not in (127.0.0.1, ::1, localhost)` → log `warning` + banner consola; `X-Warning: exposed` solo en `GET /metrics` → `403` (observability/health.py:127-139).
-- feat-006 allow-list + break-glass 72h (`src/mcp_gway/core/policy.py`, ADR-009):
+- feat-006 allow-list (`src/mcp_gway/core/policy.py`, ADR-009):
   - Allow-list: `MCP_GWAY_ALLOW_LOCAL_COMMANDS` CSV basenames; unset/blank → `DEFAULT_ALLOW_LIST {"npx","bunx","uvx","pipx"}` (policy.py:23, docstring "Replaces the old default-deny"); valor explícito sobresuelve.
   - CSV basenames case-insensitive, `*`/paths inválidos → deny + warn.
   - Nota CISO opt-in: `bunx` está en `DEFAULT_ALLOW_LIST` (runner shim); ampliar el allow-list exige pin + owner + regate 90d; `bun` runtime fuera; denylist EXACT PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED + PREFIXES DYLD_,NPM_CONFIG_,BUN_,UV_ + PATH controlado (`NODE_ENV` permitido, no denylisted); prohibido `*`, paths o shell.
-  - Break-glass `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1` + marker `~/.config/mcp-gway/.local_unrestricted` (epoch, `0o600`, 72h TTL).
-  - No renombrar `MCP_GWAY_ALLOW_LOCAL_COMMANDS` / `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL`.
+  - No renombrar `MCP_GWAY_ALLOW_LOCAL_COMMANDS`.
 
 ### OAuth Flow
 

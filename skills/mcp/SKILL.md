@@ -1,6 +1,6 @@
 ---
 name: mcp-gway-mcp
-description: Serve and consume the gateway over MCP (v3.1.0) — stdio/http/sse transports, Code Mode protocol, admin dashboard. Use when wiring agents (OpenCode/Claude/Pi) to the gateway.
+description: Serve and consume the gateway over MCP (v4.0.0) — stdio/http/sse transports, Code Mode discovery protocol, admin dashboard. Use when wiring agents (OpenCode/Pi/Antigravity/Claude) to one gateway endpoint.
 ---
 
 # mcp-gway MCP + serve surface

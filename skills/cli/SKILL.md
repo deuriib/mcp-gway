@@ -1,6 +1,6 @@
 ---
 name: mcp-gway-cli
-description: Operate the mcp-gway CLI (v3.1.0) — add/remove/update/list/inspect/refresh/tools plus local-first guards. Use when managing servers from the terminal or CI.
+description: Operate the mcp-gway CLI (v4.0.0) — add/remove/update/list/inspect/refresh/serve plus Code Mode tools from the terminal. Use when managing servers or running the gateway from CI.
 ---
 
 # mcp-gway CLI
@@ -18,7 +18,8 @@ Registry (`servers/*.json` + `servers/*.pyi`) is the single source of truth.
 | `list` | `mcp-gway list` |
 | `inspect` | `mcp-gway inspect <name>` (prints stored `.pyi` signatures) |
 | `refresh` | `mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]` |
-| `local-unrestricted` | `mcp-gway local-unrestricted enable\|disable\|status` — break-glass marker 72h (0o600), explicit only |
+| `serve` | `mcp-gway serve [--transport stdio\|http\|sse] [--host 127.0.0.1] [--port <port>]` — default stdio; `--host/--port` only with http/sse |
+| `--version` | `mcp-gway --version` / `-v` — print the package version |
 
 ## `add` flags (14, `cli.py`)
 
@@ -64,6 +65,6 @@ message, never silently. Emits `_log_cli_event("tools_exec", …)` like other CL
 
 ## Local-first security (see `mcp-gway-core`)
 
-- `local` requires `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames, case-insensitive); unset/blank → `DEFAULT_ALLOW_LIST {npx,bunx,uvx,pipx}` (`core/policy.py:23`). `*`/paths denied + warn. Break-glass `MCP_GWAY_ALLOW_UNRESTRICTED_LOCAL=1` + marker 72h TTL (explicit only). `--cwd` absolute. Denylisted env rejected.
+- `local` requires `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames, case-insensitive); unset/blank → `DEFAULT_ALLOW_LIST {npx,bunx,uvx,pipx}` (`core/policy.py:23`). `*`/paths denied + warn. No bypass exists. `--cwd` absolute. Denylisted env rejected.
 - `remote --url` has an SSRF-guard (`models.py`): only `http|https`; private/loopback/link-local/reserved/multicast rejected.
 - Secrets: never put real tokens in `--header` / `--oauth-client-secret` (shell history). Prefer `refresh <name> --auth`. Tokens live in `~/.config/mcp-gway/tokens/` (`0o600`).
