@@ -3,7 +3,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "sh /plugins/antigravity/scripts/reinject.sh",
+        "command": "node ./plugins/antigravity/scripts/reinject.mjs",
         "timeout": 10
       }
     ]

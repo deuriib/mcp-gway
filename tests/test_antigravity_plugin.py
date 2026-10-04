@@ -29,9 +29,9 @@ RULES_PATH = (
 )
 SKILL_PATH = REPO_ROOT / "skills" / "mcp-gway" / "SKILL.md"
 REINJECT_SCRIPT = (
-    REPO_ROOT / "scripts" / "reinject.sh"
-    if (REPO_ROOT / "scripts" / "reinject.sh").exists()
-    else (PLUGIN_DIR / "scripts" / "reinject.sh")
+    REPO_ROOT / "scripts" / "reinject.mjs"
+    if (REPO_ROOT / "scripts" / "reinject.mjs").exists()
+    else (PLUGIN_DIR / "scripts" / "reinject.mjs")
 )
 INSTALL_PATH = (
     REPO_ROOT / "INSTALL.md"
@@ -77,7 +77,7 @@ def test_rules_content():
     """REQ-F-004: Assert rules contain Gateway Protocol guidance and marker."""
     content = RULES_PATH.read_text()
 
-    assert "<!-- MCP-GWAY v2.8.0 -->" in content
+    assert "<!-- MCP-GWAY v3.1.0 -->" in content
     assert "gateway_listToolFiles" in content
     assert "gateway_readToolFile" in content
     assert "gateway_executeToolCode" in content
@@ -100,18 +100,21 @@ def test_hooks_json_schema():
 
     handler = hook_config["PreInvocation"][0]
     assert handler.get("type") == "command"
-    assert "reinject.sh" in handler.get("command", "")
+    assert "reinject.mjs" in handler.get("command", "")
+    # The hook must run through Node: no shell wrapper, no bash dependency.
+    assert handler.get("command", "").startswith("node ")
+    assert " sh " not in handler.get("command", "")
 
 
 def test_reinject_script_execution(tmp_path: Path):
-    """REQ-F-005: Assert reinject.sh outputs ephemeralMessage when marker absent, and empty when present."""
+    """REQ-F-005: Assert reinject.mjs outputs ephemeralMessage when marker absent, and empty when present."""
     # 1. Without marker in transcript
     empty_transcript = tmp_path / "transcript_empty.jsonl"
     empty_transcript.write_text('{"stepIdx": 1, "content": "hello"}\n')
 
     payload = json.dumps({"transcriptPath": str(empty_transcript), "invocationNum": 0})
     res = subprocess.run(
-        ["sh", str(REINJECT_SCRIPT)],
+        ["node", str(REINJECT_SCRIPT)],
         input=payload,
         text=True,
         capture_output=True,
@@ -120,19 +123,19 @@ def test_reinject_script_execution(tmp_path: Path):
     out = json.loads(res.stdout)
     assert "injectSteps" in out
     assert len(out["injectSteps"]) == 1
-    assert "MCP-GWAY v2.8.0" in out["injectSteps"][0]["ephemeralMessage"]
+    assert "MCP-GWAY v3.1.0" in out["injectSteps"][0]["ephemeralMessage"]
 
     # 2. With marker already in transcript -> dedupe, empty injectSteps
     marked_transcript = tmp_path / "transcript_marked.jsonl"
     marked_transcript.write_text(
-        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v2.8.0 -->"}\n'
+        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v3.1.0 -->"}\n'
     )
 
     payload_marked = json.dumps(
         {"transcriptPath": str(marked_transcript), "invocationNum": 1}
     )
     res_marked = subprocess.run(
-        ["sh", str(REINJECT_SCRIPT)],
+        ["node", str(REINJECT_SCRIPT)],
         input=payload_marked,
         text=True,
         capture_output=True,
@@ -140,6 +143,16 @@ def test_reinject_script_execution(tmp_path: Path):
     )
     out_marked = json.loads(res_marked.stdout)
     assert out_marked.get("injectSteps") == []
+
+    # 3. Missing/unreadable transcript must degrade to an injection, never raise.
+    res_missing = subprocess.run(
+        ["node", str(REINJECT_SCRIPT)],
+        input=json.dumps({"transcriptPath": str(tmp_path / "does-not-exist.jsonl")}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert len(json.loads(res_missing.stdout)["injectSteps"]) == 1
 
 
 def test_mcp_config_loopback_and_no_secrets():

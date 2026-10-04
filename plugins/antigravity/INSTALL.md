@@ -5,7 +5,7 @@
 The Antigravity plugin integrates **mcp-gateway** with Google Antigravity (CLI, IDE, and Antigravity 2.0). It provides:
 1. **Automatic MCP Server Registration**: Connects to the local gateway at `http://127.0.0.1:8080/mcp` over loopback.
 2. **Gateway Protocol Guidance**: Injects mandatory calling rules (`gateway_listToolFiles` → `gateway_readToolFile` → `gateway_executeToolCode`) and Starlark calling conventions via `rules/AGENTS.md`.
-3. **Session Reinjection**: PreInvocation hook (`scripts/reinject.sh`) ensures the Gateway Protocol survives conversation compaction without duplication (deduped by `MCP-GWAY v2.8.0` marker).
+3. **Session Reinjection**: PreInvocation hook (`scripts/reinject.mjs`, Node ESM) ensures the Gateway Protocol survives conversation compaction without duplication (deduped by the `MCP-GWAY v3.1.0` marker).
 4. **Bundled CLI Skill**: Automatically exposes the `mcp-gway` skill.
 
 ---
@@ -34,7 +34,6 @@ Install into your repository so any Antigravity agent working in this project ha
 ```bash
 mkdir -p <your-workspace>/.agents/plugins/mcp-gateway
 cp -r plugins/antigravity/* <your-workspace>/.agents/plugins/mcp-gateway/
-chmod +x <your-workspace>/.agents/plugins/mcp-gateway/scripts/reinject.sh
 ```
 
 ### Option B: Global Machine Installation
@@ -44,7 +43,6 @@ Install into your user configuration to enable it across all Antigravity workspa
 ```bash
 mkdir -p ~/.gemini/config/plugins/mcp-gateway
 cp -r plugins/antigravity/* ~/.gemini/config/plugins/mcp-gateway/
-chmod +x ~/.gemini/config/plugins/mcp-gateway/scripts/reinject.sh
 ```
 
 ---
@@ -75,7 +73,7 @@ chmod +x ~/.gemini/config/plugins/mcp-gateway/scripts/reinject.sh
 | Symptom | Cause | Solution |
 |---|---|---|
 | Gateway unreachable (`Connection refused`) | Gateway server not running on port 8080 | Run `mcp-gway serve --transport http --port 8080` |
-| Hook script fails / not executed | Missing execute permission on `reinject.sh` | Run `chmod +x <plugin_dir>/scripts/reinject.sh` |
+| Hook script fails / not executed | `node` missing on PATH, or the command is not resolved relative to the workspace | Verify `node --version`, then check that `hooks.json` runs `node ./plugins/antigravity/scripts/reinject.mjs` from the repo root |
 | MCP tools not appearing in agent context | Non-loopback host or wrong URL | Verify `mcp_config.json` points to `http://127.0.0.1:8080/mcp` |
 | Tools lost, gateway logs `405 Allow: POST` on `GET /mcp` | SSE-only client against `--transport http` (routes are per-transport since v3.0.0, no fallback) | Restart the gateway with `mcp-gway serve --transport sse --port 8080` (SSE clients) or point the client at POST `/mcp` (streamable HTTP) |
 | Duplicate protocol messages in chat | Transcript path mismatch | Hook uses `transcriptPath` from Antigravity input to check for existing marker |
