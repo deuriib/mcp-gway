@@ -61,7 +61,7 @@ def test_plugin_manifest():
         data = json.load(f)
 
     assert data.get("name") == "mcp-gateway"
-    assert data.get("version") == "2.8.0"
+    assert data.get("version") == "3.1.0"
     assert "$schema" in data
     assert "description" in data
 
