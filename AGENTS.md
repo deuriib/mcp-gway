@@ -135,11 +135,8 @@ mcp-gway --version | -v  # print package version
 
 ## Deployment
 
-- **PyPI**: Hybrid workflow `.github/workflows/release.yml` — `on: push tags v*` **+** `on: workflow_run Tests completed` (ver ADR-007)
-  - `push v*` → `uv build` + `pypi-publish` determinístico (GA interno `v2.0.0` via tag, nota interna no publicada — no anuncio externo)
-  - `workflow_run` → `python-semantic-release@v10 (>=10.0.0, uv.lock 10.6.1)` para patches automáticos `fix/perf` → minor/patch sin tag manual (línea v2.0.1..v2.4.0 ya liberada así)
-  - Condición: `if: push || workflow_run.conclusion == 'success'` + `concurrency: release` + `fetch-depth: 0`
-- **Version**: `3.1.0` sincronizada `pyproject.toml:project.version` + `src/mcp_gway/__init__.py:__version__` + `uv.lock` (vía `sync_version.py`, `build_command` + `assets`) (`[tool.semantic_release]`)
+- **Release**: tag-only `.github/workflows/release.yml` — `git tag vX.Y.Z && git push --follow-tags` is the single release decision. Pipeline: tag==version gate → `bump-version --check` → full suite (ruff + pytest) → `uv build` → PyPI publish (OIDC, `pypi` environment) → GitHub Release with CHANGELOG notes + `dist/*` artifacts. No `workflow_run` (it double-published every release), no semantic-release.
+- **Version**: `4.3.0` owned by `scripts/bump-version.mjs` (`pyproject.toml:project.version` is source of truth, `package.json` in lockstep, `--write` propagates to all sync surfaces, `--check` gates CI). CHANGELOG.md is hand-written — the workflow reads it, never writes it.
 - **Build**: `uv_build` backend — sin Node en CI (`ruff` único linter)
 
 ## Key Patterns
