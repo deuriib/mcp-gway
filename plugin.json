@@ -2,20 +2,13 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "mcp-gateway",
   "version": "4.4.0",
-  "description": "One MCP endpoint for every server your agent needs. Auto-loads the gateway skill, registers the loopback gateway, and keeps the Gateway Protocol alive across compaction.",
+  "description": "One MCP endpoint for every server your agent needs.",
   "author": {
     "email": "deuriib@gmail.com",
     "name": "Deuri Vasquez",
     "url": "https://github.com/deuriib"
   },
   "repository": "https://github.com/deuriib/mcp-gway",
-  "keywords": [
-    "mcp",
-    "gateway",
-    "extension",
-    "plugin",
-    "agy",
-    "antigravity"
-  ],
+  "keywords": ["mcp", "gateway", "extension", "plugin", "agy", "antigravity"],
   "license": "MIT"
 }
