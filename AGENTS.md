@@ -16,7 +16,6 @@
 - **Sandbox**: starlark-pyo3
 - **Testing**: pytest + pytest-asyncio (621 tests)
 - **Linting**: ruff
-- **Nota**: `htpy` reintroducido en v3.1.0 (Unreleased, `htpy==26.5.1`) como renderer del dashboard admin — retirado en v2.0.0, ahora re-admitido; `httpx` v1 eliminado en favor de `httpx2` (dependencia directa, alineada con mcp v2 y starlette 1.6).
 - **Dashboard**: htpy (server rendering) + htmx 2.0.10 + Tailwind — ambos vía CDN (`cdn.jsdelivr.net`, `cdn.tailwindcss.com`); CSP relajado en la constante única `CSP` de `gateway.py` (`script-src` CDNs, `style-src 'unsafe-inline'`, `frame-ancestors 'none'`).
 
 ## Project Structure
