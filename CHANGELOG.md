@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [4.3.0] — 2026-10-05
+
+- **feat(models)**: native pydantic validation errors with human-friendly messages. Validators raise `PydanticCustomError` with a distinct `type=` per failure and the `[reason=...]` token preserved in `msg` + structured `ctx.reason`; `format_validation_error` renders one `field: sentence` line per error. CLI `add` remote branch wrapped in try/except (exit 1, no traceback) and admin add/save surfaces share the helper. `https-only` now enforced at config validation; SSRF bypass fixtures moved to `https://` URLs.
+
 ## [4.2.0] — 2026-10-04
 
 - **docs(skills)**: product-first rewrite of all four skills with per-command variants and live examples. `skills/cli` → `skills/mcp-gway-cli` (via `git mv`, history preserved): every command gets its own section — `add` documents all 12 flags with remote/local/OAuth variants, `tools exec` shows three variants (`--code` inline, `--file` script, `refresh && read && exec` chain). `skills/mcp` → `skills/mcp-gway-mcp`: transport picker table, four `serve` variants, three agent-wiring variants (OpenCode stdio, Claude HTTP, Pi `.mcp.json`), 4-step protocol with real Context7/ParallelSearch output, Starlark DO/DON'T cookbook. `skills/core` → `skills/mcp-gway-core`: config-files table (`servers/*.json|pyi`, `tokens/`), complete six-var `MCP_GWAY_*` table, three policy gates with allow/deny examples, execution stack, OAuth, observability series, admin-backend route table. `skills/mcp-gway` becomes a routing table (task → skill → coverage). All frontmatter bumped to v4.2.0; `plugins/pi/INSTALL.md` naming aligned; `README.md` LICENSE link corrected to `LICENSE`.
