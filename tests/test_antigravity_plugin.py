@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from mcp_gway import __version__
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_DIR = REPO_ROOT / "plugins" / "antigravity"
 
@@ -61,7 +63,7 @@ def test_plugin_manifest():
         data = json.load(f)
 
     assert data.get("name") == "mcp-gateway"
-    assert data.get("version") == "4.3.0"
+    assert data.get("version") == __version__
     assert "$schema" in data
     assert "description" in data
 
@@ -77,7 +79,7 @@ def test_rules_content():
     """REQ-F-004: Assert rules contain Gateway Protocol guidance and marker."""
     content = RULES_PATH.read_text()
 
-    assert "<!-- MCP-GWAY v4.3.0 -->" in content
+    assert f"<!-- MCP-GWAY v{__version__} -->" in content
     assert "gateway_listToolFiles" in content
     assert "gateway_readToolFile" in content
     assert "gateway_executeToolCode" in content
@@ -123,12 +125,12 @@ def test_reinject_script_execution(tmp_path: Path):
     out = json.loads(res.stdout)
     assert "injectSteps" in out
     assert len(out["injectSteps"]) == 1
-    assert "MCP-GWAY v4.3.0" in out["injectSteps"][0]["ephemeralMessage"]
+    assert f"MCP-GWAY v{__version__}" in out["injectSteps"][0]["ephemeralMessage"]
 
     # 2. With marker already in transcript -> dedupe, empty injectSteps
     marked_transcript = tmp_path / "transcript_marked.jsonl"
     marked_transcript.write_text(
-        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v4.3.0 -->"}\n'
+        '{"stepIdx": 1, "content": "<!-- MCP-GWAY v' + __version__ + ' -->"}\n'
     )
 
     payload_marked = json.dumps(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -117,9 +118,38 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
+        from starlette.requests import ClientDisconnect
+
         start = time.perf_counter()
         rid = getattr(request.state, "request_id", None) or request_id_ctx.get() or "-"
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except (asyncio.CancelledError, ClientDisconnect):
+            raise
+        except (ConnectionResetError, BrokenPipeError) as e:
+            # Client hung up mid-request: debug, not a 500. Re-raise so the
+            # disconnect middleware answers quietly; the disconnect itself
+            # is not an application failure.
+            logger.debug(
+                "client disconnected during %s %s: %s",
+                request.method,
+                request.url.path,
+                e,
+            )
+            raise
+        except Exception:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.exception(
+                "request failed",
+                extra={
+                    "request_id": rid,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": 500,
+                    "duration_ms": duration_ms,
+                },
+            )
+            raise
         duration_ms = int((time.perf_counter() - start) * 1000)
         # Use logger with extra fields for JSONFormatter
         extra = {

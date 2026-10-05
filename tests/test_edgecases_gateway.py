@@ -329,3 +329,119 @@ def test_csp_and_security_headers(tmp_path):
     assert r.headers.get("Content-Security-Policy") == CSP
     assert "cdn.tailwindcss.com" in CSP
     assert r.headers.get("X-Frame-Options") == "DENY"
+
+
+def test_transient_accept_classifier_quiet_and_passthrough():
+    import asyncio
+
+    from mcp_gway.gateway import (
+        _is_transient_accept_error,
+        install_asyncio_exception_handler,
+    )
+
+    class FakeWinError(OSError):
+        def __init__(self):
+            super().__init__(22, "The specified network name is no longer available")
+            self.winerror = 64
+
+    assert _is_transient_accept_error(
+        {"message": "Accept failed on a socket", "exception": FakeWinError()}
+    )
+    assert _is_transient_accept_error({"exception": ConnectionResetError("peer gone")})
+    assert not _is_transient_accept_error(
+        {"message": "Task exception was never retrieved", "exception": ValueError("x")}
+    )
+    loop = asyncio.new_event_loop()
+    try:
+        seen: list[dict] = []
+
+        def _collect(loop: asyncio.AbstractEventLoop, ctx: dict) -> None:  # noqa: ANN001, ANN202
+            seen.append(ctx)
+
+        loop.set_exception_handler(_collect)
+        install_asyncio_exception_handler(loop)
+        handler = loop.get_exception_handler()
+        assert getattr(handler, "_mcp_gway_quiet_accept", False)
+        # Transient noise is swallowed without delegating.
+        handler(
+            loop, {"message": "Accept failed on a socket", "exception": FakeWinError()}
+        )
+        assert seen == []
+        # Real errors still delegate to the previous handler.
+        handler(loop, {"message": "boom", "exception": ValueError("x")})
+        assert len(seen) == 1 and seen[0]["message"] == "boom"
+        # Re-install is idempotent, never wraps twice.
+        install_asyncio_exception_handler(loop)
+        assert loop.get_exception_handler() is handler
+    finally:
+        loop.close()
+
+
+def test_unhandled_exception_handler_is_json_secret_safe():
+    import asyncio
+
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+    from starlette.testclient import TestClient
+
+    from mcp_gway.gateway import _unhandled_exception_handler
+
+    async def boom(request):  # noqa: ANN001, ANN202
+        raise RuntimeError("token=secret should never surface")
+
+    probe = Starlette(
+        routes=[Route("/boom", boom)],
+        exception_handlers={Exception: _unhandled_exception_handler},
+    )
+    c = TestClient(probe, raise_server_exceptions=False)
+    r = c.get("/boom")
+    assert r.status_code == 500
+    body = r.json()
+    assert body["detail"] == "Internal Server Error"
+    assert body["error"] == {"type": "RuntimeError"}
+    assert "secret" not in r.text
+
+    async def direct():
+        req = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/health",
+                "headers": [],
+                "query_string": b"",
+            }
+        )
+        resp = await _unhandled_exception_handler(req, ValueError("nope"))
+        assert resp.status_code == 500
+        assert isinstance(resp, JSONResponse)
+
+    asyncio.run(direct())
+
+
+def test_client_disconnect_middleware_returns_quiet_204():
+    import asyncio
+
+    from mcp_gway.gateway import _ClientDisconnectMiddleware
+
+    async def noisy(request):  # noqa: ANN001, ANN202
+        raise ConnectionResetError("peer hung up")
+
+    async def downstream(request):  # noqa: ANN001, ANN202
+        return await noisy(request)
+
+    mw = _ClientDisconnectMiddleware.__new__(_ClientDisconnectMiddleware)
+
+    async def call():
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/x",
+            "headers": [],
+            "query_string": b"",
+        }
+        req = Request(scope)
+        resp = await _ClientDisconnectMiddleware.dispatch(mw, req, downstream)
+        assert resp.status_code == 204
+
+    asyncio.run(call())
