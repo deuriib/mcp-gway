@@ -20,9 +20,14 @@ def sanitize_request_id(value: str) -> str:
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        from mcp_gway.observability.tracing import get_tracer
+
         rid = getattr(record, "request_id", None)
         if rid is None:
             rid = request_id_ctx.get()
+        tracer = get_tracer()
+        trace_id = getattr(record, "trace_id", None) or tracer.current_trace_id()
+        span_id = getattr(record, "span_id", None) or tracer.current_span_id()
         timestamp = (
             datetime.fromtimestamp(record.created, tz=UTC)
             .isoformat()
@@ -34,6 +39,8 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "request_id": rid,
+            "trace_id": trace_id,
+            "span_id": span_id,
         }
         for key in (
             "method",

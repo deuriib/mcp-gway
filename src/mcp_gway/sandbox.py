@@ -65,8 +65,14 @@ class StarlarkSandbox:
         return list(getattr(self, "_last_logs", []))
 
     def execute(self, code: str, timeout: float = 30.0) -> object:
+        from mcp_gway.observability.tracing import get_tracer
+
+        tracer = get_tracer()
+        with tracer.span("sandbox.execute", kind="internal") as span:
+            return self._execute_inner(code, timeout, span)
+
+    def _execute_inner(self, code: str, timeout: float, span: object = None) -> object:
         start = time.perf_counter()
-        status = "ok"
         self._logs = []
         try:
             mod = sl.Module()
@@ -128,6 +134,14 @@ class StarlarkSandbox:
             raise
         finally:
             duration = time.perf_counter() - start
+            try:
+                if span is not None:
+                    span.set("sandbox.status", status)  # type: ignore[union-attr]
+                    span.set("duration_ms", int(duration * 1000))  # type: ignore[union-attr]
+                    if status != "ok":
+                        span.status = "error"  # type: ignore[union-attr]
+            except Exception:
+                pass
             try:
                 metrics = getattr(self, "_metrics", None)
                 if metrics is not None:

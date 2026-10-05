@@ -81,6 +81,7 @@ class ServerFactory:
         from mcp import ClientSession
 
         from mcp_gway.core import create_client_transport
+        from mcp_gway.observability.tracing import get_tracer
 
         self._check_tool_allowed(config, tool_name)
 
@@ -95,65 +96,80 @@ class ServerFactory:
         status = "error"
         retried = False
         start = time.perf_counter()
-        try:
-            from contextlib import AsyncExitStack
-
-            async def _setup(stack: Any) -> Any:
-                """Transport + initialize phase — the ONLY retry-eligible step.
-
-                At this point the tool call has not started, so re-running this
-                phase cannot duplicate a side effect (BR-112).
-                """
-                read, write = await stack.enter_async_context(
-                    create_client_transport(config)
-                )
-                session = await stack.enter_async_context(ClientSession(read, write))
-                await asyncio.wait_for(session.initialize(), timeout=timeout_sec)
-                return session
-
-            stack = AsyncExitStack()
+        tracer = get_tracer()
+        with tracer.span(
+            f"tool {server}.{tool_label}",
+            kind="client",
+            attributes={"mcp.server": server, "mcp.tool": tool_label},
+        ) as span:
             try:
+                from contextlib import AsyncExitStack
+
+                async def _setup(stack: Any) -> Any:
+                    """Transport + initialize phase — the ONLY retry-eligible step.
+
+                    At this point the tool call has not started, so re-running this
+                    phase cannot duplicate a side effect (BR-112).
+                    """
+                    read, write = await stack.enter_async_context(
+                        create_client_transport(config)
+                    )
+                    session = await stack.enter_async_context(
+                        ClientSession(read, write)
+                    )
+                    await asyncio.wait_for(session.initialize(), timeout=timeout_sec)
+                    return session
+
+                stack = AsyncExitStack()
                 try:
-                    session = await _setup(stack)
-                except Exception:
-                    if not getattr(config, "retry_on_transport_error", False):
-                        raise
-                    retried = True
+                    try:
+                        session = await _setup(stack)
+                    except Exception:
+                        if not getattr(config, "retry_on_transport_error", False):
+                            raise
+                        retried = True
+                        await stack.aclose()
+                        stack = AsyncExitStack()
+                        session = await _setup(stack)
+                    result = await asyncio.wait_for(
+                        session.call_tool(tool_name, arguments), timeout=timeout_sec
+                    )
+                    status = "ok"
+                    span.set("mcp.status", status)
+                    return _extract_result(result)
+                finally:
                     await stack.aclose()
-                    stack = AsyncExitStack()
-                    session = await _setup(stack)
-                result = await asyncio.wait_for(
-                    session.call_tool(tool_name, arguments), timeout=timeout_sec
-                )
-                status = "ok"
-                return _extract_result(result)
-            finally:
-                await stack.aclose()
-        except BaseException as exc:  # noqa: BLE001 — telemetry classifies, then re-raises
-            status = "timeout" if isinstance(exc, TimeoutError) else "error"
-            raise
-        finally:
-            if metrics is not None:
+            except BaseException as exc:  # noqa: BLE001 — telemetry classifies, then re-raises
+                status = "timeout" if isinstance(exc, TimeoutError) else "error"
                 try:
-                    metrics.inc(
-                        "upstream_tool_calls_total",
-                        {"server": server, "tool": tool_label, "status": status},
-                    )
-                    metrics.observe(
-                        "upstream_tool_duration_seconds",
-                        time.perf_counter() - start,
-                        {"server": server, "tool": tool_label},
-                    )
+                    span.fail(f"{type(exc).__name__}: {exc}")
+                    span.set("mcp.status", status)
                     if retried:
-                        metrics.inc("upstream_retries_total", {"server": server})
+                        span.set("mcp.retried", True)
                 except Exception:
-                    # WHY broad: telemetry must never alter the tool outcome.
                     pass
+                raise
+            finally:
+                if metrics is not None:
+                    try:
+                        metrics.inc(
+                            "upstream_tool_calls_total",
+                            {"server": server, "tool": tool_label, "status": status},
+                        )
+                        metrics.observe(
+                            "upstream_tool_duration_seconds",
+                            time.perf_counter() - start,
+                            {"server": server, "tool": tool_label},
+                        )
+                        if retried:
+                            metrics.inc("upstream_retries_total", {"server": server})
+                    except Exception:
+                        # WHY broad: telemetry must never alter the tool outcome.
+                        pass
 
     def make_server_struct(self, server_name: str) -> object:
         """Create a Starlark-compatible server object.
 
-        Returns a Python object whose methods map to MCP tools.
         The sandbox's inject_server() introspects this object to
         create Starlark struct methods. Only tools_to_execute-allowed
         tools are bound (Bifrost Tool ACL).

@@ -77,6 +77,11 @@ def metrics_fragment(*, stats: dict[str, str], exposition: str) -> Node:
     exposition_card = card(
         feature_heading("Exposition"),
         div({"class": "mt-3"})[_exposition_details(exposition)],
+        div({"class": "mt-3"})[
+            span({"class": f"text-[12px] text-[{theme.TEXT_SILVER}]"})[
+                "Recent spans: GET /admin/partials/traces?limit=50"
+            ]
+        ],
     )
     return div({"class": "flex flex-col gap-4"})[kpis, exposition_card]
 

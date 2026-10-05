@@ -60,6 +60,52 @@ def path_template(path: str) -> str:
     return path
 
 
+class TracingMiddleware(BaseHTTPMiddleware):
+    """W3C traceparent in, server span out — completes logs+metrics with traces."""
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        from mcp_gway.observability.tracing import (
+            format_traceparent,
+            get_tracer,
+            parse_traceparent,
+        )
+
+        incoming_trace, incoming_parent = parse_traceparent(
+            request.headers.get("traceparent")
+        )
+        tracer = get_tracer()
+        attrs = {
+            "http.method": request.method,
+            "http.route": path_template(request.url.path),
+        }
+        if incoming_trace:
+            attrs["parent_span_id"] = incoming_parent or "unknown"
+        with tracer.span(
+            f"{request.method} {path_template(request.url.path)}",
+            kind="server",
+            attributes=attrs,
+        ) as span:
+            if incoming_trace:
+                span.trace_id = incoming_trace
+                span.parent_id = incoming_parent
+            request.state.trace_id = span.trace_id  # type: ignore[attr-defined]
+            request.state.span_id = span.span_id  # type: ignore[attr-defined]
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                span.fail(f"{type(exc).__name__}: {exc}")
+                raise
+            span.set("http.status_code", response.status_code)
+            if response.status_code >= 500:
+                span.status = "error"
+            response.headers["traceparent"] = format_traceparent(
+                span.trace_id, span.span_id
+            )
+            return response
+
+
 class CorrelationMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint

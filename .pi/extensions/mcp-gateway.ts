@@ -29,7 +29,7 @@ import type { ExtensionAPI, BeforeAgentStartEvent } from "@earendil-works/pi-cod
  * shared with the Antigravity plugin — so the harnesses cannot drift apart.
  */
 
-const MARKER = "MCP-GWAY v4.3.1";
+const MARKER = "MCP-GWAY v4.4.0";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const SECTION_KEY = "mcp-gateway";
 const MAX_RULES_BYTES = 256 * 1024;

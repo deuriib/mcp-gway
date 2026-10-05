@@ -20,7 +20,7 @@ from typing import Any
 
 from markupsafe import Markup
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from mcp_gway import __version__
@@ -1222,6 +1222,21 @@ async def p_metrics(request: Request) -> Response:
     return _frag(metrics_fragment(stats=stats, exposition=exposition))
 
 
+async def p_traces(request: Request) -> Response:
+    """Recent finished spans — the trace tail behind logs + metrics."""
+    denied = await _gate(request)
+    if denied:
+        return denied
+    from mcp_gway.observability.tracing import get_tracer
+
+    try:
+        limit = int(request.query_params.get("limit", "50"))
+    except ValueError:
+        limit = 50
+    limit = max(1, min(limit, 200))
+    return JSONResponse({"spans": get_tracer().recent_spans(limit)})
+
+
 async def p_empty(request: Request) -> Response:
     denied = await _gate(request)
     if denied:
@@ -1258,5 +1273,6 @@ def create_admin_routes() -> list[Route]:
         Route("/admin/partials/codemode/list", p_codemode_list, methods=["GET"]),
         Route("/admin/partials/codemode", p_codemode, methods=["POST"]),
         Route("/admin/partials/metrics", p_metrics, methods=["GET"]),
+        Route("/admin/partials/traces", p_traces, methods=["GET"]),
         Route("/admin/partials/empty", p_empty, methods=["GET"]),
     ]

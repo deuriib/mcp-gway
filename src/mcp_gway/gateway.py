@@ -33,6 +33,7 @@ from mcp_gway.observability.middleware import (
     CorrelationMiddleware,
     LoggingMiddleware,
     MetricsMiddleware,
+    TracingMiddleware,
 )
 from mcp_gway.registry import Registry
 
@@ -464,11 +465,12 @@ class Gateway:
                 HTTPException: _http_exception_handler,
             },
         )
-        # order outer→inner: Correlation→Metrics→Logging→Security
+        # order outer→inner: Correlation→Tracing→Metrics→Logging→Security
         # Starlette last added = outermost, so add innermost first
         self.app.add_middleware(_SecurityMiddleware)
         self.app.add_middleware(LoggingMiddleware)
         self.app.add_middleware(MetricsMiddleware, registry=self.metrics)
+        self.app.add_middleware(TracingMiddleware)
         self.app.add_middleware(CorrelationMiddleware)
         self.app.add_middleware(_ClientDisconnectMiddleware)
         self.app.state.registry = registry  # type: ignore[attr-defined]

@@ -20,7 +20,7 @@
 
 import { readFileSync } from "node:fs";
 
-const MARKER = "MCP-GWAY v4.3.1";
+const MARKER = "MCP-GWAY v4.4.0";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
 
