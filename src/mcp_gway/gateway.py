@@ -12,9 +12,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.requests import ClientDisconnect, Request
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from mcp_gway import __version__
@@ -48,6 +49,42 @@ CSP = (
     "connect-src 'self'; "
     "frame-ancestors 'none'"
 )
+
+
+class _ClientDisconnectMiddleware(BaseHTTPMiddleware):
+    """Turn client-abort noise into a quiet synthetic response.
+
+    Same family as the WinError 64 accept abort at the socket layer: the peer
+    hung up mid-request, so there is nobody to answer. Without this the error
+    bubbles into a 500 + traceback for a client that already left. 204 keeps
+    metrics truthful (no phantom 500) and the log at debug.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
+        try:
+            return await call_next(request)
+        except (asyncio.CancelledError, ClientDisconnect):
+            raise
+        except (ConnectionResetError, BrokenPipeError, OSError) as e:
+            if _is_transient_accept_error({"exception": e}):
+                logging.getLogger("mcp_gway.gateway").debug(
+                    "client disconnected mid-request: %s", e
+                )
+                return Response(status_code=204)
+            raise
+
+
+async def _unhandled_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:  # type: ignore[no-untyped-def]
+    """Last-resort 500: JSON shape, secret-safe, never an HTML traceback."""
+    data = _safe_error_data(exc)
+    logging.getLogger("mcp_gway.gateway").exception(
+        "unhandled exception for %s %s", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500, content={"detail": "Internal Server Error", "error": data}
+    )
 
 
 class _SecurityMiddleware(BaseHTTPMiddleware):
@@ -91,6 +128,60 @@ class InvalidParamsError(ValueError):
 
 
 _REASON_RE = __import__("re").compile(r"\[reason=([A-Za-z0-9_]+)\]")
+
+# WinError codes for transient accept aborts on Windows (client closed the
+# socket between TCP handshake and asyncio finish_accept). Benign noise from
+# the ProactorEventLoop ("Task exception was never retrieved" + "Accept
+# failed on a socket"), not a gateway bug: the listening socket stays
+# healthy. Downgrade to debug so operators stop paging on them.
+_TRANSIENT_ACCEPT_WINERRORS = frozenset({64, 121, 995, 1236})
+
+
+def _is_transient_accept_error(context: dict[str, object]) -> bool:
+    """Return True for benign client-abort noise the loop reports."""
+    exc = context.get("exception")
+    if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+        return True
+    if isinstance(exc, OSError):
+        winerror = getattr(exc, "winerror", None)
+        if winerror in _TRANSIENT_ACCEPT_WINERRORS:
+            return True
+        if exc.errno in (10053, 10054):
+            return True
+    message = str(context.get("message", ""))
+    return "Accept failed on a socket" in message
+
+
+def install_asyncio_exception_handler(
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> None:
+    """Install a loop exception handler that quiets transient accept noise.
+
+    Benign Windows accept aborts (WinError 64 et al.) go to ``debug``;
+    everything else keeps asyncio's default handler. Idempotent per loop.
+    """
+    try:
+        target = loop or asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    default_handler = target.get_exception_handler()
+    if getattr(default_handler, "_mcp_gway_quiet_accept", False):
+        return
+
+    def _handler(loop: asyncio.AbstractEventLoop, context: dict[str, object]) -> None:
+        if _is_transient_accept_error(context):
+            logging.getLogger("mcp_gway.gateway").debug(
+                "transient accept aborted by client: %s",
+                context.get("exception", context.get("message")),
+            )
+            return
+        if default_handler is not None:
+            default_handler(loop, context)
+        else:
+            loop.default_exception_handler(context)
+
+    _handler._mcp_gway_quiet_accept = True  # type: ignore[attr-defined]
+    target.set_exception_handler(_handler)
 
 
 def _safe_error_data(exc: BaseException) -> dict[str, str] | None:
@@ -317,6 +408,7 @@ class Gateway:
 
         @_acm
         async def _lifespan(app):  # type: ignore[no-untyped-def]
+            install_asyncio_exception_handler()
             try:
                 loop = asyncio.get_running_loop()
                 if (
@@ -349,6 +441,14 @@ class Gateway:
                 Route("/mcp", self._mcp_post, methods=["POST"]),
                 Route("/mcp", self._mcp_get_not_allowed, methods=["GET"]),
             ]
+
+        async def _http_exception_handler(
+            request: Request, exc: HTTPException
+        ) -> JSONResponse:  # type: ignore[no-untyped-def]
+            return JSONResponse(
+                status_code=exc.status_code, content={"detail": exc.detail}
+            )
+
         self.app = Starlette(
             routes=[
                 Route("/health", self._health, methods=["GET"]),
@@ -359,6 +459,10 @@ class Gateway:
                 *create_admin_routes(),
             ],
             lifespan=_lifespan,
+            exception_handlers={
+                Exception: _unhandled_exception_handler,
+                HTTPException: _http_exception_handler,
+            },
         )
         # order outer→inner: Correlation→Metrics→Logging→Security
         # Starlette last added = outermost, so add innermost first
@@ -366,6 +470,7 @@ class Gateway:
         self.app.add_middleware(LoggingMiddleware)
         self.app.add_middleware(MetricsMiddleware, registry=self.metrics)
         self.app.add_middleware(CorrelationMiddleware)
+        self.app.add_middleware(_ClientDisconnectMiddleware)
         self.app.state.registry = registry  # type: ignore[attr-defined]
         self.app.state.serve_host = host  # type: ignore[attr-defined]
         self.app.state.transport = transport  # type: ignore[attr-defined]
@@ -373,6 +478,10 @@ class Gateway:
         self.app.state.gateway = self  # type: ignore[attr-defined]
         self.app.state.start_time = self.start_time  # type: ignore[attr-defined]
         self.app.state.csrf_token = secrets.token_urlsafe(32)  # type: ignore[attr-defined]
+        try:
+            install_asyncio_exception_handler()
+        except Exception:
+            pass
         try:
             loop = asyncio.get_running_loop()
             self._heartbeat_task = loop.create_task(self._heartbeat())

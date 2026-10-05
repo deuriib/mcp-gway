@@ -5,7 +5,7 @@
 The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in OpenCode and Antigravity:
 
 1. **Gateway MCP registration** — `.mcp.json` at the repo root registers the local gateway over loopback. Pi's MCP adapter discovers it automatically.
-2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.3.0` marker.
+2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.3.1` marker.
 3. **Compression survival** — Pi re-enters the agent loop after compaction (threshold, overflow recovery, retries), so re-applying the card at the start of every run keeps the protocol available without duplicate cards.
 4. **Bundled skills** — `skills/mcp-gway*` (`mcp-gway`, `mcp-gway-cli`, `mcp-gway-mcp`, `mcp-gway-core`) are loaded through the `pi` key in `package.json`.
 

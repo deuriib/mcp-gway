@@ -723,14 +723,36 @@ def _serve_http(
     click.echo(f"  {_c('Press Ctrl+C to stop', dim=True)}")
     click.echo("")
 
+    # WHY patch new_event_loop: uvicorn builds its own loop internally, so the
+    # lifespan hook runs too late to catch accept-time loop errors (WinError 64
+    # on Windows). Patching the factory installs the quiet-accept handler on
+    # whatever loop uvicorn creates; restored in `finally` below.
     try:
-        uvicorn.run(
-            gateway.app,
-            host=host,
-            port=port,
-            log_level=resolved_level,
-            access_log=resolved_level in ("trace", "debug", "info"),
-        )
+        import asyncio as _asyncio
+
+        from mcp_gway.gateway import install_asyncio_exception_handler
+
+        _orig_new_event_loop = _asyncio.new_event_loop
+
+        def _quiet_accept_new_event_loop() -> _asyncio.AbstractEventLoop:
+            loop = _orig_new_event_loop()
+            try:
+                install_asyncio_exception_handler(loop)
+            except Exception:
+                pass
+            return loop
+
+        _asyncio.new_event_loop = _quiet_accept_new_event_loop  # type: ignore[method-assign]
+        try:
+            uvicorn.run(
+                gateway.app,
+                host=host,
+                port=port,
+                log_level=resolved_level,
+                access_log=resolved_level in ("trace", "debug", "info"),
+            )
+        finally:
+            _asyncio.new_event_loop = _orig_new_event_loop  # type: ignore[method-assign]
     except Exception as e:
         click.echo(f"Error: serve failed to bind {host}:{port} [reason={e}]", err=True)
         sys.exit(1)

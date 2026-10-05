@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [4.3.1] — 2026-10-05
+
+- **fix(gateway)**: silence benign Windows accept noise + harden global error handlers. `install_asyncio_exception_handler()` downgrades transient client-abort accept errors (WinError 64/121/995/1236, `ConnectionResetError`, "Accept failed on a socket") to debug — wired via `new_event_loop` patch in `serve` (uvicorn owns the loop), `Gateway.__init__`, and lifespan. New `_ClientDisconnectMiddleware` answers mid-request hangups with a quiet 204; `Exception`/`HTTPException` handlers guarantee JSON 500s (secret-safe via `_safe_error_data`, never HTML tracebacks); `LoggingMiddleware` logs disconnects at debug, real failures with context. 3 new regression tests in `test_edgecases_gateway.py`.
+
 ## [4.3.0] — 2026-10-05
 
 - **feat(models)**: native pydantic validation errors with human-friendly messages. Validators raise `PydanticCustomError` with a distinct `type=` per failure and the `[reason=...]` token preserved in `msg` + structured `ctx.reason`; `format_validation_error` renders one `field: sentence` line per error. CLI `add` remote branch wrapped in try/except (exit 1, no traceback) and admin add/save surfaces share the helper. `https-only` now enforced at config validation; SSRF bypass fixtures moved to `https://` URLs.
