@@ -485,7 +485,12 @@ async def p_add_server(request: Request) -> Response:
     from mcp_gway.code_mode import to_pascal_case_identifier
     from mcp_gway.core import discover_tools, parse_envs, parse_headers
     from mcp_gway.core.policy import audit_local_action, check_cwd, check_local_command
-    from mcp_gway.models import MCPServerConfig, OAuthConfig, ToolInfo
+    from mcp_gway.models import (
+        MCPServerConfig,
+        OAuthConfig,
+        ToolInfo,
+        format_validation_error,
+    )
 
     registry = _registry(request)
     form = await request.form()
@@ -561,7 +566,7 @@ async def p_add_server(request: Request) -> Response:
                 retry_on_transport_error=retry,
             )
         except Exception as exc:
-            return _error(f"Invalid local config: {exc}")
+            return _error(f"Invalid local config: {format_validation_error(exc)}")
         decision = check_local_command(list(cmd_parts), require_binary=True)
         audit_local_action(
             "admin_add", name, cmd_parts[0] if cmd_parts else None, decision
@@ -603,7 +608,7 @@ async def p_add_server(request: Request) -> Response:
                 retry_on_transport_error=retry,
             )
         except Exception as exc:
-            return _error(f"Invalid remote config: {exc}")
+            return _error(f"Invalid remote config: {format_validation_error(exc)}")
         try:
             from mcp_gway.core import detect_transport
 
@@ -911,7 +916,7 @@ async def p_set_config(request: Request) -> Response:
         check_cwd,
         check_local_command,
     )
-    from mcp_gway.models import MCPServerConfig, OAuthConfig
+    from mcp_gway.models import MCPServerConfig, OAuthConfig, format_validation_error
 
     registry = _registry(request)
     name = _resolve_name(registry, request.path_params["name"])
@@ -996,7 +1001,9 @@ async def p_set_config(request: Request) -> Response:
     try:
         updated = MCPServerConfig(**data)
     except Exception as exc:
-        return _error(f"Invalid config: {exc} — fix the values, then try Save again.")
+        return _error(
+            f"Invalid config: {format_validation_error(exc)} — fix the values, then try Save again."
+        )
     if updated.type == "local":
         command = list(updated.command or [])
         decision = check_local_command(command, require_binary=True)

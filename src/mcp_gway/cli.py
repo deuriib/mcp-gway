@@ -16,7 +16,12 @@ from mcp_gway import __version__
 from mcp_gway.core import detect_transport, discover_tools, parse_envs, parse_headers
 from mcp_gway.core.client import refresh_server
 from mcp_gway.core.policy import home_dir
-from mcp_gway.models import MCPServerConfig, OAuthConfig, ToolInfo
+from mcp_gway.models import (
+    MCPServerConfig,
+    OAuthConfig,
+    ToolInfo,
+    format_validation_error,
+)
 from mcp_gway.registry import Registry
 
 
@@ -214,7 +219,9 @@ def add(
                 retry_on_transport_error=retry_on_transport_error,
             )
         except Exception as e:
-            click.echo(f"Error: invalid local config: {e}", err=True)
+            click.echo(
+                f"Error: invalid local config: {format_validation_error(e)}", err=True
+            )
             sys.exit(1)
         decision = check_local_command(list(cmd_parts), require_binary=True)
         audit_local_action(
@@ -227,16 +234,22 @@ def add(
         if not url:
             click.echo(f"Error: --url required for {conn_type} connection", err=True)
             sys.exit(1)
-        config = MCPServerConfig(
-            name=name,
-            type="remote",
-            url=url,
-            headers=headers_dict,
-            oauth=oauth_config,
-            timeout=timeout,
-            enabled=enabled,
-            retry_on_transport_error=retry_on_transport_error,
-        )
+        try:
+            config = MCPServerConfig(
+                name=name,
+                type="remote",
+                url=url,
+                headers=headers_dict,
+                oauth=oauth_config,
+                timeout=timeout,
+                enabled=enabled,
+                retry_on_transport_error=retry_on_transport_error,
+            )
+        except Exception as e:
+            click.echo(
+                f"Error: invalid remote config: {format_validation_error(e)}", err=True
+            )
+            sys.exit(1)
         try:
             try:
                 detected = asyncio.run(

@@ -19,6 +19,7 @@ from urllib.parse import urlparse as _urlparse_for_validation
 
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 SSRF_TIMEOUT = 8.0
 SSRF_DNS_TIMEOUT = 3.0
@@ -57,7 +58,166 @@ def _get_pin_lock() -> asyncio.Lock:
 def _require_https(url: str) -> None:
     """Fail-closed https-only gate with [reason=https_only] token."""
     if _urlparse_for_validation(url).scheme != "https":
-        raise ValueError("ssrf: https-only [reason=https_only]")
+        raise _err(
+            "https_only", "URL must use https:// (plain http is rejected)", "https_only"
+        )
+
+
+# Human-friendly presentation for config validation failures. Stored
+# messages in this file keep stable keywords + [reason=...] tokens (test
+# contracts); this formatter rewrites them into one short human sentence
+# per problem. Idempotent: safe to run on already-formatted output.
+def _err(error_type: str, message: str, reason: str) -> PydanticCustomError:
+    """Native pydantic custom error: human message + machine reason token.
+
+    Pydantic renders this as `message [reason=<reason>]` with
+    `type=<error_type>` and keeps `ctx["reason"]` structured, so CLI/admin
+    get a native ValidationError (field + type preserved) while log parsing
+    keeps the verbatim `[reason=...]` token contract.
+    """
+    return PydanticCustomError(
+        error_type, message + " [reason=" + reason + "]", {"reason": reason}
+    )
+
+
+_REASON_RE = re.compile(r"\[reason=([A-Za-z0-9_]+)\]")
+
+
+def _humanize_message(raw: str) -> str:
+    """Rewrite one raw validator/type message to a human sentence."""
+    text = raw.strip()
+    low = text.lower()
+    if not text:
+        return text
+    if "hyphens" in low and "space" in low:
+        return "use only letters, digits, and underscores (no hyphens or spaces) — e.g. my_tools"
+    if "start with a number" in low:
+        return "start with a letter or underscore, not a number — e.g. my_tools"
+    if "only ascii" in low:
+        return "use only ASCII letters, digits, and underscores — e.g. my_tools"
+    if (
+        "must not be empty" in low
+        and "command" not in low
+        and "url" not in low
+        and "cwd" not in low
+    ):
+        return "name must not be empty — e.g. my_tools"
+    if "path separator" in low or "'.' or '..'" in low or "traversal" in low:
+        return "use only letters, digits, and underscores (no slashes or dots) — e.g. my_tools"
+    if "is reserved" in low:
+        return "that name is reserved — pick another name, e.g. my_tools"
+    if "^[a-za-z" in low or (
+        "start with a letter or underscore" in low and "e.g." not in low
+    ):
+        return "start with a letter or underscore, then letters, digits, or underscores (max 64 chars) — e.g. my_tools"
+    if "command" in low and "required" in low and "local" in low:
+        return 'local servers need --command "npx -y <package>"'
+    if "url" in low and "required" in low and "remote" in low:
+        return "remote servers need --url https://<host>/mcp"
+    if "https-only" in low or "https_only" in low:
+        return "URL must use https:// (plain http is rejected)"
+    if "userinfo" in low:
+        return "URL must not contain user@example.com credentials"
+    if "encoded" in low:
+        return "URL host must not contain %-encoded characters"
+    if "invalid idna" in low or ("invalid" in low and "host" in low):
+        return "URL host is invalid — check for typos"
+    if "dns" in low and ("no addresses" in low or "timeout" in low or "failure" in low):
+        return "could not resolve that host — check the hostname and network"
+    if "private" in low or "loopback" in low:
+        return (
+            "that host is private/loopback and is blocked — use a public https:// URL"
+        )
+    if "absolute" in low or (
+        "cwd" in low
+        and ("director" in low or "resolv" in low or "not a director" in low)
+    ):
+        return "cwd must be an existing absolute directory — e.g. --cwd /tmp/work"
+    if (
+        "basename" in low
+        or "command token" in low
+        or "forbidden" in low
+        or "1-8 tokens" in low
+    ):
+        return "command must be a plain binary name plus safe arguments (no paths, shell characters, or ..)"
+    if "environment" in low or "denied" in low:
+        return "that environment variable is blocked — remove it from --env"
+    if "valid list" in low or "must be list" in low:
+        return 'command must be a list of words — e.g. ["npx", "-y", "pkg"]'
+    if (
+        "local" in low
+        and "remote" in low
+        and ("valid" in low or "input should be" in low)
+    ):
+        return 'type must be "local" or "remote"'
+    if "http or https" in low:
+        return "URL must use https:// (plain http is rejected)"
+    if "must have host" in low:
+        return "URL host is invalid — check for typos"
+    if "non-empty string" in low or "cr or lf" in low:
+        return "URL must be a non-empty https:// URL without line breaks"
+    if "too many redirects" in low or "redirect" in low:
+        return (
+            "that URL redirects too much or leaves https:// — use a direct https:// URL"
+        )
+    if "timeout" in low and (
+        "greater than" in low or "less than" in low or "valid integer" in low
+    ):
+        return "timeout must be a positive number of milliseconds — e.g. 5000"
+    if "field required" in low:
+        return "a required field is missing — check the highlighted field"
+    return text
+
+
+def format_validation_error(exc: Exception) -> str:
+    """Render any config validation failure as human sentences.
+
+    Pydantic ValidationError: one `field: sentence` line per error (model-level
+    errors with empty loc render without a field prefix). Machine
+    [reason=...] tokens are preserved verbatim at the end of their line.
+    Non-pydantic ValueError/PermissionError: returned as-is (single line).
+    Unknown messages pass through unchanged so no failure mode is hidden.
+    """
+    text = str(exc)
+    errors: list[dict[str, Any]] | None = None
+    with contextlib.suppress(Exception):
+        errors_fn = getattr(exc, "errors", None)
+        if callable(errors_fn):
+            maybe = errors_fn()
+            if isinstance(maybe, list):
+                errors = maybe
+    if not errors:
+        single = text.split("For further information visit")[0].strip()
+        return single
+    lines: list[str] = []
+    for err in errors:
+        ctx = err.get("ctx") if isinstance(err, dict) else None
+        raw_msg = err.get("msg", "") if isinstance(err, dict) else ""
+        if not isinstance(raw_msg, str):
+            raw_msg = str(raw_msg)
+        tokens: list[str] = []
+        if isinstance(ctx, dict) and ctx.get("error") is not None:
+            tokens = _REASON_RE.findall(str(ctx.get("error")))
+        if not tokens:
+            tokens = _REASON_RE.findall(raw_msg)
+        clean = raw_msg
+        if clean.lower().startswith("value error, "):
+            clean = clean[len("value error, ") :]
+        clean = _REASON_RE.sub("", clean).strip()
+        human = _humanize_message(clean)
+        if tokens:
+            human = f"{human} " + " ".join(f"[reason={t}]" for t in tokens)
+        loc = err.get("loc", ()) if isinstance(err, dict) else ()
+        try:
+            parts = (
+                [str(p) for p in loc] if isinstance(loc, (list, tuple)) else [str(loc)]
+            )
+        except Exception:
+            parts = []
+        parts = [p for p in parts if p not in ("body",)]
+        field = ".".join(parts)
+        lines.append(f"{field}: {human}" if field else human)
+    return "\n".join(lines)
 
 
 _NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -92,21 +252,49 @@ _ARG_RE = re.compile(r"^[A-Za-z0-9_./:@-]{1,80}$")
 
 def _validate_name_value(v: str) -> str:
     if not v:
-        raise ValueError("Name must not be empty")
+        raise _err("name_empty", "Name must not be empty — e.g. my_tools", "name_empty")
     if "/" in v or "\\" in v or v in (".", ".."):
-        raise ValueError("Name must not contain path separators or be '.' or '..'")
+        raise _err(
+            "name_path",
+            "Name must not contain path separators or be '.' or '..' — use only letters, digits, and underscores, e.g. my_tools",
+            "name_path",
+        )
     if not v.isascii():
-        raise ValueError("Name must contain only ASCII characters")
+        raise _err(
+            "name_ascii",
+            "Name must contain only ASCII characters — e.g. my_tools",
+            "name_ascii",
+        )
     if "-" in v or " " in v:
-        raise ValueError("Name cannot contain hyphens or spaces")
+        raise _err(
+            "name_hyphens",
+            "Name cannot contain hyphens or spaces — use only letters, digits, and underscores, e.g. my_tools",
+            "name_hyphens",
+        )
     if v[0].isdigit():
-        raise ValueError("Name cannot start with a number")
+        raise _err(
+            "name_leading_digit",
+            "Name cannot start with a number — start with a letter or underscore, e.g. my_tools",
+            "name_leading_digit",
+        )
     if "<" in v or ">" in v or '"' in v or "'" in v or "&" in v:
-        raise ValueError("Name contains invalid characters")
+        raise _err(
+            "name_invalid_chars",
+            "Name contains invalid characters — use only letters, digits, and underscores, e.g. my_tools",
+            "name_invalid_chars",
+        )
     if not _NAME_RE.match(v):
-        raise ValueError("Name must match ^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+        raise _err(
+            "name_pattern",
+            "Name must match ^[A-Za-z_][A-Za-z0-9_]{0,63}$ — start with a letter or underscore, then letters, digits, or underscores (max 64 chars), e.g. my_tools",
+            "name_pattern",
+        )
     if v.lower() in _RESERVED_NAMES:
-        raise ValueError("Name is reserved")
+        raise _err(
+            "name_reserved",
+            "Name is reserved — pick another name, e.g. my_tools",
+            "name_reserved",
+        )
     return v
 
 
@@ -189,14 +377,30 @@ def _raw_netloc(url: str) -> str:
 def _reject_obscured_netloc(url: str) -> None:
     raw = _raw_netloc(url)
     if "@" in raw:
-        raise ValueError("url must not contain userinfo [reason=userinfo]")
+        raise _err(
+            "userinfo",
+            "URL must not contain userinfo (user@example.com) credentials",
+            "userinfo",
+        )
     if "%" in raw:
-        raise ValueError("url host contains encoded chars [reason=encoded_host]")
+        raise _err(
+            "encoded_host",
+            "URL host must not contain encoded chars — remove %-encoding",
+            "encoded_host",
+        )
     if "\\" in raw or " " in raw:
-        raise ValueError("url host contains invalid chars [reason=invalid_host]")
+        raise _err(
+            "invalid_host",
+            "URL host contains invalid chars — check for typos",
+            "invalid_host",
+        )
     parsed = _urlparse_for_validation(url)
     if parsed.username is not None or parsed.password is not None:
-        raise ValueError("url must not contain userinfo [reason=userinfo]")
+        raise _err(
+            "userinfo",
+            "URL must not contain userinfo (user@example.com) credentials",
+            "userinfo",
+        )
 
 
 def _normalize_host(raw_host: str) -> str:
@@ -208,41 +412,81 @@ def _normalize_host(raw_host: str) -> str:
     block (fail-closed); never fall back to the raw host.
     """
     if not raw_host:
-        raise ValueError("url must have host [reason=invalid_host]")
+        raise _err(
+            "invalid_host", "URL must have host — check for typos", "invalid_host"
+        )
     if "%" in raw_host:
-        raise ValueError("url host contains encoded chars [reason=encoded_host]")
+        raise _err(
+            "encoded_host",
+            "URL host must not contain encoded chars — remove %-encoding",
+            "encoded_host",
+        )
     decoded = _unquote(raw_host)
     if decoded != raw_host:
-        raise ValueError("url host contains encoded chars [reason=encoded_host]")
+        raise _err(
+            "encoded_host",
+            "URL host must not contain encoded chars — remove %-encoding",
+            "encoded_host",
+        )
     if "@" in decoded or "/" in decoded or "\\" in decoded or " " in decoded:
-        raise ValueError("url host contains invalid chars [reason=invalid_host]")
+        raise _err(
+            "invalid_host",
+            "URL host contains invalid chars — check for typos",
+            "invalid_host",
+        )
     if "%" in decoded:
-        raise ValueError("url host contains encoded chars [reason=encoded_host]")
+        raise _err(
+            "encoded_host",
+            "URL host must not contain encoded chars — remove %-encoding",
+            "encoded_host",
+        )
     host = decoded.lower().rstrip(".")
     if not host:
-        raise ValueError("url must have host [reason=invalid_host]")
+        raise _err(
+            "invalid_host", "URL must have host — check for typos", "invalid_host"
+        )
     try:
         host = host.encode("idna").decode("ascii")
     except (UnicodeError, ValueError) as e:
-        raise ValueError(f"url host invalid idna [reason=invalid_host]: {e}") from e
+        raise _err(
+            "invalid_host",
+            f"URL host invalid idna — check for typos: {e}",
+            "invalid_host",
+        ) from e
     return host
 
 
 def _validate_url_structure(url: str) -> tuple[Any, str]:
     if not isinstance(url, str) or not url:
-        raise ValueError("url must be non-empty string")
+        raise _err(
+            "url_empty",
+            "url must be non-empty string — provide an https:// URL",
+            "url_empty",
+        )
     if "\r" in url or "\n" in url:
-        raise ValueError("url must not contain CR or LF")
+        raise _err(
+            "url_control",
+            "url must not contain CR or LF — remove line breaks",
+            "url_control",
+        )
     _reject_obscured_netloc(url)
     parsed = _urlparse_for_validation(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError("url must be http or https")
+    if parsed.scheme != "https":
+        raise _err(
+            "https_only", "URL must use https:// (plain http is rejected)", "https_only"
+        )
     if not parsed.netloc:
-        raise ValueError("url must have host")
+        raise _err(
+            "invalid_host", "url must have host — check for typos", "invalid_host"
+        )
     raw_host = parsed.hostname or ""
     host = _normalize_host(raw_host)
     if host == "localhost" or host.endswith(".localhost"):
-        raise ValueError("url host not allowed (private/local) [reason=private_ip]")
+        raise _err(
+            "private_ip",
+            "url host not allowed (private/local) — use a public https:// URL",
+            "private_ip",
+        )
     return parsed, host
 
 
@@ -261,14 +505,22 @@ def _is_public_literal_ip(host: str) -> bool:
     except ValueError:
         return False
     if _is_blocked_ip(ip):
-        raise ValueError("url host not allowed (private IP)")
+        raise _err(
+            "private_ip",
+            "url host not allowed (private IP) — use a public https:// URL",
+            "private_ip",
+        )
     return True
 
 
 def _ensure_resolved_ips(ips: list[str]) -> None:
     """Fail-closed DNS gate: empty or zero-parsable blocks; any blocked IP blocks."""
     if not ips:
-        raise ValueError("url host DNS failure: no addresses [reason=dns_error]")
+        raise _err(
+            "dns_error",
+            "could not resolve that host — check the hostname and network",
+            "dns_error",
+        )
     parsable = 0
     for ip_str in ips:
         try:
@@ -279,9 +531,17 @@ def _ensure_resolved_ips(ips: list[str]) -> None:
             continue
         parsable += 1
         if _is_blocked_ip(ip):
-            raise ValueError("url host not allowed (private IP)")
+            raise _err(
+                "private_ip",
+                "url host not allowed (private IP) — use a public https:// URL",
+                "private_ip",
+            )
     if parsable == 0:
-        raise ValueError("url host DNS failure: no addresses [reason=dns_error]")
+        raise _err(
+            "dns_error",
+            "could not resolve that host — check the hostname and network",
+            "dns_error",
+        )
 
 
 # Deprecated aliases (backward compatibility with tests/review tooling).
@@ -304,7 +564,11 @@ def _resolve_host_ips(host: str, *, use_cache: bool) -> list[str]:
             key, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
         )
     except (socket.gaierror, OSError, UnicodeError) as e:
-        raise ValueError(f"url host DNS failure [reason=dns_error]: {e}") from e
+        raise _err(
+            "dns_error",
+            f"could not resolve that host — check the hostname and network: {e}",
+            "dns_error",
+        ) from e
     ips: list[str] = []
     for _fam, _typ, _proto, _canon, sockaddr in infos:
         try:
@@ -327,9 +591,11 @@ async def _aresolve_host_ips(host: str, *, use_cache: bool = False) -> list[str]
         )
     except TimeoutError as e:
         # WHY narrow to timeouts: DNS blocks and slow resolvers must not hang
-        # the loop; any timeout is fail-closed as dns_error. Resolver ValueErrors
-        # propagate unchanged (already carry [reason=dns_error]).
-        raise ValueError("url host DNS timeout [reason=dns_error]") from e
+        raise _err(
+            "dns_error",
+            "could not resolve that host (DNS timeout) — check the hostname and network",
+            "dns_error",
+        ) from e
 
 
 async def _avalidate_url_ssrf(url: str) -> str:
@@ -500,13 +766,25 @@ _check_body_limits = _ensure_body_limits
 def _resolve_redirect_target(current: str, location: str, hop: int) -> str:
     """Sync redirect gate (structure + https-only + sync DNS); async path uses _aresolve_redirect_target."""
     if not location:
-        raise ValueError("ssrf: empty redirect [reason=redirect]")
+        raise _err(
+            "redirect",
+            "redirect target is empty — use a direct https:// URL",
+            "redirect",
+        )
     if hop >= SSRF_MAX_REDIRECTS:
-        raise ValueError("ssrf: too many redirects [reason=redirect]")
+        raise _err(
+            "redirect",
+            "that URL redirects too much — use a direct https:// URL",
+            "redirect",
+        )
     nxt = _urljoin(current, location)
     pn = _urlparse_for_validation(nxt)
     if pn.scheme != "https":
-        raise ValueError("ssrf: https-only redirect [reason=redirect]")
+        raise _err(
+            "redirect",
+            "redirect leaves https:// — use a direct https:// URL",
+            "redirect",
+        )
     validate_url_ssrf(nxt, use_cache=False)
     return nxt
 
@@ -519,13 +797,25 @@ async def _aresolve_redirect_target(current: str, location: str, hop: int) -> st
     _ssrf_fetch so no sync getaddrinfo ever blocks the event loop.
     """
     if not location:
-        raise ValueError("ssrf: empty redirect [reason=redirect]")
+        raise _err(
+            "redirect",
+            "redirect target is empty — use a direct https:// URL",
+            "redirect",
+        )
     if hop >= SSRF_MAX_REDIRECTS:
-        raise ValueError("ssrf: too many redirects [reason=redirect]")
+        raise _err(
+            "redirect",
+            "that URL redirects too much — use a direct https:// URL",
+            "redirect",
+        )
     nxt = _urljoin(current, location)
     pn = _urlparse_for_validation(nxt)
     if pn.scheme != "https":
-        raise ValueError("ssrf: https-only redirect [reason=redirect]")
+        raise _err(
+            "redirect",
+            "redirect leaves https:// — use a direct https:// URL",
+            "redirect",
+        )
     await _avalidate_url_ssrf(nxt)
     return nxt
 
@@ -787,7 +1077,9 @@ class MCPServerConfig(BaseModel):
         try:
             validate_command_syntax(v)
         except ValueError as e:
-            raise ValueError(str(e)) from None
+            raise _err(
+                "invalid_syntax", str(e).split(" [reason=")[0], "invalid_syntax"
+            ) from None
         return v
 
     @field_validator("cwd")
@@ -796,11 +1088,19 @@ class MCPServerConfig(BaseModel):
         if v is None:
             return v
         if not isinstance(v, str) or not v.strip():
-            raise ValueError("cwd must be absolute path [reason=invalid_cwd]")
+            raise _err(
+                "invalid_cwd",
+                "cwd must be an existing absolute directory — e.g. --cwd /tmp/work",
+                "invalid_cwd",
+            )
         text = v.strip()
         is_abs = _Path(text).is_absolute() or _PurePosix(text).is_absolute()
         if not is_abs:
-            raise ValueError("cwd must be absolute path [reason=invalid_cwd]")
+            raise _err(
+                "invalid_cwd",
+                "cwd must be an existing absolute directory — e.g. --cwd /tmp/work",
+                "invalid_cwd",
+            )
         return text
 
     @field_validator("environment")
@@ -810,15 +1110,28 @@ class MCPServerConfig(BaseModel):
             return v
         from mcp_gway.core.policy import check_environment
 
-        return check_environment(v)
+        try:
+            return check_environment(v)
+        except ValueError as e:
+            raise _err(
+                "denied_env", str(e).split(" [reason=")[0], "denied_env"
+            ) from None
 
     def model_post_init(self, __context: Any) -> None:
         if self.type == "local":
             if not self.command:
-                raise ValueError("'command' required for type=local")
+                raise _err(
+                    "local_command",
+                    'local servers need --command "npx -y <package>"',
+                    "local_command",
+                )
         elif self.type == "remote":
             if not self.url:
-                raise ValueError("'url' required for type=remote")
+                raise _err(
+                    "remote_url",
+                    "remote servers need --url https://<host>/mcp",
+                    "remote_url",
+                )
 
 
 class MCPServerState(BaseModel):

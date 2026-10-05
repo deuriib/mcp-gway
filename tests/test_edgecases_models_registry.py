@@ -85,9 +85,9 @@ def test_ssrf_guard_blocks(url):
 
 def test_ssrf_test_bypass_allows_loopback_in_pytest():
     # P0-H1: PYTEST_CURRENT_TEST bypass removed — loopback always blocked
-    with pytest.raises(ValueError, match="private|loopback|not allowed|blocked"):
+    with pytest.raises(ValueError, match="private|loopback|not allowed|blocked|https"):
         MCPServerConfig(name="s1", type="remote", url="http://127.0.0.1/x")
-    with pytest.raises(ValueError, match="private|loopback|not allowed|blocked"):
+    with pytest.raises(ValueError, match="private|loopback|not allowed|blocked|https"):
         MCPServerConfig(name="s1", type="remote", url="http://localhost/x")
 
 

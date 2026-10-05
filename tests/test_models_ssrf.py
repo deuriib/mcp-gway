@@ -15,30 +15,30 @@ def test_validate_url_ssrf_helper_exists():
 def test_numeric_int_bypass_blocked():
     # 2130706433 == 127.0.0.1
     with pytest.raises(ValueError, match="private|loopback|not allowed|ssrf|blocked"):
-        M.validate_url_ssrf("http://2130706433/mcp")
+        M.validate_url_ssrf("https://2130706433/mcp")
 
 
 def test_hex_bypass_blocked():
     with pytest.raises(ValueError, match="private|loopback|not allowed|ssrf|blocked"):
-        M.validate_url_ssrf("http://0x7f.0x0.0x0.0x1/mcp")
+        M.validate_url_ssrf("https://0x7f.0x0.0x0.0x1/mcp")
 
 
 def test_octal_bypass_blocked():
     with pytest.raises(ValueError, match="private|loopback|not allowed|ssrf|blocked"):
-        M.validate_url_ssrf("http://0177.0.0.1/mcp")
+        M.validate_url_ssrf("https://0177.0.0.1/mcp")
 
 
 def test_ipv4_mapped_ipv6_blocked():
     with pytest.raises(ValueError, match="private|loopback|not allowed|ssrf|blocked"):
-        M.validate_url_ssrf("http://[::ffff:127.0.0.1]/mcp")
+        M.validate_url_ssrf("https://[::ffff:127.0.0.1]/mcp")
 
 
 def test_localhost_blocked_even_under_pytest():
     # PYTEST_CURRENT_TEST bypass must be gone — localhost always blocked
     with pytest.raises(ValueError, match="private|loopback|not allowed|blocked"):
-        M.validate_url_ssrf("http://localhost/mcp")
+        M.validate_url_ssrf("https://localhost/mcp")
     with pytest.raises(ValueError, match="private|loopback|not allowed|blocked"):
-        M.validate_url_ssrf("http://127.0.0.1/mcp")
+        M.validate_url_ssrf("https://127.0.0.1/mcp")
 
 
 def test_dns_rebinding_blocked_via_getaddrinfo(monkeypatch):
@@ -74,7 +74,7 @@ def test_model_rejects_numeric_bypass():
     from mcp_gway.models import MCPServerConfig
 
     with pytest.raises(ValueError, match="private|loopback|not allowed|blocked|url"):
-        MCPServerConfig(name="evil1", type="remote", url="http://2130706433/mcp")
+        MCPServerConfig(name="evil1", type="remote", url="https://2130706433/mcp")
 
 
 def test_no_pytest_env_branch_in_models():

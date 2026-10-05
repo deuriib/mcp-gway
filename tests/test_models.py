@@ -29,12 +29,12 @@ def test_local_config_valid():
 
 
 def test_local_requires_command():
-    with pytest.raises(ValueError, match="command.*required"):
+    with pytest.raises(ValueError, match="command.*local|--command"):
         MCPServerConfig(name="myserver", type="local")
 
 
 def test_remote_requires_url():
-    with pytest.raises(ValueError, match="url.*required"):
+    with pytest.raises(ValueError, match="url.*remote|--url"):
         MCPServerConfig(name="myserver", type="remote")
 
 
@@ -127,4 +127,56 @@ def test_name_rejects_leading_digit():
 
 def test_name_rejects_non_ascii():
     with pytest.raises(ValueError, match="ASCII"):
-        MCPServerConfig(name="datös", type="remote", url="https://x")
+        MCPServerConfig(name="café", type="remote", url="https://x")
+
+
+def test_name_hyphen_human_message_no_pydantic_footer():
+
+    from mcp_gway.models import format_validation_error
+
+    try:
+        MCPServerConfig(name="my-tools", type="remote", url="https://example.com/mcp")
+        raise AssertionError("should have raised")
+    except ValueError as e:
+        msg = str(e)
+        assert "underscores" in msg and "my_tools" in msg
+        assert "errors.pydantic.dev" not in msg
+        assert "^[A-Za-z" not in msg
+        human = format_validation_error(e)
+        assert human.startswith("name: ")
+        assert "my_tools" in human
+        assert "[reason=name_hyphens]" in human
+        assert "errors.pydantic.dev" not in human
+
+
+def test_https_only_human_message_keeps_token():
+    from mcp_gway.models import format_validation_error
+
+    try:
+        MCPServerConfig(name="ok1", type="remote", url="http://example.com/mcp")
+        raise AssertionError("should have raised")
+    except ValueError as e:
+        assert "[reason=https_only]" in str(e)
+        human = format_validation_error(e)
+        assert "https://" in human
+        assert "[reason=https_only]" in human
+
+
+def test_format_validation_error_multi_error_lines():
+    from pydantic import BaseModel, ValidationError
+
+    from mcp_gway.models import format_validation_error
+
+    class Two(BaseModel):
+        a: int
+        b: int
+
+    try:
+        Two(a="x", b="y")
+        raise AssertionError("should have raised")
+    except ValidationError as e:
+        human = format_validation_error(e)
+        lines = human.splitlines()
+        assert len(lines) == 2
+        assert lines[0].startswith("a: ") and lines[1].startswith("b: ")
+        assert "errors.pydantic.dev" not in human
