@@ -46,7 +46,7 @@ class StarlarkSandbox:
         self._metrics: object | None = None
 
     def _capture_print(self, *args: object, **kwargs: object) -> None:
-        """Bifrost-style print capture: output goes to logs, not stdout."""
+        """Print capture: output goes to logs, not stdout."""
         sep = str(kwargs.get("sep", " ")) if isinstance(kwargs, dict) else " "
         try:
             self._logs.append(sep.join(str(a) for a in args))

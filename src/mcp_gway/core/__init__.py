@@ -1,4 +1,4 @@
-"""Core package — single source of truth for transport/discovery (OpenCode-only)."""
+"""Core package — single source of truth for transport/discovery."""
 
 from __future__ import annotations
 

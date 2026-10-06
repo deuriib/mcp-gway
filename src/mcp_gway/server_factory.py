@@ -45,7 +45,7 @@ class ServerFactory:
         self._metrics: object | None = None
 
     def is_auto_executable(self, server: str, tool: str) -> bool:
-        """Bifrost Agent Mode classification: executable AND auto-approved."""
+        """Agent Mode classification: executable AND auto-approved."""
         try:
             config = self._registry.get_config(server)
         except Exception:
@@ -172,7 +172,7 @@ class ServerFactory:
 
         The sandbox's inject_server() introspects this object to
         create Starlark struct methods. Only tools_to_execute-allowed
-        tools are bound (Bifrost Tool ACL).
+        tools are bound (Tool ACL).
         """
         config = self._registry.get_config(server_name)
         tool_names = self._get_tool_names(server_name)

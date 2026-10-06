@@ -1,4 +1,4 @@
-"""Pydantic models for MCP server configurations (OpenCode-only)."""
+"""Pydantic models for MCP server configurations."""
 
 from __future__ import annotations
 
@@ -1009,12 +1009,12 @@ class MCPServerConfig(BaseModel):
     # Default off → zero behavior change for existing configs (ADR-012 decision 9).
     retry_on_transport_error: bool = False
 
-    # Bifrost CodeMode alignment: per-client opt-in + allow-list.
+    # CodeMode alignment: per-client opt-in + allow-list.
     # is_code_mode_client=False hides the server from CodeMode VFS/sandbox.
     # tools_to_execute=["*"] exposes all tools; otherwise exact allow-list.
     is_code_mode_client: bool = True
     tools_to_execute: list[str] = Field(default_factory=lambda: ["*"])
-    # Bifrost Agent Mode: tools the agent loop may auto-execute without
+    # Agent Mode: tools the agent loop may auto-execute without
     # per-tool approval. [] = all manual; ["*"] = all executable auto-run.
     tools_to_auto_execute: list[str] = Field(default_factory=list)
 

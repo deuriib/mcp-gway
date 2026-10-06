@@ -16,16 +16,16 @@ MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE en
 
 ## Who it is for
 
-- **Agent developers** wiring OpenCode, Pi, Antigravity, Claude Desktop, or Cursor to many MCP servers through one gateway.
+- **Agent developers** wiring Pi, Antigravity, Claude Desktop, or Cursor to many MCP servers through one gateway.
 - **Operators** running local-first infrastructure who want a CLI + dashboard with health probes, Prometheus metrics, and JSON logs.
 
 ## Features
 
-- **Multi-Server Aggregation** — Connect to multiple MCP servers (`remote` / `local`, OpenCode format) and expose them through a single endpoint — one URL for every agent, one registry to manage
+- **Multi-Server Aggregation** — Connect to multiple MCP servers (`remote` / `local`) and expose them through a single endpoint — one URL for every agent, one registry to manage
 - **Code Mode** — 4 meta-tools that let LLMs discover schemas on demand and execute in a sandbox, instead of loading every tool definition into context
 - **OAuth 2.0 Support** — Built-in OAuth flow with dynamic client registration (RFC 7591) and token storage
 - **Hermetic Sandbox** — Starlark-based sandbox for safe code execution
-- **MCP Protocol Compliant** — Works with OpenCode, Pi, Antigravity, Claude Desktop, Cursor, and any MCP-compatible client
+- **MCP Protocol Compliant** — Works with Pi, Antigravity, Claude Desktop, Cursor, and any MCP-compatible client
 
 ## Installation
 
@@ -44,9 +44,9 @@ uv sync --all-groups  # installs dev group with pre-commit
 
 ## Quick Start
 
-### OpenCode Format (Primary)
+### Config format
 
-OpenCode schema — `remote` / `local` with transport auto-detection. This is the recommended path.
+Server config schema — `remote` / `local` with transport auto-detection. This is the recommended path.
 
 ```bash
 # Remote — auto-detects transport (streamable-http → sse → http)
@@ -165,7 +165,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 | Command                                                                                                                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp-gway add --type remote\|local`                                                                                          | Add an MCP server and generate `.pyi` stub (OpenCode format, primary)                                                                                                                                                                                                                                                                                                                                                                               |
+| `mcp-gway add --type remote\|local`                                                                                          | Add an MCP server and generate `.pyi` stub                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `mcp-gway remove`                                                                                                            | Remove an MCP server                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `mcp-gway update`                                                                                                            | Update tools for a server                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `mcp-gway list`                                                                                                              | List all connected servers                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -177,7 +177,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 > **Types:** only `--type local|remote` (`cli.py:50`). Legacy `http|stdio|sse|streamable-http` are rejected by click. There is no `--args` / `--docs-url`.
 
-Options for `add` (OpenCode) — 13 flags (cli.py:45-95):
+Options for `add` — 13 flags (cli.py:45-95):
 
 | Option                         | Description                                      |
 | ------------------------------ | ------------------------------------------------ |

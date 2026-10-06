@@ -12,8 +12,7 @@ import type {
 /**
  * mcp-gateway — Pi extension.
  *
- * Parity with `plugins/opencode/mcp-gateway.ts` and
- * `plugins/antigravity/scripts/reinject.mjs`: keep the Gateway Protocol card in
+ * Parity with `plugins/antigravity/scripts/reinject.mjs`: keep the Gateway Protocol card in
  * the system prompt of every run, so it survives context compaction.
  *
  * MCP registration is declarative, not code: `.mcp.json` at the repo root

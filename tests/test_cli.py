@@ -1,4 +1,4 @@
-"""Tests for CLI commands (OpenCode-only)."""
+"""Tests for CLI commands."""
 
 import pytest
 from click.testing import CliRunner
@@ -289,7 +289,7 @@ def test_refresh_continues_after_server_error(tmp_path, monkeypatch):
     assert call_count["n"] == 2, "Both servers should be attempted"
 
 
-# --- OpenCode-style CLI options ---
+# --- CLI-style options ---
 
 
 def test_add_remote_type(runner, monkeypatch):

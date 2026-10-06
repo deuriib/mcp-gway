@@ -1,4 +1,4 @@
-"""Code Mode — 4 meta-tools for LLM-driven tool orchestration (Bifrost-aligned)."""
+"""Code Mode — 4 meta-tools for LLM-driven tool orchestration."""
 
 from __future__ import annotations
 
@@ -342,12 +342,12 @@ class CodeMode:
                 f"result serialization failed: {type(e).__name__}"
             ) from None
 
-    # ── Bifrost Agent Mode ──────────────────────────────────────────────
+    # ── Agent Mode ────────────────────────────────────────────────────
 
     def classify_tool_calls(
         self, tool_calls: list[dict[str, object]]
     ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-        """Bifrost Agent Mode: split tool calls into auto/manual buckets.
+        """Agent Mode: split tool calls into auto/manual buckets.
 
         Returns (auto_executable, manual) where each item is
         {"server": str, "tool": str, "arguments": dict, "id": str|None}.

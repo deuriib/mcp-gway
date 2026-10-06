@@ -1,4 +1,4 @@
-"""Tests for .pyi file registry operations (OpenCode-only)."""
+"""Tests for .pyi file registry operations."""
 
 import json
 
@@ -119,7 +119,7 @@ def test_remove_cleans_both_files(registry, http_config):
     assert not (registry.servers_dir / "testserver.json").exists()
 
 
-def test_add_creates_opencode_json(registry):
+def test_add_creates_server_json(registry):
     config = MCPServerConfig(
         name="myserver",
         type="remote",

@@ -2,7 +2,7 @@
 
 > *"Haces las cosas como para Dios, por eso trabajas con excelencia y dedicación."*
 
-The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in OpenCode and Antigravity:
+The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in other hosts and Antigravity:
 
 1. **Gateway MCP registration** — `.mcp.json` at the repo root declares `gateway` over stdio (`uvx mcp-gway serve` — loopback by construction, no TCP surface). Pi discovers it automatically.
 2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.5.0` marker.
@@ -99,9 +99,9 @@ pi install ./mcp-gway -l
 
 ## How the pieces map
 
-| Concern | OpenCode | Antigravity | Pi |
-|---|---|---|---|
-| MCP registration | `ctx.mcp.transform()` in plugin | `mcp_config.json` (remote `serverUrl`) | `.mcp.json` (stdio `uvx mcp-gway serve`) |
-| Protocol card | `MARKER`-deduped system text | `rules/mcp-gway.md` | `rules/mcp-gway.md` read at runtime |
-| Compression survival | `chat.params` / `systemHasRules` + `pushRules` | `hooks.json` → `scripts/reinject.mjs` | `before_agent_start` (re-enters loop after compaction) |
-| Skill surface | `skills/` | `skills/mcp-gway` | `skills/` via the `pi` key |
+| Concern | Other hosts | Pi |
+|---|---|---|
+| MCP registration | agent config (remote `serverUrl`) | `.mcp.json` (stdio `uvx mcp-gway serve`) |
+| Protocol card | `MARKER`-deduped system text | `rules/mcp-gway.md` read at runtime |
+| Compression survival | `hooks.json` → `scripts/reinject.mjs` | `before_agent_start` (re-enters loop after compaction) |
+| Skill surface | `skills/mcp-gway` | `skills/` via the `pi` key |

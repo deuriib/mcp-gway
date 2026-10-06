@@ -1,4 +1,4 @@
-"""Transport auto-detection for remote MCP servers (OpenCode-only)."""
+"""Transport auto-detection for remote MCP servers."""
 
 from __future__ import annotations
 

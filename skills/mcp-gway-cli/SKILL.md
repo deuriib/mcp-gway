@@ -6,7 +6,7 @@ description: Operate the mcp-gway CLI (v4.2.0) — add/remove/update/list/inspec
 # mcp-gway CLI
 
 Standalone Python CLI (`mcp-gway = "mcp_gway.cli:main"`, alias `mgw` — 1:1 shortcut).
-OpenCode format only. Registry (`servers/*.json` + `servers/*.pyi`) is the single source of truth.
+Server config format. Registry (`servers/*.json` + `servers/*.pyi`) is the single source of truth.
 
 > Windows note: set `PYTHONIOENCODING=utf-8` before any `--help` or piped output, or `click.echo` can crash with `UnicodeEncodeError` under `cp1252`.
 
@@ -119,7 +119,7 @@ mcp-gway refresh supabase --auth --oauth-port 9999   # custom callback port
 Default `--transport stdio` (NDJSON JSON-RPC on stdin/stdout, logs → stderr). `--host/--port` ONLY with `http|sse` — passing them with stdio exits 2. `mcp-gway mcp` is a DEPRECATED hidden alias for `serve --transport stdio` (prints a deprecation notice, same loop). Full route table and protocol: see `mcp-gway-mcp`.
 
 ```bash
-mcp-gway serve                                        # stdio (default, OpenCode local)
+mcp-gway serve                                        # stdio (default, local)
 mcp-gway serve --transport http --port 8080           # binds 127.0.0.1
 mcp-gway serve --transport sse --host 127.0.0.1 --port 8080
 mcp-gway serve --transport http --port 8080 --log-level debug --registry-dir ./servers

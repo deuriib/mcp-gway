@@ -1,6 +1,6 @@
 ---
 name: mcp-gway-mcp
-description: Serve and consume the gateway over MCP (v4.2.0) — stdio/http/sse transports, Code Mode discovery protocol, wiring agents, admin dashboard. Use when running serve, calling the 4 meta-tools, or connecting OpenCode/Pi/Claude to one gateway endpoint.
+description: Serve and consume the gateway over MCP (v4.2.0) — stdio/http/sse transports, Code Mode discovery protocol, wiring agents, admin dashboard. Use when running serve, calling the 4 meta-tools, or connecting agents to one gateway endpoint.
 ---
 
 # mcp-gway MCP + serve surface
@@ -11,7 +11,7 @@ One gateway process serves `/mcp`, probes, and the admin dashboard on the same S
 
 | You want… | Run | `/mcp` behavior |
 |-----------|-----|-----------------|
-| Agent on the same machine (OpenCode, Claude Desktop local) | `serve --transport stdio` (default) | NDJSON JSON-RPC on stdin/stdout, logs → stderr |
+| Agent on the same machine (local stdio) | `serve --transport stdio` (default) | NDJSON JSON-RPC on stdin/stdout, logs → stderr |
 | HTTP client / `.mcp.json` URL | `serve --transport http` | `POST /mcp` (JSON-RPC); `GET /mcp` → 405 `Allow: POST` |
 | SSE streaming client | `serve --transport sse` | `GET /mcp` (SSE `endpoint` event) + `POST /mcp/messages?session_id=…`; `POST /mcp` → 405 `Allow: GET` |
 
@@ -48,7 +48,7 @@ mcp-gway serve --transport http --port 8080 &
 curl -s http://127.0.0.1:8080/health | jq .status   # "ok"
 ```
 
-OpenCode (`type: local`, stdio — no URL needed):
+Local stdio agent (`type: local`, stdio — no URL needed):
 
 ```json
 { "type": "local", "command": ["mcp-gway", "serve", "--transport", "stdio"] }
@@ -66,7 +66,7 @@ Pi (`.mcp.json` at repo root, adapter-discovered):
 { "mcpServers": { "gateway": { "url": "http://127.0.0.1:8080/mcp", "directTools": true, "requestTimeoutMs": 5000 } } }
 ```
 
-URL/token overrides without touching files (honored by the OpenCode + Pi plugins):
+URL/token overrides without touching files (honored by the agent plugins):
 
 ```bash
 MCP_GWAY_URL=http://127.0.0.1:9090/mcp mcp-gway serve --transport http --port 9090

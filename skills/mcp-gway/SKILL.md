@@ -10,7 +10,7 @@ This skill routes. The focused skills carry the detail — read the one that mat
 | Your task | Read | It covers |
 |-----------|------|-----------|
 | Add/remove/refresh servers, run tool calls from the terminal or CI | `mcp-gway-cli` (`skills/mcp-gway-cli/SKILL.md`) | `add/remove/update/list/inspect/refresh/serve/--version` + `tools list\|read\|docs\|exec`, every flag, per-command examples |
-| Start the gateway, wire an agent, run the 4-step discovery protocol, open the dashboard | `mcp-gway-mcp` (`skills/mcp-gway-mcp/SKILL.md`) | `serve --transport stdio\|http\|sse`, OpenCode/Claude/Pi wiring, `listToolFiles → readToolFile → getToolDocs → executeToolCode` with examples, probes, admin pages |
+| Start the gateway, wire an agent, run the 4-step discovery protocol, open the dashboard | `mcp-gway-mcp` (`skills/mcp-gway-mcp/SKILL.md`) | `serve --transport stdio\|http\|sse`, agent wiring, `listToolFiles → readToolFile → getToolDocs → executeToolCode` with examples, probes, admin pages |
 | Debug execution/auth/discovery/policy, read config files or env vars | `mcp-gway-core` (`skills/mcp-gway-core/SKILL.md`) | Registry `.pyi/.json`, all six `MCP_GWAY_*` vars, allow-list + cwd/env gates, sandbox, transports, OAuth, metrics, admin backend |
 
 ## Quick commands

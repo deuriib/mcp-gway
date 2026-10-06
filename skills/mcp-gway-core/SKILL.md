@@ -13,7 +13,7 @@ All state is files under `~/.config/mcp-gway/` (honors a `HOME` override, so `HO
 
 | Path | Contents | Managed by |
 |------|----------|------------|
-| `servers/<Name>.json` | OpenCode config: `type`, `url`/`command`, `env`, `headers`, `tools`, `timeout`, `enabled`, OAuth refs | `add` / `refresh` / `update` (atomic `.json` + `.pyi` together, last-write-wins) |
+| `servers/<Name>.json` | Server config: `type`, `url`/`command`, `env`, `headers`, `tools`, `timeout`, `enabled`, OAuth refs | `add` / `refresh` / `update` (atomic `.json` + `.pyi` together, last-write-wins) |
 | `servers/<Name>.pyi` | Signatures only — what Code Mode reads | `refresh` re-discovers; `inspect` prints |
 | `tokens/<Name>.json` | OAuth access tokens | `refresh --auth` (`0o600` via `_secure_atomic_write`) |
 | `tokens/<Name>_client.json` | Dynamic-registration client credentials (RFC 7591) | OAuth flow; deleted with `remove` |
@@ -51,7 +51,7 @@ Only six `MCP_GWAY_*` vars exist. Everything else is flags or files.
 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS` | CSV basenames allowed for `local` spawns (case-insensitive). Explicit value **overrides** defaults. `*`/paths/invalid → deny + warn. **Do NOT rename.** | `{npx,bunx,uvx,pipx}` when unset/blank | `core/policy.py:28,77` |
 | `MCP_GWAY_ALLOW_REMOTE` | `=1` permits `serve --host 0.0.0.0`. Anything else → exit 2 on non-loopback | unset (loopback-only) | `cli.py:627`, `observability/health.py:134` |
 | `MCP_GWAY_LOG_LEVEL` | `trace/debug/info/warning/error/critical` (`warn` → `warning`). CLI INFO events emit only when set; WARN/ERROR always | `info` | `cli.py:67,529`, `--log-level` overrides it per-run |
-| `MCP_GWAY_URL` | Gateway endpoint override (OpenCode + Pi plugins) | `http://127.0.0.1:8080/mcp` | plugins, not the server |
+| `MCP_GWAY_URL` | Gateway endpoint override (agent plugins) | `http://127.0.0.1:8080/mcp` | plugins, not the server |
 | `MCP_GWAY_TOKEN` | Bearer token sent as `Authorization: Bearer …` (never written to `.mcp.json`) | unset (no auth header) | plugins, not the server |
 | `HOME` | Relocates the whole `~/.config/mcp-gway/` tree (POSIX override; `Path.home()` ignores it on Windows) | real home | `core/policy.py:22` (`home_dir()`) |
 
@@ -97,7 +97,7 @@ mcp-gway add t --type local --command "npx -y my-mcp" --cwd rel/path           #
 
 ## Execution stack — CodeMode → factory → sandbox
 
-`code_mode.py` — `CodeMode(registry)` + `to_pascal_case_identifier` (names normalize to PascalCase; hyphens in upstream tool names become underscores in the sandbox). Methods: `list_tool_files` / `read_tool_file` / `get_tool_docs` / `execute_tool_code` (+ Bifrost agent helpers `classify_tool_calls`, `execute_agent_tool`, `auto_execute`). Tool ACL comes from `tools_to_execute` (`["*"]` = all) — `update <name> --tools` rewrites it without re-discovery.
+`code_mode.py` — `CodeMode(registry)` + `to_pascal_case_identifier` (names normalize to PascalCase; hyphens in upstream tool names become underscores in the sandbox). Methods: `list_tool_files` / `read_tool_file` / `get_tool_docs` / `execute_tool_code` (+ agent helpers `classify_tool_calls`, `execute_agent_tool`, `auto_execute`). Tool ACL comes from `tools_to_execute` (`["*"]` = all) — `update <name> --tools` rewrites it without re-discovery.
 
 `server_factory.py` — per-server structs with sanitized identifiers, `_check_tool_allowed` (ACL enforcement), `_call_tool_async` with per-config timeout + upstream telemetry (`upstream_tool_calls_total{server,tool,status}`, `upstream_tool_duration_seconds{server,tool}`). Retry is transport-phase only and opt-in (`--retry-on-transport-error`): exactly one retry when connect fails, never after `call_tool` starts (ADR-012).
 
@@ -145,4 +145,4 @@ Key series: `http_requests_total{method,path,status}`, `http_request_duration_se
 
 ## Retired — do not serve or rebuild
 
-Legacy dashboard (`/dashboard`, `/api/servers`, `/static`) and catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `catalog.json`) are removed since v2.0.0. `/` is the admin index now, not the legacy dashboard. No `local-unrestricted` — removed in v4.0.0, no bypass exists.
+Legacy dashboard (`/dashboard`, `/api/servers`, `/static`) and catalog (`/api/catalog`, `/dashboard/catalog`, `catalog.json`) are removed since v2.0.0. `/` is the admin index now, not the legacy dashboard. No `local-unrestricted` — removed in v4.0.0, no bypass exists.

@@ -1,4 +1,4 @@
-"""Tests for MCP server config models (OpenCode-only)."""
+"""Tests for MCP server config models."""
 
 import pytest
 

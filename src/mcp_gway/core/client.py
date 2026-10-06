@@ -1,4 +1,4 @@
-"""Core client helpers — transport creation and tool discovery (OpenCode-only)."""
+"""Core client helpers — transport creation and tool discovery."""
 
 from __future__ import annotations
 

@@ -8,7 +8,7 @@ cli + local service + web dashboard
 
 ## Users
 
-Primary: agent developers wiring OpenCode / Pi / Antigravity / Claude / Cursor to many MCP servers through one gateway endpoint — schemas served on demand, not all loaded upfront.
+Primary: agent developers wiring Pi / Antigravity / Claude / Cursor to many MCP servers through one gateway endpoint — schemas served on demand, not all loaded upfront.
 
 Secondary: the operator running the gateway on their own machine, managing server connections and monitoring health via CLI (canonical) plus dashboard.
 

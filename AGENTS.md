@@ -23,7 +23,7 @@
 ```
 src/mcp_gway/
 ├── __init__.py          # Package version (3.1.0)
-├── models.py            # Pydantic models (MCPServerConfig OpenCode-only local|remote, ToolInfo, OAuthConfig)
+├── models.py            # Pydantic models (MCPServerConfig local|remote, ToolInfo, OAuthConfig)
 ├── registry.py          # .pyi file CRUD (servers/ directory) — única fuente de verdad
 ├── sandbox.py           # Starlark sandbox (hermetic execution)
 ├── server_proxy.py      # MCP server wrapper for sandbox
@@ -50,7 +50,7 @@ src/mcp_gway/
     ├── metrics.py       # MetricsRegistry hand-rolled Prometheus exposition (counter/gauge/histogram)
     └── health.py        # /health, /ready, /live, /metrics (X-Warning: exposed gating)
 
-> **Retirado en v2.0.0 (no servir):** dashboard legacy (`/dashboard`, `/api/servers`, `/static`) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json`). El alias `/` fue reactivado en v3.1.0 como índice del admin (`/admin*`) — superficie nueva, no el dashboard legacy.
+> **Retirado en v2.0.0 (no servir):** dashboard legacy (`/dashboard`, `/api/servers`, `/static`) y catalog (`/api/catalog`, `/dashboard/catalog`, `~/.config/mcp-gway/catalog.json`). El alias `/` fue reactivado en v3.1.0 como índice del admin (`/admin*`) — superficie nueva, no el dashboard legacy.
 
 tests/
 ├── conftest.py                 # Fixtures compartidos
@@ -94,7 +94,7 @@ uv run pytest -v                         # Run tests (621 tests)
 uv run ruff check src/ tests/            # Lint (CI parity)
 uv run ruff format --check src/ tests/   # Format check (CI parity)
 
-# CLI — OpenCode format (primary)
+# CLI — server config
 # Alias: `mgw` is a 1:1 shortcut for `mcp-gway` (same `cli.main`); examples use canonical.
 mcp-gway add <name> --type remote --url <url> [--header "KEY=VALUE"] [--oauth-client-id ID] [--oauth-client-secret SECRET] [--oauth-scope SCOPE] [--timeout 5000] [--enabled] [--oauth-port 8989]
 # Shell-history warning: no secretos reales en --header/--oauth-client-secret; preferir `refresh --auth`.
@@ -110,7 +110,7 @@ mcp-gway list
 mcp-gway inspect <name>
 mcp-gway refresh [<name>] [--auth] [--oauth-port <port>]
 mcp-gway serve [--transport stdio|http|sse] [--host 127.0.0.1] [--port 8080] [--log-level LEVEL] [--registry-dir PATH]  # default --transport stdio; --host/--port only with http|sse (con stdio → exit 2); 0.0.0.0 requiere MCP_GWAY_ALLOW_REMOTE=1
-# mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]  # DEPRECATED hidden alias: avisa '[mcp] deprecated, use serve --transport stdio' y delega a _serve_stdio(); stdout puro NDJSON (usable como OpenCode type: local con command: [mcp-gway, serve, --transport, stdio])
+# mcp-gway mcp [--log-level LEVEL] [--registry-dir PATH]  # DEPRECATED hidden alias: avisa '[mcp] deprecated, use serve --transport stdio' y delega a _serve_stdio(); stdout puro NDJSON (usable como type: local con command: [mcp-gway, serve, --transport, stdio])
 mcp-gway --version | -v  # print package version
 ```
 
@@ -143,11 +143,11 @@ mcp-gway --version | -v  # print package version
 ### Endpoints vivos + Retiro dashboard/catalog
 
 - **Vivos (v2.4.0; rutas `/mcp` por transporte, enmienda 2026-09-22):** probes `/health`, `/ready`, `/live`, `/metrics` siempre presentes; `/mcp` según `Gateway(registry, transport=...)` (`gateway.py:320-340`, `mcp_routes` condicional): **http** → `POST /mcp` (JSON-RPC) con `GET /mcp` → 405 `Allow: POST` = 6 entradas, `/mcp/messages` no existe (404); **sse** → `GET /mcp` (SSE) con `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages` alias POST al mismo handler `_mcp_post`, no endpoint independiente = 7 entradas. Sin fallback cruzado; `app.state.transport` expuesto. **+ 24 rutas admin** (`/` índice, `/admin` alias, `/admin/servers[/{name}]`, `/admin/tools`, `/admin/observability`, `/admin/policy`, `/admin/partials/*`) en ambos transports → 30 entradas (http) / 31 (sse); admin es loopback-only + CSRF por proceso, CSP único `CSP` en `gateway.py`. Gestión CLI + dashboard admin.
-- **Retirados (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, Bifrost fetch, `~/.config/mcp-gway/catalog.json` — borrar caché vieja manualmente).
+- **Retirados (no servir):** dashboard (`/dashboard`, `/api/servers`, `/static`, `/` alias) y catalog (`/api/catalog`, `/dashboard/catalog`, `~/.config/mcp-gway/catalog.json` — borrar caché vieja manualmente).
 
 ### Registry (.pyi + .json) — Única fuente
 
-- `.pyi` = signatures only; `servers/*.json` = OpenCode config (type/url/command etc). Legacy `#` comments only for fallback migration.
+- `.pyi` = signatures only; `servers/*.json` = server config (type/url/command etc). Legacy `#` comments only for fallback migration.
 - Used by Code Mode para descubrir tools.
 - Escrituras atómicas (`*.json` + `*.pyi` juntos), last-write-wins para concurrencia entre escrituras CLI.
 
