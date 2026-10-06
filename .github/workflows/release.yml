@@ -25,7 +25,7 @@ permissions:
 jobs:
   release:
     name: Release ${{ github.ref_name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: release
       cancel-in-progress: false
@@ -39,6 +39,15 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Verify tag points at merged code
+        run: |
+          git fetch origin +master:refs/remotes/origin/master
+          SHA="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          git merge-base --is-ancestor "$SHA" origin/master || {
+            echo "::error::tag $GITHUB_REF_NAME ($SHA) is not on master — releases only come from merged PR code"
+            exit 1
+          }
 
       - name: Set up Python
         uses: actions/setup-python@v5.6.0
