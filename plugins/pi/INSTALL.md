@@ -5,7 +5,7 @@
 The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in other hosts and Antigravity:
 
 1. **Gateway MCP registration** — `.mcp.json` at the repo root declares `gateway` over stdio (`uvx mcp-gway serve` — loopback by construction, no TCP surface). Pi discovers it automatically.
-2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.5.5` marker.
+2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.5.6` marker.
 3. **Compression survival** — Pi re-enters the agent loop after compaction (threshold, overflow recovery, retries), so re-applying the card at the start of every run keeps the protocol available without duplicate cards.
 4. **Meta-tools** — `gw_list`, `gw_read`, `gw_docs`, `gw_exec` (model-callable tools via `pi.registerTool`) shell out to `mcp-gway tools list|read|docs|exec` — the same CodeMode operations as the `gateway_*` MCP tools — for discovery without a gateway round-trip.
 5. **Session inventory** — on `session_start` the extension runs `mcp-gway tools list` once and publishes the server list as hidden context (`display: false`), so the agent knows which servers are available from the first turn.
