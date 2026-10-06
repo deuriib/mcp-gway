@@ -28,6 +28,14 @@
     ]
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deuriib/mcp-gway.git"
+  },
+  "homepage": "https://github.com/deuriib/mcp-gway#readme",
+  "bugs": {
+    "url": "https://github.com/deuriib/mcp-gway/issues"
+  },
   "dependencies": {
     "@earendil-works/pi-ai": "1.0.4",
     "@earendil-works/pi-coding-agent": "1.0.4",
