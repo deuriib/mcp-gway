@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [4.5.1] — 2026-10-06
+
+- **docs(scrub)**: remove retired product names from live surfaces — README, AGENTS, PRODUCT, all four skill files, source docstrings/comments, one served `listToolFiles` description, and test names reworded. Wording-only: no logic, packaging, plugin, or history change. Zero live mentions remain; scoped sweep + 645 tests + ruff clean.
+- **docs(context)**: hierarchical `AGENTS.md` via init-deep — root refresh (178 → 87 lines) with evidence-backed domain table and commands copied from `mise.toml`; new domain-scoped files for `src/mcp_gway/core`, `src/mcp_gway/observability`, `src/mcp_gway/admin`, `tests`.
+
 ## [4.5.0] — 2026-10-06
 
 - **feat(pi)**: gateway over stdio — `.mcp.json` declares `gateway` as `uvx mcp-gway serve` (loopback by construction, no TCP surface, no port, no token). Extension drops programmatic registration; Pi discovers the server declaratively. Extension surface: Gateway Protocol card injection (`rules/mcp-gway.md` at runtime, deduped by marker), 4 meta-tools (`gw_list`, `gw_read`, `gw_docs`, `gw_exec` via `pi.registerTool` shelling out to `mcp-gway tools`), hidden `session_start` server inventory. 27 checks in `tests/pi_extension.test.mjs` incl. `.mcp.json` contract test.
