@@ -1,5 +1,7 @@
 # CHANGELOG
+## [4.5.2] — 2026-10-06
 
+- **fix(pi-ext)**: card injection fallback for omp — `oh-my-pi` 18.6.1 emits `before_agent_start` without `systemPromptOptions`, so the section write threw and the UI warned `Gateway Protocol card not injected`. The handler now returns a `systemPrompt` override (card appended, deduped by marker) when sections are absent; the Pi section path is unchanged. Regression test in `tests/pi_extension.test.mjs` + troubleshooting row in `plugins/pi/INSTALL.md`.
 ## [4.5.1] — 2026-10-06
 
 - **docs(scrub)**: remove retired product names from live surfaces — README, AGENTS, PRODUCT, all four skill files, source docstrings/comments, one served `listToolFiles` description, and test names reworded. Wording-only: no logic, packaging, plugin, or history change. Zero live mentions remain; scoped sweep + 645 tests + ruff clean.

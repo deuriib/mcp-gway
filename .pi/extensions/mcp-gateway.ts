@@ -40,7 +40,7 @@ import type {
  * a missing CLI must never break session start.
  */
 
-const MARKER = "MCP-GWAY v4.5.1";
+const MARKER = "MCP-GWAY v4.5.2";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const SECTION_KEY = "mcp-gateway";
 const MAX_RULES_BYTES = 256 * 1024;
