@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "skills/htpy/SKILL.md",
       "computedHash": "cfd321fdaad0f1511289c0ed2cc5c0324f8e160e98612b3cc3f4a656a5ed6b84"
+    },
+    "pi-agent": {
+      "source": "deuriib/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pi-agent/SKILL.md",
+      "computedHash": "98867b3e03aa2f820164d32d192e4424b5ad516d38769e328e5a11a9da222b47"
     }
   }
 }

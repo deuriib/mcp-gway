@@ -165,8 +165,10 @@ def test_mcp_config_loopback_and_no_secrets():
     assert "mcpServers" in data
     assert "gateway" in data["mcpServers"]
     gateway_conf = data["mcpServers"]["gateway"]
-    assert "serverUrl" in gateway_conf
-    assert "127.0.0.1" in gateway_conf["serverUrl"]
+    # stdio transport: no TCP surface, loopback by construction.
+    assert gateway_conf.get("command") == "uvx"
+    assert "mcp-gway" in gateway_conf.get("args", [])
+    assert "url" not in gateway_conf and "serverUrl" not in gateway_conf
 
     raw_text = MCP_CONFIG_PATH.read_text().lower()
     for secret_word in ["password", "secret", "bearer", "token", "key"]:

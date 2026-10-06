@@ -7,6 +7,11 @@
   "exports": {
     ".": "./plugins/opencode/mcp-gateway.ts"
   },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-skill"
+  ],
   "pi": {
     "extensions": [
       "./.pi/extensions/"
@@ -17,6 +22,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@earendil-works/pi-ai": "1.0.4",
+    "@earendil-works/pi-coding-agent": "1.0.4",
     "@opencode/plugin": "2.0.9"
   }
 }

@@ -79,3 +79,4 @@ junit.xml
 # AI
 .claude/skills/
 /.impeccable/surfaces
+node_modules/

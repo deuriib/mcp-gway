@@ -4,10 +4,12 @@
 
 The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in OpenCode and Antigravity:
 
-1. **Gateway MCP registration** — `.mcp.json` at the repo root registers the local gateway over loopback. Pi's MCP adapter discovers it automatically.
+1. **Gateway MCP registration** — `.mcp.json` at the repo root declares `gateway` over stdio (`uvx mcp-gway serve` — loopback by construction, no TCP surface). Pi discovers it automatically.
 2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.4.0` marker.
 3. **Compression survival** — Pi re-enters the agent loop after compaction (threshold, overflow recovery, retries), so re-applying the card at the start of every run keeps the protocol available without duplicate cards.
-4. **Bundled skills** — `skills/mcp-gway*` (`mcp-gway`, `mcp-gway-cli`, `mcp-gway-mcp`, `mcp-gway-core`) are loaded through the `pi` key in `package.json`.
+4. **Meta-tools** — `gw_list`, `gw_read`, `gw_docs`, `gw_exec` (model-callable tools via `pi.registerTool`) shell out to `mcp-gway tools list|read|docs|exec` — the same CodeMode operations as the `gateway_*` MCP tools — for discovery without a gateway round-trip.
+5. **Session inventory** — on `session_start` the extension runs `mcp-gway tools list` once and publishes the server list as hidden context (`display: false`), so the agent knows which servers are available from the first turn.
+6. **Bundled skills** — `skills/mcp-gway*` (`mcp-gway`, `mcp-gway-cli`, `mcp-gway-mcp`, `mcp-gway-core`) are loaded through the `pi` key in `package.json`.
 
 The card text is read from `rules/mcp-gway.md` at runtime — the same source the Antigravity plugin uses, so the harnesses cannot drift apart.
 
@@ -15,17 +17,8 @@ The card text is read from `rules/mcp-gway.md` at runtime — the same source th
 
 ## Prerequisites
 
-- Node 20+ (Pi loads `.ts` extensions via `jiti`; no build step).
-- `pi-mcp-adapter` installed:
-  ```bash
-  pi install npm:pi-mcp-adapter
-  ```
-- A running gateway over loopback:
-  ```bash
-  mcp-gway serve --transport http --host 127.0.0.1 --port 8080
-  curl -s http://127.0.0.1:8080/health
-  # Expected: {"status": "ok", ...}
-  ```
+- Node 22+ (Pi loads `.ts` extensions via `jiti`; no build step).
+- `uvx mcp-gway` on PATH (the extension spawns `uvx mcp-gway serve` over stdio; no port, no separate daemon).
 
 ---
 
@@ -65,22 +58,14 @@ pi install ./mcp-gway -l
 
 ## Configuration
 
-| Variable | Effect | Default |
-|---|---|---|
-| `MCP_GWAY_URL` | Override the gateway endpoint | `http://127.0.0.1:8080/mcp` |
-| `MCP_GWAY_TOKEN` | Bearer token for the gateway | unset (no auth header) |
-
-`.mcp.json` holds only the loopback URL — never a token. To authenticate, prefer the adapter's env-bound field so the secret never touches the file:
+`.mcp.json` declares the stdio server — no token, no URL, no port:
 
 ```json
 {
   "mcpServers": {
     "gateway": {
-      "url": "http://127.0.0.1:8080/mcp",
-      "directTools": true,
-      "requestTimeoutMs": 5000,
-      "auth": "bearer",
-      "bearerTokenEnv": "MCP_GWAY_TOKEN"
+      "command": "uvx",
+      "args": ["mcp-gway", "serve"]
     }
   }
 }
@@ -96,7 +81,7 @@ pi install ./mcp-gway -l
    # Expected: ALL GREEN
    ```
 2. **Card injection** — start Pi in this repo and confirm no `mcp-gateway:` warning appears on stderr. The extension logs `[mcp-gateway] ...` only when `rules/mcp-gway.md` cannot be read or injection is skipped.
-3. **MCP surface** — in Pi run `/mcp-adapter status`, or ask the agent to list gateway tools. You should see the `gateway_*` meta-tools.
+3. **MCP surface** — in Pi run `/mcp`, or ask the agent to list gateway tools. You should see the `gateway_*` meta-tools.
 4. **Protocol is live** — the Gateway Protocol card (four numbered steps starting with `gateway_listToolFiles`) is present in the system prompt.
 
 ---
@@ -106,7 +91,7 @@ pi install ./mcp-gway -l
 | Symptom | Cause | Fix |
 |---|---|---|
 | `[mcp-gateway] could not read rules/mcp-gway.md` | Extension copied without the repo's `rules/` dir | Keep `rules/mcp-gway.md` next to the package, or accept the embedded fallback card |
-| Gateway tools missing | `mcp-gway serve` not running, or wrong port | Start the gateway; check `MCP_GWAY_URL` |
+| Gateway tools missing | `uvx mcp-gway` not on PATH | Install `mcp-gway` so `uvx mcp-gway serve` resolves |
 | Duplicate cards in prompt | Two extensions injecting (e.g. this one plus another) | Remove the duplicate — the card is keyed and deduped by marker within this extension |
 | Card present but agent ignores the order | System prompt replaced by another handler | Check that no other extension sets `forceSystemPrompt` |
 
@@ -116,9 +101,7 @@ pi install ./mcp-gway -l
 
 | Concern | OpenCode | Antigravity | Pi |
 |---|---|---|---|
-| MCP registration | `ctx.mcp.transform()` in plugin | `mcp_config.json` (remote `serverUrl`) | `.mcp.json` (adapter-discovered) |
+| MCP registration | `ctx.mcp.transform()` in plugin | `mcp_config.json` (remote `serverUrl`) | `.mcp.json` (stdio `uvx mcp-gway serve`) |
 | Protocol card | `MARKER`-deduped system text | `rules/mcp-gway.md` | `rules/mcp-gway.md` read at runtime |
 | Compression survival | `chat.params` / `systemHasRules` + `pushRules` | `hooks.json` → `scripts/reinject.mjs` | `before_agent_start` (re-enters loop after compaction) |
 | Skill surface | `skills/` | `skills/mcp-gway` | `skills/` via the `pi` key |
-
-The `pi` key does **not** use runtime `registerMcpServer()`: that API forces `directTools: false` (proxy-only) and throws when the server name already exists, which would both downgrade and break a pre-existing `gateway` registration. The declarative `.mcp.json` is the supported path.
