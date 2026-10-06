@@ -1,6 +1,6 @@
 [project]
 name = "mcp-gway"
-version = "4.5.4"
+version = "4.5.5"
 description = "One MCP endpoint for every server your agent needs — Code Mode discovers schemas on demand."
 readme = "README.md"
 authors = [

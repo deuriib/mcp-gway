@@ -1,4 +1,8 @@
 # CHANGELOG
+## [4.5.5] — 2026-10-06
+
+- **chore(packaging)**: add `files` whitelist to `package.json` — npm was shipping the whole git-tracked tree (2,058,620 B unpacked: `.github/workflows/`, `.omp/`, `docs/`, `tests/`, `AGENTS.md`, `DESIGN.md`, `.pre-commit-config.yaml`). The whitelist holds the five runtime contracts only: `.mcp.json` (Pi gateway discovery), `plugins/opencode/mcp-gateway.ts` (`main`/`exports`), `.pi/extensions/` (`pi.extensions`), `skills/` (`pi.skills` — four cross-referencing SKILL.md files) and `rules/mcp-gway.md`, which `.pi/extensions/mcp-gateway.ts` reads at runtime and would otherwise have degraded silently to the embedded fallback card. Evidence: `npm pack --dry-run` 605 KB → 25 KB packed, 2,058,620 → 81,278 B unpacked, 11 files (`package.json`, `README.md`, `LICENSE` are always included by npm regardless).
+
 ## [4.5.4] — 2026-10-06
 
 - **chore(pypi)**: declare license expression + Python classifiers — PyPI metadata shipped empty (`classifiers: []`, no `license`), so the README's dynamic Python and License badges rendered red `missing`. `license = "MIT"` + `license-files` now emit `License-Expression: MIT` / `License-File: LICENSE` in wheel METADATA (the LICENSE file ships inside the dist), and 3.12/3.13 classifiers match the CI matrix so both badges derive real data. Evidence: `uv build` clean (deprecated license classifier dropped — PEP 639 warning gone), `uv lock --check` clean, ruff probe confirms shields reads `license_expression`.
