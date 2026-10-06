@@ -71,7 +71,7 @@ Thumbs.db
 # Project specific
 servers/
 .superpowers/
-.ruff_cache/
+.frame-ship/
 junit.xml
 .agents/
 .worktrees/
