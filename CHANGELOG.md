@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## [4.4.0] — 2026-10-05
+## [4.5.0] — 2026-10-06
+
+- **feat(pi)**: gateway over stdio — `.mcp.json` declares `gateway` as `uvx mcp-gway serve` (loopback by construction, no TCP surface, no port, no token). Extension drops programmatic registration; Pi discovers the server declaratively. Extension surface: Gateway Protocol card injection (`rules/mcp-gway.md` at runtime, deduped by marker), 4 meta-tools (`gw_list`, `gw_read`, `gw_docs`, `gw_exec` via `pi.registerTool` shelling out to `mcp-gway tools`), hidden `session_start` server inventory. 27 checks in `tests/pi_extension.test.mjs` incl. `.mcp.json` contract test.
+- **feat(pi)**: Pi packages upgraded to 1.0.4 (`@earendil-works/pi-coding-agent`, `pi-ai`) — `ExtensionContext` typing on the `before_agent_start` handler, no implicit/explicit `any`.
+- **fix(antigravity)**: `mcp_config.json` moves to stdio (`command: uvx`, `args: [mcp-gway, serve]`); `test_mcp_config_loopback_and_no_secrets` asserts the stdio shape.
 
 - **feat(tracing)**: stdlib-only distributed tracing completes logs → metrics → traces. New `observability/tracing.py` (`Tracer` + `Span`, contextvars propagation, W3C `traceparent` in/out, 256-span ring buffer, zero deps). `TracingMiddleware` wraps every HTTP request as a `server` span (`METHOD /route`, status + error capture, `traceparent` response header). Every upstream tool call gets a nested `client` span (`tool server.name`, `mcp.server/tool/status`, retry flag); `sandbox.execute` gets its own span. `JSONFormatter` now always emits `trace_id` + `span_id` for log correlation. New `GET /admin/partials/traces?limit=50` (loopback-gated) exposes the recent span tail; observability page links it. 7 new tests in `test_observability_tracing.py`.
 ## [4.3.1] — 2026-10-05
