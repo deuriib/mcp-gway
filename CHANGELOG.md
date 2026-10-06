@@ -1,4 +1,8 @@
 # CHANGELOG
+## [4.5.4] — 2026-10-06
+
+- **chore(pypi)**: declare license expression + Python classifiers — PyPI metadata shipped empty (`classifiers: []`, no `license`), so the README's dynamic Python and License badges rendered red `missing`. `license = "MIT"` + `license-files` now emit `License-Expression: MIT` / `License-File: LICENSE` in wheel METADATA (the LICENSE file ships inside the dist), and 3.12/3.13 classifiers match the CI matrix so both badges derive real data. Evidence: `uv build` clean (deprecated license classifier dropped — PEP 639 warning gone), `uv lock --check` clean, ruff probe confirms shields reads `license_expression`.
+
 ## [4.5.3] — 2026-10-06
 
 - **docs(readme)**: product-focused badge set — CI/Release status, Ruff code style, PyPI downloads, MCP Protocol, Code Mode, Local-First Security, Observability Built-in. Anchor links to corresponding sections. 11 badges total, 2-row visual layout. No code/logic change.

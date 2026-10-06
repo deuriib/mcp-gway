@@ -1,10 +1,16 @@
 [project]
 name = "mcp-gway"
-version = "4.5.3"
+version = "4.5.4"
 description = "One MCP endpoint for every server your agent needs — Code Mode discovers schemas on demand."
 readme = "README.md"
 authors = [
     { name = "Deuri Vasquez", email = "deuriib@gmail.com" }
+]
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 requires-python = ">=3.12"
 dependencies = [
