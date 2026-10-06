@@ -1,4 +1,8 @@
 # CHANGELOG
+## [4.5.3] — 2026-10-06
+
+- **docs(readme)**: product-focused badge set — CI/Release status, Ruff code style, PyPI downloads, MCP Protocol, Code Mode, Local-First Security, Observability Built-in. Anchor links to corresponding sections. 11 badges total, 2-row visual layout. No code/logic change.
+- **chore(omp)**: add .omp/ directory with README badges plan artifact.
 ## [4.5.2] — 2026-10-06
 
 - **fix(pi-ext)**: card injection fallback for omp — `oh-my-pi` 18.6.1 emits `before_agent_start` without `systemPromptOptions`, so the section write threw and the UI warned `Gateway Protocol card not injected`. The handler now returns a `systemPrompt` override (card appended, deduped by marker) when sections are absent; the Pi section path is unchanged. Regression test in `tests/pi_extension.test.mjs` + troubleshooting row in `plugins/pi/INSTALL.md`.

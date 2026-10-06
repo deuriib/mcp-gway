@@ -1,8 +1,16 @@
 # MCP Gateway
 
+[![Tests](https://github.com/deuriib/mcp-gateway/actions/workflows/test.yml/badge.svg)](https://github.com/deuriib/mcp-gateway/actions/workflows/test.yml)
+[![Release](https://github.com/deuriib/mcp-gateway/actions/workflows/release.yml/badge.svg)](https://github.com/deuriib/mcp-gateway/actions/workflows/release.yml)
 [![PyPI version](https://badge.fury.io/py/mcp-gway.svg)](https://pypi.org/project/mcp-gway/)
 [![Python](https://img.shields.io/pypi/pyversions/mcp-gway)](https://pypi.org/project/mcp-gway/)
 [![License](https://img.shields.io/pypi/l/mcp-gway)](https://github.com/deuriib/mcp-gateway/blob/main/LICENSE)
+[![Code Style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![PyPI Downloads](https://static.pepy.tech/badge/mcp-gway/month)](https://pepy.tech/project/mcp-gway)
+[![MCP Protocol](https://img.shields.io/badge/MCP-Protocol-blue?logo=modelcontextprotocol)](https://modelcontextprotocol.io/)
+[![Code Mode](https://img.shields.io/badge/Code%20Mode-Lazy%20Discovery-purple)](#code-mode)
+[![Local-First Security](https://img.shields.io/badge/Local--First-Security-green)](#local-first-security)
+[![Observability Built-in](https://img.shields.io/badge/Observability-Built--in-orange)](#observability-logs-metrics-health-approach-c-v240)
 
 One endpoint for every MCP server your agent needs — so it reads tool schemas on demand instead of loading them all upfront.
 
