@@ -371,9 +371,22 @@ export default function (pi: ExtensionAPI) {
       // prompt section: Pi wraps it in a tag and records a transcript delta,
       // instead of replacing the whole prompt for this turn.
       if (alreadyPresent(event.systemPrompt)) return;
-      const { sections } = event.systemPromptOptions;
-      if (sections[SECTION_KEY] === card) return;
-      sections[SECTION_KEY] = card;
+      const sections = event.systemPromptOptions?.sections;
+      if (sections) {
+        if (sections[SECTION_KEY] === card) return;
+        sections[SECTION_KEY] = card;
+        return;
+      }
+      // omp (oh-my-pi) emits `before_agent_start` without
+      // `systemPromptOptions`; request an explicit full-prompt replacement so
+      // the card still lands and the handler returns without throwing.
+      const systemPrompt =
+        typeof event.systemPrompt === "string" ? event.systemPrompt : "";
+      return {
+        systemPrompt: alreadyPresent(systemPrompt)
+          ? systemPrompt
+          : `${systemPrompt}${systemPrompt.endsWith("\n") || systemPrompt === "" ? "" : "\n\n"}${card}\n`,
+      };
     } catch (error) {
       // Never let a card injection failure abort the turn.
       warn(`card injection skipped: ${(error as Error)?.message ?? error}`);

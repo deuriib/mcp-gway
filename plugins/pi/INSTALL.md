@@ -92,7 +92,7 @@ pi install ./mcp-gway -l
 |---|---|---|
 | `[mcp-gateway] could not read rules/mcp-gway.md` | Extension copied without the repo's `rules/` dir | Keep `rules/mcp-gway.md` next to the package, or accept the embedded fallback card |
 | Gateway tools missing | `uvx mcp-gway` not on PATH | Install `mcp-gway` so `uvx mcp-gway serve` resolves |
-| Duplicate cards in prompt | Two extensions injecting (e.g. this one plus another) | Remove the duplicate — the card is keyed and deduped by marker within this extension |
+| `mcp-gateway: Gateway Protocol card not injected` (omp) | `oh-my-pi` emits `before_agent_start` without `systemPromptOptions` | Update to the version with the `systemPrompt` return-value fallback — the card is returned as a prompt override instead of a section |
 | Card present but agent ignores the order | System prompt replaced by another handler | Check that no other extension sets `forceSystemPrompt` |
 
 ---

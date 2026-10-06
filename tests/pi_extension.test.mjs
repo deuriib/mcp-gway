@@ -97,6 +97,13 @@ check("injects card when system prompt is empty", () => {
 	handlerFor(api)(event, {});
 	assert.ok(event.systemPromptOptions.sections["mcp-gateway"]);
 });
+check("returns a systemPrompt replacement when options are missing (omp)", () => {
+	const { api } = makePi();
+	ext.default(api);
+	const event = { systemPrompt: "", systemPromptOptions: undefined };
+	const result = handlerFor(api)(event, {});
+	assert.ok(result?.systemPrompt?.includes("MCP Rules — Gateway Protocol"));
+});
 
 check("does not duplicate when MARKER already in system prompt", () => {
 	const { api } = makePi();
