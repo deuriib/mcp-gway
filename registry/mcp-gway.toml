@@ -1,0 +1,7 @@
+description = "MCP Gateway - One connection to manage MCP servers"
+version_order = "source"
+bins = ["mcp-gway"]
+test = { cmd = "mcp-gway --version", expected = "{{version}}" }
+
+[[backends]]
+full = "github:deuriib/mcp-gway"
