@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.6.2 (2026-10-10)
+
+### Bug Fixes
+
+- **ci**: Publish in-run so automated tags cannot skip the release
+  ([`a888340`](https://github.com/deuriib/mcp-gway/commit/a888340b2b70c4a3af2984b8f527e6a44c7eca6c))
+
+
 ## v4.6.1 (2026-10-10)
 
 ### Bug Fixes
