@@ -33,7 +33,8 @@ const check = (name, fn) => {
 };
 
 // Full ExtensionAPI stub: card injection + gw_* tools + session inventory.
-// MCP registration is native (pi.registerMcpServer) — no .mcp.json.
+// MCP registration is declarative (repo-root mcp.json) — the extension never
+// calls pi.registerMcpServer; stubs stay only to prove zero calls.
 function makePi(execImpl) {
 	const handlers = new Map();
 	const tools = new Map();
@@ -195,14 +196,17 @@ check("registers the 6 meta-tools", () => {
 	}
 });
 
-check("registers gateway natively via pi.registerMcpServer (uvx mcp-gway serve)", () => {
+check("never calls pi.registerMcpServer (declarative mcp.json owns registration)", () => {
 	const { api, mcpCalls } = makePi();
 	ext.default(api);
-	assert.equal(mcpCalls.length, 1);
-	assert.equal(mcpCalls[0].name, "gateway");
-	assert.equal(mcpCalls[0].config.command, "uvx");
-	assert.deepEqual(mcpCalls[0].config.args, ["mcp-gway", "serve"]);
-	assert.ok(mcpCalls[0].config.description.includes("Single MCP endpoint"));
+	assert.equal(mcpCalls.length, 0);
+});
+
+check("declares gateway in repo-root mcp.json (uvx mcp-gway serve)", () => {
+	const raw = readFileSync(resolve(here, "..", "mcp.json"), "utf8");
+	const config = JSON.parse(raw);
+	assert.equal(config.mcpServers.gateway.command, "uvx");
+	assert.deepEqual(config.mcpServers.gateway.args, ["mcp-gway", "serve"]);
 });
 
 check("gw_list shells out to uvx mcp-gway tools list", async () => {
