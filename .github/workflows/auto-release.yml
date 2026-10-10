@@ -88,13 +88,14 @@ jobs:
       - name: Release (commit, tag, push)
         if: steps.guard.outputs.skip != 'true'
         run: |
-          FLAGS="--no-vcs-release -v"
+          GLOBAL="-v"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            GLOBAL="$GLOBAL --noop"
+          fi
+          FLAGS="--no-vcs-release"
           case "${{ inputs.bump }}" in
             major) FLAGS="$FLAGS --major" ;;
             minor) FLAGS="$FLAGS --minor" ;;
             patch) FLAGS="$FLAGS --patch" ;;
           esac
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            FLAGS="$FLAGS --noop"
-          fi
-          uv run semantic-release version $FLAGS
+          uv run semantic-release $GLOBAL version $FLAGS
