@@ -48,6 +48,11 @@ on:
         required: false
         default: ""
         type: string
+      npm_tag:
+        description: 'npm dist-tag for republishes of older versions (e.g. backfill-4.6.1; empty = latest)'
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write # commit version sync + create annotated tag + GitHub Release
@@ -249,7 +254,11 @@ jobs:
       - name: Publish to npm (OIDC trusted publishing)
         run: |
           npm -v
-          npm publish
+          if [ -n "${{ inputs.npm_tag }}" ]; then
+            npm publish --tag "${{ inputs.npm_tag }}"
+          else
+            npm publish
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.3.2
