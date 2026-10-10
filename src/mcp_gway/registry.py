@@ -86,6 +86,7 @@ class Registry:
         config_data: dict[str, Any] = {
             "name": config.name,
             "type": config.type,
+            "description": getattr(config, "description", "") or "",
             "enabled": config.enabled,
             "timeout": config.timeout,
             "is_code_mode_client": getattr(config, "is_code_mode_client", True),
@@ -349,6 +350,12 @@ class Registry:
             f"# Use sanitized names in executeToolCode as {cap_name}.tool_name(...).",
             "",
         ]
+        raw_desc = str(getattr(config, "description", "") or "").strip()
+        if raw_desc:
+            first = raw_desc.splitlines()[0].strip()
+            if first:
+                short = first if len(first) <= 200 else first[:199] + "…"
+                lines.insert(1, f"# Description: {short}")
         for tool in tools:
             sig = self._make_signature(tool)
             desc = tool.description or ""

@@ -996,6 +996,15 @@ class MCPServerConfig(BaseModel):
 
     name: str
     type: Literal["local", "remote"]
+    description: str = Field(default="")
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def validate_description(cls, v: object) -> str:
+        if v is None:
+            return ""
+        text = str(v).strip()
+        return text[:500]
 
     @field_validator("name")
     @classmethod

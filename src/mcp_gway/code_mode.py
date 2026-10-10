@@ -232,6 +232,19 @@ class CodeMode:
                 names.append(safe)
         return sorted(names)
 
+    def _server_description(self, server: str) -> str:
+        """First-line server description, truncated for VFS listings."""
+        try:
+            raw = str(
+                getattr(self.registry.get_config(server), "description", "") or ""
+            )
+        except Exception:
+            return ""
+        first = raw.splitlines()[0].strip() if raw.strip() else ""
+        if not first:
+            return ""
+        return first if len(first) <= 80 else first[:79] + "…"
+
     def list_tool_files(self, binding_level: str | None = None) -> str:
         level = binding_level or self.binding_level
         if level not in _VALID_BINDINGS:
@@ -246,10 +259,12 @@ class CodeMode:
         lines = ["servers/"]
         if level == "server":
             for name in names:
-                lines.append(f"  {name}.pyi")
+                desc = self._server_description(name)
+                lines.append(f"  {name}.pyi  # {desc}" if desc else f"  {name}.pyi")
         else:
             for name in names:
-                lines.append(f"  {name}/")
+                desc = self._server_description(name)
+                lines.append(f"  {name}/  # {desc}" if desc else f"  {name}/")
                 for tool in self._tool_file_names(name):
                     lines.append(f"    {tool}.pyi")
         return "\n".join(lines)
