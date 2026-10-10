@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.7.0 (2026-10-10)
+
+### Features
+
+- **servers**: Show server description in list, listToolFiles and admin
+  ([`100dd14`](https://github.com/deuriib/mcp-gway/commit/100dd141a1663afdc33f8b301123f087b7314105))
+
+
 ## v4.6.3 (2026-10-10)
 
 ### Bug Fixes
