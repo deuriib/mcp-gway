@@ -43,7 +43,7 @@ import { fileURLToPath } from "node:url";
  * a missing CLI must never break session start.
  */
 
-const MARKER = "MCP-GWAY v4.6.2";
+const MARKER = "MCP-GWAY v4.6.3";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const SECTION_KEY = "mcp-gateway";
 const MAX_RULES_BYTES = 256 * 1024;

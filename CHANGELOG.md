@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.6.3 (2026-10-10)
+
+### Bug Fixes
+
+- **ci**: Allow explicit npm dist-tag for republishes
+  ([`29e8c84`](https://github.com/deuriib/mcp-gway/commit/29e8c8465a73c68d118fdbd05744c50a0b0ba2f2))
+
+
 ## v4.6.2 (2026-10-10)
 
 ### Bug Fixes
