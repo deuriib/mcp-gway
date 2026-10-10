@@ -1,19 +1,26 @@
 name: Auto Release
 
-# Full-auto tag + CHANGELOG via python-semantic-release. On every push to
-# master (i.e. a merged PR): detect bump from conventional commits
-# (feat=minor, fix/perf=patch, BREAKING=major), write versions, run
-# bump-version.mjs --write (build_command, syncs all owned surfaces),
-# prepend the CHANGELOG entry, commit, create an annotated tag, push both.
-# Pushing the tag triggers Release (tag-only publisher) unchanged.
+# Full-auto release via python-semantic-release. On every push to master
+# (i.e. a merged PR): detect bump from conventional commits (feat=minor,
+# fix/perf=patch, BREAKING=major), write versions, run bump-version.mjs
+# --write (build_command, syncs all owned surfaces), prepend the CHANGELOG
+# entry, commit, create an annotated tag, push both — then publish to PyPI +
+# npm and create the GitHub Release in the publish job below.
 #
-# --no-vcs-release by design: GitHub Release creation stays in Release, which
-# also publishes PyPI + npm and attaches dist artifacts.
+# Publish lives in THIS workflow (same run) by design: pushes made with
+# GITHUB_TOKEN never trigger downstream workflows, so a tag pushed here
+# would never fire release.yml. release.yml stays untouched as the manual
+# fallback: pushing a tag with your own credentials still publishes through
+# it. Mirror note: the publish job duplicates release.yml's steps — keep
+# the two in sync (pins, gates, notes extraction).
+#
+# --no-vcs-release by design: the GitHub Release is created by the publish
+# job / release.yml, never by semantic-release.
 #
 # Loop guard: release commits are `chore(release-X.Y.Z): ...` (commit_message
-# in pyproject) and the job exits early on them, so the version-commit push
-# never re-releases. Non-releasable pushes (docs/chore/ci/test only) exit
-# cleanly with no tag.
+# in pyproject) and the release job exits early on them, so the
+# version-commit push never re-releases. Non-releasable pushes
+# (docs/chore/ci/test only) exit cleanly with no tag and no publish.
 #
 # Manual use: Actions -> Auto Release -> Run workflow (bump=auto|major|minor|patch,
 # dry_run=true runs everything in --noop mode and changes nothing).
@@ -43,9 +50,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  auto-release:
+  release:
     name: Semantic release
     runs-on: ubuntu-24.04
+    outputs:
+      released: ${{ steps.report.outputs.released }}
+      version: ${{ steps.report.outputs.version }}
+      sha: ${{ steps.report.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -99,3 +110,130 @@ jobs:
             patch) FLAGS="$FLAGS --patch" ;;
           esac
           uv run semantic-release $GLOBAL version $FLAGS
+
+      - name: Report release outcome
+        id: report
+        if: always()
+        run: |
+          MSG="$(git log -1 --pretty=format:%s)"
+          if [[ "$MSG" =~ ^chore\(release-([0-9]+\.[0-9]+\.[0-9]+[^\)]*)\) ]]; then
+            VER="${BASH_REMATCH[1]}"
+            if git rev-parse "v$VER^{commit}" >/dev/null 2>&1; then
+              echo "released=true" >> "$GITHUB_OUTPUT"
+              echo "version=$VER" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "Released v$VER."
+              exit 0
+            fi
+          fi
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          echo "version=" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "No release made."
+
+  publish:
+    name: Publish ${{ needs.release.outputs.version }}
+    needs: [release]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create GitHub Release + attach artifacts
+      id-token: write # PyPI + npm trusted publishing (OIDC)
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcp-gway/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify tag points at merged code
+        run: |
+          git fetch origin +master:refs/remotes/origin/master
+          SHA="$(git rev-parse "refs/tags/v${{ needs.release.outputs.version }}^{commit}")"
+          git merge-base --is-ancestor "$SHA" origin/master || {
+            echo "::error::tag v${{ needs.release.outputs.version }} ($SHA) is not on master — releases only come from merged PR code"
+            exit 1
+          }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          # Pinned exact: npm trusted publishing requires npm >= 11.5.1, and
+          # Node 22 does not ship it (22.23.3 bundles npm 10.9.9). 24.21.0 ships 11.19.0.
+          node-version: "24.21.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6.8.0
+        with:
+          enable-cache: true
+
+      - name: Verify tag matches package version
+        run: |
+          TAG="${{ needs.release.outputs.version }}"
+          PKG="$(node -p "require('./package.json').version")"
+          test "$TAG" = "$PKG" || {
+            echo "::error::tag v$TAG != package.json $PKG — bump first, then tag"
+            exit 1
+          }
+          grep -q "__version__ = \"$TAG\"" src/mcp_gway/__init__.py || {
+            echo "::error::src/mcp_gway/__init__.py drifts from tag v$TAG"
+            exit 1
+          }
+
+      - name: Verify version sync
+        run: node scripts/bump-version.mjs --check
+
+      - name: Run test suite
+        run: |
+          uv sync --all-groups
+          uv run ruff check src/ tests/
+          uv run ruff format --check src/ tests/
+          uv run pytest
+
+      - name: Extract release notes
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          awk -v ver="$VERSION" '/^## /{if(capture)exit; if(index($0,ver)){capture=1; next}} capture{print}' CHANGELOG.md | sed '/./,$!d' > release-notes.md
+          test -s release-notes.md || {
+            echo "::error::no CHANGELOG.md entry for $VERSION"
+            exit 1
+          }
+          {
+            echo "## mcp-gway v$VERSION"
+            echo
+            cat release-notes.md
+            echo
+            echo "Install: \`pip install mcp-gway==$VERSION\`"
+          } > release-notes.md.tmp && mv release-notes.md.tmp release-notes.md
+
+      - name: Build distribution
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.13.0
+        with:
+          verbose: true
+
+      - name: Publish to npm (OIDC trusted publishing)
+        run: |
+          npm -v
+          npm publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.3.2
+        with:
+          tag_name: v${{ needs.release.outputs.version }}
+          body_path: release-notes.md
+          files: dist/*
+          generate_release_notes: false
