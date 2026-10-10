@@ -526,6 +526,7 @@ async def p_add_server(request: Request) -> Response:
     enabled = str(form.get("enabled", "")) in ("on", "true", "1")
     retry = str(form.get("retry_on_transport_error", "")) in ("on", "true", "1")
     tools_raw = str(form.get("tools", "*")).strip() or "*"
+    description_raw = str(form.get("description", "")).strip()[:500]
     tool_filter = (
         ["*"]
         if tools_raw == "*"
@@ -558,6 +559,7 @@ async def p_add_server(request: Request) -> Response:
             config = MCPServerConfig(
                 name=name,
                 type="local",
+                description=description_raw,
                 command=cmd_parts,
                 cwd=resolved_cwd,
                 environment=environment,
@@ -600,6 +602,7 @@ async def p_add_server(request: Request) -> Response:
             config = MCPServerConfig(
                 name=name,
                 type="remote",
+                description=description_raw,
                 url=url,
                 headers=headers,
                 oauth=oauth_config,
@@ -633,6 +636,15 @@ async def p_add_server(request: Request) -> Response:
         )
         if not recheck.allowed:
             return _error(recheck.message)
+    if not description_raw:
+        try:
+            from mcp_gway.core.client import fetch_server_description
+
+            fetched = await fetch_server_description(config)
+            if fetched.strip():
+                config.description = fetched.strip()[:500]
+        except Exception:
+            pass
     registry.add(
         config, [ToolInfo(name=t.name, description=t.description) for t in discovered]
     )
@@ -739,6 +751,16 @@ async def _refresh_one(
             False,
             f"No tools discovered for {name} — authenticate first for OAuth servers, then try Refresh again.",
         )
+    if not str(getattr(config, "description", "") or "").strip():
+        try:
+            from mcp_gway.core.client import fetch_server_description
+
+            fetched = await fetch_server_description(config)
+            if fetched.strip():
+                config.description = fetched.strip()[:500]
+                registry.set_config(config)
+        except Exception:
+            pass
     registry.update(name, discovered)
     return True, f"Refreshed {name} with {len(discovered)} tools."
 
@@ -945,6 +967,8 @@ async def p_set_config(request: Request) -> Response:
     data = config.model_dump()
     data["timeout"] = timeout
     data["enabled"] = enabled
+    if form.get("description") is not None:
+        data["description"] = str(form.get("description", "")).strip()[:500]
     data["tools_to_execute"] = tool_filter
     if config.type == "local":
         command_raw = str(form.get("command", "")).strip()

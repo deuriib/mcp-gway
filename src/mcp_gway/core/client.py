@@ -280,6 +280,58 @@ async def create_client_transport(
             yield read, write
 
 
+async def fetch_server_description(
+    config: MCPServerConfig,
+    *,
+    force_auth: bool = False,
+) -> str:
+    """Return the upstream server description (`initialize.instructions`).
+
+    Fail-open to "": any transport/auth/timeout failure yields "" so callers
+    can fall back to the manual value. Truncated to 500 chars (model limit).
+    """
+    try:
+        from mcp import ClientSession
+
+        raw_timeout = getattr(config, "timeout", 5000)
+        timeout_sec = (
+            5 if raw_timeout is None or raw_timeout <= 0 else raw_timeout / 1000
+        )
+        async with asyncio.timeout(timeout_sec):
+            async with create_client_transport(config, force_auth=force_auth) as (
+                read,
+                write,
+            ):
+                async with ClientSession(read, write) as session:
+                    result = await session.initialize()
+                    raw = getattr(result, "instructions", None)
+                    if not raw or not str(raw).strip():
+                        return ""
+                    return str(raw).strip()[:500]
+    except Exception:
+        logger.debug("Could not fetch description for server %s", config.name)
+        return ""
+
+
+async def resolve_server_description(
+    explicit: str | None,
+    config: MCPServerConfig,
+    *,
+    force_auth: bool = False,
+) -> str:
+    """Manual-wins resolution: explicit text when non-blank, else upstream.
+
+    Never overwrites a manual value with auto text; auto failures yield "".
+    """
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()[:500]
+    stored = str(getattr(config, "description", "") or "").strip()
+    if stored:
+        return stored[:500]
+    fetched = await fetch_server_description(config, force_auth=force_auth)
+    return fetched
+
+
 async def discover_tools(
     config: MCPServerConfig,
     *,

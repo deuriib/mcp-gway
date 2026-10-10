@@ -17,6 +17,7 @@ class ServerRow:
     detail: str
     has_oauth: bool
     is_code_mode: bool
+    description: str = ""
 
 
 def _tool_count(registry: Registry, name: str) -> int:
@@ -35,6 +36,12 @@ def _detail(config: MCPServerConfig | None) -> str:
     if config.type == "local":
         return " ".join(config.command or [])
     return config.url or ""
+
+
+def _description(config: MCPServerConfig | None) -> str:
+    if config is None:
+        return ""
+    return str(getattr(config, "description", "") or "")
 
 
 def server_rows(registry: Registry) -> list[ServerRow]:
@@ -58,6 +65,7 @@ def server_rows(registry: Registry) -> list[ServerRow]:
                 if config and config.oauth is not None
                 else False,
                 is_code_mode=bool(getattr(config, "is_code_mode_client", True)),
+                description=_description(config),
             )
         )
     rows.sort(key=lambda r: not r.enabled)
@@ -65,10 +73,14 @@ def server_rows(registry: Registry) -> list[ServerRow]:
 
 
 def filter_rows(rows: list[ServerRow], q: str) -> list[ServerRow]:
-    """Case-insensitive substring match on name and detail (search input)."""
+    """Case-insensitive substring match on name, detail and description (search input)."""
     needle = q.strip().casefold()
     if not needle:
         return rows
     return [
-        r for r in rows if needle in r.name.casefold() or needle in r.detail.casefold()
+        r
+        for r in rows
+        if needle in r.name.casefold()
+        or needle in r.detail.casefold()
+        or needle in r.description.casefold()
     ]

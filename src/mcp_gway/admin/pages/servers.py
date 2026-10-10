@@ -165,19 +165,35 @@ def server_row(row: ServerRow) -> Element:
         ),
     ]
     return div({"id": f"row-{row.name}", "class": row_classes})[
-        div({"class": "flex items-center gap-2 min-w-0"})[
-            a(
-                {
-                    "href": f"/admin/servers/{row.name}",
-                    "class": (
-                        f"text-[16px] font-bold text-[{theme.TEXT}] truncate hover:underline"
-                    ),
-                }
-            )[row.name],
-            badge("disabled", tone="gray") if not row.enabled else None,
-            span({"class": (f"text-[12px] text-[{theme.TEXT_SILVER}] truncate")})[
-                row.detail
+        div({"class": "flex flex-col min-w-0"})[
+            div({"class": "flex items-center gap-2 min-w-0"})[
+                a(
+                    {
+                        "href": f"/admin/servers/{row.name}",
+                        "class": (
+                            f"text-[16px] font-bold text-[{theme.TEXT}] truncate hover:underline"
+                        ),
+                    }
+                )[row.name],
+                badge("disabled", tone="gray") if not row.enabled else None,
+                span({"class": (f"text-[12px] text-[{theme.TEXT_SILVER}] truncate")})[
+                    row.detail
+                ],
             ],
+            span(
+                {
+                    "class": (f"text-[12px] text-[{theme.TEXT_SILVER}] truncate"),
+                    "title": row.description.splitlines()[0].strip()
+                    if row.description.strip()
+                    else "",
+                }
+            )[
+                row.description.splitlines()[0].strip()[:120]
+                if row.description.strip()
+                else ""
+            ]
+            if row.description.strip()
+            else None,
         ],
         div({"class": "min-w-0"})[_type_badge(row.type)],
         div({"class": "min-w-0"})[_tools_badge(row.tool_count)],
@@ -277,6 +293,10 @@ def add_server_form(
                 ),
             ),
         ],
+        _field(
+            "Description",
+            text_input("description", placeholder="What this server is for"),
+        ),
         p({"class": (f"text-[12px] text-[{theme.TEXT_SILVER}]")})[
             "Fill the section matching the type."
         ],
@@ -435,6 +455,14 @@ def detail_config_inner(
                 tone="green" if row.enabled else "gray",
             ),
         ),
+        kv_row(
+            "Description",
+            span({"class": "truncate", "title": row.description or ""})[
+                row.description.splitlines()[0].strip()[:200]
+                if row.description.strip()
+                else "—"
+            ],
+        ),
         kv_row("Timeout", span({"class": "tabular"})[f"{config.timeout} ms"]),
         kv_row("Tools filter", ", ".join(config.tools_to_execute) or "*"),
     ]
@@ -521,6 +549,14 @@ def _edit_config_details(
             _field("Timeout (ms)", text_input("timeout", value=str(config.timeout))),
             _field("Tools filter", text_input("tools_filter", value=tools_filter)),
         ],
+        _field(
+            "Description",
+            text_input(
+                "description",
+                value=str(getattr(config, "description", "") or ""),
+                placeholder="What this server is for — blank keeps current",
+            ),
+        ),
     ]
     if config.type == "local":
         fields.append(

@@ -118,6 +118,11 @@ def main() -> None:
 @click.option("--oauth-client-id", default=None, help="OAuth client ID")
 @click.option("--oauth-client-secret", default=None, help="OAuth client secret")
 @click.option("--oauth-scope", default=None, help="OAuth scope")
+@click.option(
+    "--description",
+    default=None,
+    help="Short server description (auto-filled from server instructions when omitted)",
+)
 @click.option("--timeout", type=int, default=5000, help="Timeout ms")
 @click.option(
     "--retry-on-transport-error",
@@ -146,6 +151,7 @@ def add(
     oauth_client_id: str | None,
     oauth_client_secret: str | None,
     oauth_scope: str | None,
+    description: str | None,
     timeout: int,
     enabled: bool,
     retry_on_transport_error: bool,
@@ -325,6 +331,9 @@ def add(
             click.echo(f"Error: {_re.message}", err=True)
             sys.exit(1)
     registry = _get_registry()
+    from mcp_gway.core.client import resolve_server_description
+
+    config.description = asyncio.run(resolve_server_description(description, config))
     registry.add(config, discovered)
     click.echo(f"Added {name} with {len(discovered)} tools.")
     _log_cli_event(
@@ -388,11 +397,17 @@ def list_servers() -> None:
             config = registry.get_config(name)
             conn_type = _get_config_display_type(config)
             enabled = getattr(config, "enabled", True)
+            server_desc = str(getattr(config, "description", "") or "")
         except Exception:
             conn_type = "http"
             enabled = True
+            server_desc = ""
         suffix = " (disabled)" if not enabled else ""
         click.echo(f"{name:<20} {conn_type.upper():<10} {tool_count:<8}{suffix}")
+        first = server_desc.splitlines()[0].strip() if server_desc.strip() else ""
+        if first:
+            short = first if len(first) <= 100 else first[:99] + "…"
+            click.echo(f"  {short}")
 
 
 @main.command()
@@ -984,6 +999,16 @@ def refresh(name: str | None, auth: bool, oauth_port: int) -> None:
             )
             continue
 
+        if not str(getattr(config, "description", "") or "").strip():
+            try:
+                from mcp_gway.core.client import fetch_server_description
+
+                fetched = asyncio.run(fetch_server_description(config))
+                if fetched.strip():
+                    config.description = fetched.strip()[:500]
+                    registry.set_config(config)
+            except Exception:
+                pass
         registry.update(server_name, discovered)
         click.echo(f"Refreshed {server_name} with {len(discovered)} tools.")
         _log_cli_event(
