@@ -80,3 +80,6 @@ junit.xml
 .claude/skills/
 /.impeccable/surfaces
 node_modules/
+
+# Oh-my-pi (OMP)
+.omp/plugins/

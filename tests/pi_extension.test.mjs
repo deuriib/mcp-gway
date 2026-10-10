@@ -9,6 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // Keep command/arg/timeout assertions on the uvx contract exact.
 const CLI = "uvx";
 const CLI_PREFIX = ["mcp-gway", "tools"];
+const CLI_ROOT = ["mcp-gway"];
 const LIST_TIMEOUT_MS = 15_000;
 const CMD_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -32,12 +33,14 @@ const check = (name, fn) => {
 };
 
 // Full ExtensionAPI stub: card injection + gw_* tools + session inventory.
-// MCP registration is declarative (.mcp.json) — the extension registers no servers.
+// MCP registration is native (pi.registerMcpServer) — no .mcp.json.
 function makePi(execImpl) {
 	const handlers = new Map();
 	const tools = new Map();
 	const sent = [];
 	const execCalls = [];
+	const mcpCalls = [];
+	const notified = [];
 	const api = {
 		on: (event, handler) => {
 			handlers.set(event, handler);
@@ -45,6 +48,13 @@ function makePi(execImpl) {
 		},
 		registerTool: (tool) => {
 			tools.set(tool.name, tool);
+		},
+		registerMcpServer: (name, config) => {
+			mcpCalls.push({ name, config });
+		},
+		unregisterMcpServer: (name) => {
+			const idx = mcpCalls.findIndex((c) => c.name === name);
+			if (idx >= 0) mcpCalls.splice(idx, 1);
 		},
 		exec: async (command, args, options) => {
 			execCalls.push({ command, args, options });
@@ -59,8 +69,21 @@ function makePi(execImpl) {
 		tools,
 		sent,
 		execCalls,
+		mcpCalls,
+		notified,
 	};
-	return { handlers, tools, sent, execCalls, api };
+	return { handlers, tools, sent, execCalls, mcpCalls, notified, api };
+}
+
+function notifyCtx(api) {
+	return {
+		hasUI: true,
+		ui: {
+			notify: (message, type) => {
+				api.notified.push({ message, type });
+			},
+		},
+	};
 }
 
 const card = readFileSync(resolve(here, "..", "rules", "mcp-gway.md"), "utf8");
@@ -164,18 +187,22 @@ check("card carries the mandatory 4-step order", () => {
 	}
 });
 
-check("registers the 4 meta-tools", () => {
+check("registers the 6 meta-tools", () => {
 	const { api } = makePi();
 	ext.default(api);
-	for (const name of ["gw_list", "gw_read", "gw_docs", "gw_exec"]) {
+	for (const name of ["gw_list", "gw_read", "gw_docs", "gw_exec", "gw_add", "gw_remove"]) {
 		assert.ok(api.tools.has(name), `missing tool ${name}`);
 	}
 });
 
-check("declares gateway over stdio in .mcp.json (uvx mcp-gway serve)", () => {
-	const raw = readFileSync(resolve(here, "..", ".mcp.json"), "utf8");
-	const data = JSON.parse(raw);
-	assert.deepEqual(data.mcpServers.gateway, { command: "uvx", args: ["mcp-gway", "serve"] });
+check("registers gateway natively via pi.registerMcpServer (uvx mcp-gway serve)", () => {
+	const { api, mcpCalls } = makePi();
+	ext.default(api);
+	assert.equal(mcpCalls.length, 1);
+	assert.equal(mcpCalls[0].name, "gateway");
+	assert.equal(mcpCalls[0].config.command, "uvx");
+	assert.deepEqual(mcpCalls[0].config.args, ["mcp-gway", "serve"]);
+	assert.ok(mcpCalls[0].config.description.includes("Single MCP endpoint"));
 });
 
 check("gw_list shells out to uvx mcp-gway tools list", async () => {
@@ -298,13 +325,15 @@ check("empty CLI output reports (no output)", async () => {
 	assert.ok(res.content[0].text.includes("(no output)"));
 });
 
-check("session_start publishes a hidden server inventory", async () => {
+check("session_start probes uvx then publishes a hidden server inventory", async () => {
 	const { api, execCalls, sent } = makePi();
 	ext.default(api);
 	await api.handlers.get("session_start")({ type: "session_start", reason: "startup" }, {});
 	assert.equal(execCalls[0].command, CLI);
-	assert.deepEqual(execCalls[0].args, [...CLI_PREFIX, "list"]);
-	assert.equal(execCalls[0].options.timeout, LIST_TIMEOUT_MS);
+	assert.deepEqual(execCalls[0].args, ["--version"]);
+	assert.equal(execCalls[1].command, CLI);
+	assert.deepEqual(execCalls[1].args, [...CLI_PREFIX, "list"]);
+	assert.equal(execCalls[1].options.timeout, LIST_TIMEOUT_MS);
 	assert.equal(sent.length, 1);
 	assert.equal(sent[0].customType, "mcp-gateway-servers");
 	assert.equal(sent[0].display, false);
@@ -318,6 +347,86 @@ check("session_start degrades silently when the CLI is missing", async () => {
 	ext.default(api);
 	await api.handlers.get("session_start")({ type: "session_start", reason: "startup" }, {});
 	assert.equal(sent.length, 0);
+});
+
+check("session_start without uv notifies with install URL and skips inventory", async () => {
+	const { api, execCalls, sent, notified } = makePi(async (command, args) => {
+		if (args[0] === "--version") throw new Error("spawn uvx ENOENT");
+		return { stdout: "servers/Omniroute.pyi", stderr: "", code: 0 };
+	});
+	ext.default(api);
+	await api.handlers.get("session_start")({ type: "session_start", reason: "startup" }, notifyCtx(api));
+	assert.equal(execCalls.length, 1);
+	assert.deepEqual(execCalls[0].args, ["--version"]);
+	assert.equal(sent.length, 0);
+	assert.equal(notified.length, 1);
+	assert.ok(notified[0].message.includes("'uv' (uvx) was not found on PATH"));
+	assert.ok(notified[0].message.includes("https://docs.astral.sh/uv/"));
+	assert.ok(notified[0].message.includes("/reload"));
+});
+
+check("gw_add local shells out to uvx mcp-gway add with --command", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	const res = await api.tools.get("gw_add").execute("id", { name: "MyServer", type: "local", command: "npx -y x" });
+	assert.equal(execCalls[0].command, CLI);
+	assert.deepEqual(execCalls[0].args, [...CLI_ROOT, "add", "MyServer", "--type", "local", "--command", "npx -y x"]);
+	assert.equal(execCalls[0].options.timeout, CMD_TIMEOUT_MS);
+	assert.ok(!res.content[0].text.startsWith("Error:"));
+});
+
+check("gw_add local forwards env, cwd, timeout and --no-enabled", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	await api.tools.get("gw_add").execute("id", {
+		name: "MyServer",
+		type: "local",
+		command: "npx -y x",
+		tools: "a,b",
+		env: ["KEY=VALUE"],
+		headers: ["H=V"],
+		cwd: "/tmp",
+		enabled: false,
+		timeout: 9000,
+	});
+	assert.deepEqual(execCalls[0].args, [
+		...CLI_ROOT, "add", "MyServer", "--type", "local",
+		"--command", "npx -y x", "--tools", "a,b",
+		"--env", "KEY=VALUE", "--header", "H=V",
+		"--cwd", "/tmp", "--no-enabled", "--timeout", "9000",
+	]);
+});
+
+check("gw_add remote shells out with --url", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	await api.tools.get("gw_add").execute("id", { name: "Remote", type: "remote", url: "https://example.com/mcp" });
+	assert.deepEqual(execCalls[0].args, [...CLI_ROOT, "add", "Remote", "--type", "remote", "--url", "https://example.com/mcp"]);
+});
+
+check("gw_add local without command returns usage error with zero exec calls", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	const res = await api.tools.get("gw_add").execute("id", { name: "Foo", type: "local" });
+	assert.equal(execCalls.length, 0);
+	assert.ok(res.content[0].text.includes("local servers need `command`"));
+});
+
+check("gw_add remote without url returns usage error with zero exec calls", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	const res = await api.tools.get("gw_add").execute("id", { name: "Foo", type: "remote" });
+	assert.equal(execCalls.length, 0);
+	assert.ok(res.content[0].text.includes("remote servers need `url`"));
+});
+
+check("gw_remove shells out to uvx mcp-gway remove", async () => {
+	const { api, execCalls } = makePi();
+	ext.default(api);
+	await api.tools.get("gw_remove").execute("id", { name: "Foo" });
+	assert.equal(execCalls[0].command, CLI);
+	assert.deepEqual(execCalls[0].args, [...CLI_ROOT, "remove", "Foo"]);
+	assert.equal(execCalls[0].options.timeout, CMD_TIMEOUT_MS);
 });
 
 check("gw_read without tool omits --tool flag", async () => {

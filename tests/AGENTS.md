@@ -12,7 +12,7 @@ Mirror of `src/` layout; hermetic DNS stub + shared fixtures; full suite <30s ta
 | Shared fixtures | `conftest.py`, `fixtures/` + `helpers/` | `tmp_path` isolation |
 | Unit scope | `test_*.py` per module | asyncio auto, monkeypatch mocks |
 | Policy hardening | `test_policy_local_commands.py`, `test_feat006_harden.py` | bypass + regate cases |
-| Node surface | `pi_extension.test.mjs` | 27 checks incl. `.mcp.json` contract |
+| Node surface | `pi_extension.test.mjs` | 34 checks incl. native `gateway` registration + `gw_add`/`gw_remove` argv + uv-missing notify |
 
 ## GUARDRAILS (THIS DIR)
 
