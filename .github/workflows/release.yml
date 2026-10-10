@@ -1,42 +1,165 @@
 name: Release
 
-# Tag-only releaser. Pushing `vX.Y.Z` is the single release decision:
-# verify version sync -> build -> publish to PyPI + npm -> create GitHub Release.
+# The single release pipeline. On every push to master (i.e. a merged PR):
+# detect bump from conventional commits (feat=minor, fix/perf=patch,
+# BREAKING=major), write versions, run bump-version.mjs --write
+# (build_command, syncs all owned surfaces), prepend the CHANGELOG entry,
+# commit, create an annotated tag, push both — then publish to PyPI + npm
+# and create the GitHub Release in the publish job below.
 #
-# Release process (full-auto, preferred):
-#   merge PR to master -> Auto Release runs `semantic-release version`
-#   (bump from conventional commits, versions via pyproject + version files,
-#   owned surfaces via bump-version.mjs --write, CHANGELOG entry, release
-#   commit + annotated tag vX.Y.Z), pushes commit and tag, then publishes
-#   in its own publish job. Pushes made with GITHUB_TOKEN never trigger
-#   downstream workflows, so this workflow does NOT fire on automated tags
-#   (no double-publish by construction).
-# Manual fallback (unchanged): pushing a tag with your own credentials fires
-#   this workflow directly:
-#   1. node scripts/bump-version.mjs <major|minor|patch>
-#   2. Hand-write the CHANGELOG.md entry
-#   3. git commit && git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
-#      Push the tag explicitly: only annotated tags trigger this workflow.
+# Publish lives in THIS workflow (same run) by design: pushes made with
+# GITHUB_TOKEN never trigger downstream workflows, so splitting version
+# and publish across workflows silently drops releases. The OIDC trusted
+# publishers on PyPI and npm point at this filename + the pypi environment.
 #
-# No workflow_run trigger by design: it double-published every release
-# (once via Tests-success, once via the tag push). No semantic-release:
-# versioning is owned by scripts/bump-version.mjs, this workflow verifies.
+# --no-vcs-release by design: the GitHub Release is created by the publish
+# job below, never by semantic-release.
+#
+# Loop guard: release commits are `chore(release-X.Y.Z): ...` (commit_message
+# in pyproject) and the release job exits early on them, so the
+# version-commit push never re-releases. Non-releasable pushes
+# (docs/chore/ci/test only) exit cleanly with no tag and no publish.
+#
+# Manual use: Actions -> Release -> Run workflow.
+#   bump=auto|major|minor|patch overrides detection.
+#   dry_run=true runs everything in --noop mode and changes nothing.
+#   republish=X.Y.Z republishes an existing tag (e.g. a version that got
+#     tagged but never published); skips version detection, runs the full
+#     publish job for that tag.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Override detected bump type"
+        required: false
+        default: auto
+        type: choice
+        options: [auto, major, minor, patch]
+      dry_run:
+        description: "No-op mode: print plan without changing anything"
+        required: false
+        default: false
+        type: boolean
+      republish:
+        description: "Republish an existing tag (e.g. 4.6.2); skips version detection"
+        required: false
+        default: ""
+        type: string
 
 permissions:
-  contents: write # create GitHub Release + attach artifacts
-  id-token: write # PyPI + npm trusted publishing (OIDC)
+  contents: write # commit version sync + create annotated tag + GitHub Release
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Release ${{ github.ref_name }}
+    name: Semantic release
     runs-on: ubuntu-24.04
-    concurrency:
-      group: release
-      cancel-in-progress: false
+    outputs:
+      released: ${{ steps.report.outputs.released }}
+      version: ${{ steps.report.outputs.version }}
+      sha: ${{ steps.report.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Skip on release commits
+        id: guard
+        run: |
+          MSG="$(git log -1 --pretty=format:%s)"
+          echo "head=$MSG"
+          case "$MSG" in
+            "chore(release-"*) echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Release commit — nothing to do." ;;
+            *) echo "skip=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Set up Python
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "24.21.0"
+
+      - name: Install uv
+        if: steps.guard.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v6.8.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
+        run: uv sync --all-groups
+
+      - name: Release (commit, tag, push)
+        if: steps.guard.outputs.skip != 'true' && inputs.republish == ''
+        run: |
+          GLOBAL="-v"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            GLOBAL="$GLOBAL --noop"
+          fi
+          FLAGS="--no-vcs-release"
+          case "${{ inputs.bump }}" in
+            major) FLAGS="$FLAGS --major" ;;
+            minor) FLAGS="$FLAGS --minor" ;;
+            patch) FLAGS="$FLAGS --patch" ;;
+          esac
+          uv run semantic-release $GLOBAL version $FLAGS
+
+      - name: Report release outcome
+        id: report
+        if: always()
+        run: |
+          if [ -n "${{ inputs.republish }}" ]; then
+            VER="${{ inputs.republish }}"
+            VER="${VER#v}"
+            git fetch origin --tags --quiet
+            if git rev-parse "v$VER^{commit}" >/dev/null 2>&1; then
+              echo "released=true" >> "$GITHUB_OUTPUT"
+              echo "version=$VER" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse "v$VER^{commit}")" >> "$GITHUB_OUTPUT"
+              echo "Republishing v$VER."
+              exit 0
+            fi
+            echo "::error::tag v$VER not found on origin"
+            exit 1
+          fi
+          MSG="$(git log -1 --pretty=format:%s)"
+          if [[ "$MSG" =~ ^chore\(release-([0-9]+\.[0-9]+\.[0-9]+[^\)]*)\) ]]; then
+            VER="${BASH_REMATCH[1]}"
+            if git rev-parse "v$VER^{commit}" >/dev/null 2>&1; then
+              echo "released=true" >> "$GITHUB_OUTPUT"
+              echo "version=$VER" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "Released v$VER."
+              exit 0
+            fi
+          fi
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          echo "version=" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "No release made."
+
+  publish:
+    name: Publish ${{ needs.release.outputs.version }}
+    needs: [release]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create GitHub Release + attach artifacts
+      id-token: write # PyPI + npm trusted publishing (OIDC)
     environment:
       name: pypi
       url: https://pypi.org/p/mcp-gway/
@@ -45,15 +168,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
         with:
+          ref: v${{ needs.release.outputs.version }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Verify tag points at merged code
         run: |
           git fetch origin +master:refs/remotes/origin/master
-          SHA="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          SHA="$(git rev-parse "refs/tags/v${{ needs.release.outputs.version }}^{commit}")"
           git merge-base --is-ancestor "$SHA" origin/master || {
-            echo "::error::tag $GITHUB_REF_NAME ($SHA) is not on master — releases only come from merged PR code"
+            echo "::error::tag v${{ needs.release.outputs.version }} ($SHA) is not on master — releases only come from merged PR code"
             exit 1
           }
 
@@ -72,10 +196,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6.8.0
+        with:
+          enable-cache: true
 
       - name: Verify tag matches package version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${{ needs.release.outputs.version }}"
           PKG="$(node -p "require('./package.json').version")"
           test "$TAG" = "$PKG" || {
             echo "::error::tag v$TAG != package.json $PKG — bump first, then tag"
@@ -98,14 +224,14 @@ jobs:
 
       - name: Extract release notes
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.release.outputs.version }}"
           awk -v ver="$VERSION" '/^## /{if(capture)exit; if(index($0,ver)){capture=1; next}} capture{print}' CHANGELOG.md | sed '/./,$!d' > release-notes.md
           test -s release-notes.md || {
             echo "::error::no CHANGELOG.md entry for $VERSION"
             exit 1
           }
           {
-            echo "## mcp-gway $GITHUB_REF_NAME"
+            echo "## mcp-gway v$VERSION"
             echo
             cat release-notes.md
             echo
@@ -128,6 +254,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.3.2
         with:
+          tag_name: v${{ needs.release.outputs.version }}
           body_path: release-notes.md
           files: dist/*
           generate_release_notes: false
