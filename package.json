@@ -11,7 +11,8 @@
     "plugins/opencode/mcp-gateway.ts",
     ".pi/extensions/",
     "rules/mcp-gway.md",
-    "skills/"
+    "skills/",
+    "mcp.json"
   ],
   "keywords": [
     "pi-package",

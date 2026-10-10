@@ -4,8 +4,8 @@
 
 The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.com/earendil-works/pi) so it behaves like it does in other hosts and Antigravity:
 
-1. **Gateway MCP registration** — `.pi/extensions/mcp-gateway.ts` registers `gateway` natively via `pi.registerMcpServer` over stdio (`uvx mcp-gway serve` — loopback by construction, no TCP surface). A same-named server in a user's project `mcp.json` still takes precedence.
-2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.6.3` marker.
+1. **Gateway MCP registration** — declarative via repo-root `mcp.json` (`gateway` over stdio: `uvx mcp-gway serve` — loopback by construction, no TCP surface). The extension never calls `pi.registerMcpServer`. A same-named server in a user's project `mcp.json` still takes precedence.
+2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v4.6.2` marker.
 3. **Compression survival** — Pi re-enters the agent loop after compaction (threshold, overflow recovery, retries), so re-applying the card at the start of every run keeps the protocol available without duplicate cards.
 4. **Meta-tools** — `gw_list`, `gw_read`, `gw_docs`, `gw_exec`, `gw_add`, `gw_remove` (model-callable tools via `pi.registerTool`) shell out to `mcp-gway tools list|read|docs|exec` and `mcp-gway add|remove` — the same CodeMode operations as the `gateway_*` MCP tools — for discovery without a gateway round-trip. `gw_add` exposes no OAuth flags: add OAuth-backed servers from a real terminal, not via the tool.
 5. **Session inventory** — on `session_start` the extension probes `uvx --version` first (missing `uv` notifies with the install URL and skips inventory), then runs `mcp-gway tools list` once and publishes the server list as hidden context (`display: false`), so the agent knows which servers are available from the first turn. Requires `uv` on PATH.
@@ -58,7 +58,7 @@ pi install ./mcp-gway -l
 
 ## Configuration
 
-No `.mcp.json` is shipped — the extension registers `gateway` natively (`command: "uvx"`, `args: ["mcp-gway", "serve"]`). No token, no URL, no port. Prerequisite: `uv` (`uvx`) on PATH; without it the extension notifies at session start with the install URL and skips inventory until you reload (`/reload`) or reopen Pi.
+No imperative registration — `gateway` is declared in repo-root `mcp.json` (`command: "uvx"`, `args: ["mcp-gway", "serve"]`), shipped in the `files` whitelist in `package.json`. No token, no URL, no port. Prerequisite: `uv` (`uvx`) on PATH; without it the extension notifies at session start with the install URL and skips inventory until you reload (`/reload`) or reopen Pi.
 
 ---
 
@@ -90,7 +90,7 @@ No `.mcp.json` is shipped — the extension registers `gateway` natively (`comma
 
 | Concern | Other hosts | Pi |
 |---|---|---|
-| MCP registration | agent config (remote `serverUrl`) | native `pi.registerMcpServer` (`uvx mcp-gway serve`) |
+| MCP registration | agent config (remote `serverUrl`) | declarative `mcp.json` (`uvx mcp-gway serve`) |
 | Protocol card | `MARKER`-deduped system text | `rules/mcp-gway.md` read at runtime |
 | Compression survival | `hooks.json` → `scripts/reinject.mjs` | `before_agent_start` (re-enters loop after compaction) |
 | Skill surface | `skills/mcp-gway` | `skills/` via the `pi` key |

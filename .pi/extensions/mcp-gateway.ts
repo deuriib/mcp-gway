@@ -15,10 +15,11 @@ import { fileURLToPath } from "node:url";
  * Parity with `plugins/antigravity/scripts/reinject.mjs`: keep the Gateway Protocol card in
  * the system prompt of every run, so it survives context compaction.
  *
- * MCP registration is native, not declarative: the extension calls
- * `pi.registerMcpServer("gateway", { command: "uvx", args: ["mcp-gway",
- * "serve"] })` — loopback by construction, no TCP surface. A same-named
- * server in a user's project `mcp.json` still takes precedence.
+ * MCP registration is declarative, not imperative: repo-root `mcp.json`
+ * declares `gateway` over stdio (`uvx mcp-gway serve`) — loopback by
+ * construction, no TCP surface. A same-named server in a user's project
+ * `mcp.json` still takes precedence. The extension never calls
+ * `pi.registerMcpServer`.
  * Re-injection happens on `before_agent_start` rather than on a `compaction` hook:
  * Pi re-enters the agent loop after compaction (threshold, overflow
  * recovery, retries), so re-applying the card at the start of every run
@@ -340,10 +341,7 @@ const RemoveParams = Type.Object({
 });
 type RemoveParams = Static<typeof RemoveParams>;
 
-async function runAdd(
-  runner: Runner,
-  params: AddParams,
-): Promise<ToolResult> {
+async function runAdd(runner: Runner, params: AddParams): Promise<ToolResult> {
   if (params.type === "local" && params.command === undefined) {
     return toResult({
       ok: false,
@@ -383,17 +381,6 @@ async function runRemove(
 export default function (pi: ExtensionAPI) {
   const card: string = loadCard();
   const runner = pi as unknown as Runner;
-
-  try {
-    pi.registerMcpServer("gateway", {
-      command: "uvx",
-      args: ["mcp-gway", "serve"],
-      description:
-        "Single MCP endpoint fronting every mcp-gway server (Code Mode discovery + execution).",
-    });
-  } catch (error) {
-    warn(`gateway MCP registration skipped: ${(error as Error)?.message ?? error}`);
-  }
 
   pi.registerTool({
     name: "gw_list",
@@ -477,10 +464,7 @@ export default function (pi: ExtensionAPI) {
       "Use gw_add with name and type before gw_list when a server is missing.",
     ],
     parameters: AddParams,
-    async execute(
-      _toolCallId: string,
-      params: AddParams,
-    ): Promise<ToolResult> {
+    async execute(_toolCallId: string, params: AddParams): Promise<ToolResult> {
       return runAdd(runner, params);
     },
   });
@@ -513,7 +497,9 @@ export default function (pi: ExtensionAPI) {
         });
         if (uv.code !== 0) throw new Error(`exit code ${uv.code}`);
       } catch (error) {
-        warn(`session inventory skipped: uvx not available (${(error as Error)?.message ?? error})`);
+        warn(
+          `session inventory skipped: uvx not available (${(error as Error)?.message ?? error})`,
+        );
         if (ctx && ctx.hasUI) {
           try {
             ctx.ui.notify(

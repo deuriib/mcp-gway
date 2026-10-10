@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gateway": {
+      "command": "uvx",
+      "args": ["mcp-gway", "serve"]
+    }
+  }
+}
