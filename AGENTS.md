@@ -43,7 +43,7 @@ scripts/             # bump-version.mjs (11 owned sync surfaces)
 | Serve transports | `src/mcp_gway/gateway.py:320-340` | http/sse routes differ, no fallback |
 | Code Mode tools | `src/mcp_gway/code_mode.py` | 4 meta-tools + Starlark `sandbox.py` |
 | Local allow-list | `src/mcp_gway/core/policy.py`, ADR-009 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS`, no rename |
-| Version/release | `scripts/bump-version.mjs`, `.github/workflows/release.yml` | tag-only `v*`, pyproject is truth |
+| Version/release | `scripts/bump-version.mjs`, `.github/workflows/release.yml` | push-to-master auto via semantic-release, pyproject is truth |
 | Specs/ADRs | `docs/specs/` (10_design/12_adr/15_requirements/30_delivery/40_workspace/50_archive) | archived specs are history, not live |
 
 ## BOUNDARIES
