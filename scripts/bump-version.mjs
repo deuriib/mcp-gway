@@ -3,14 +3,16 @@
 // Two modes, one file:
 //
 //   node scripts/bump-version.mjs [major|minor|patch] [--dry-run]
-//       Increment the version. Source of truth is pyproject.toml,
+//       Increment the version (manual fallback; the auto path is
+//       `semantic-release version`). Source of truth is pyproject.toml,
 //       package.json moves in lockstep. Everything else is left to
-//       --write, which is how the next release-after-next will work.
+//       --write, which semantic-release runs as its build_command.
 //
 //   node scripts/bump-version.mjs --write [--version X.Y.Z]
 //       Propagate the current (or given) version to every owned surface
-//       so CI can verify with --check. This replaces the retired
-//       scripts/sync_version.py; nothing else in the repo calls it.
+//       so CI can verify with --check. Invoked automatically by
+//       python-semantic-release via the build_command in pyproject.toml;
+//       this replaces the retired scripts/sync_version.py.
 //
 // Owned sync surfaces (closed list — add here, never inline):
 //   package.json                      "version": "X.Y.Z"  (2-space JSON)
@@ -24,8 +26,9 @@
 //   .pi/extensions/mcp-gateway.ts     MARKER const
 //   plugins/*/INSTALL.md              MCP-GWAY vX.Y.Z tokens
 //
-// Deliberately NOT owned: CHANGELOG.md (hand-written release notes),
-// docs history (v3.1.0 mentions stay as history), archived specs.
+// Deliberately NOT owned: CHANGELOG.md (written by semantic-release
+// changelog in update mode, never touched here), docs history
+// (v3.1.0 mentions stay as history), archived specs.
 //
 // Exit codes: 0 clean/wrote, 1 usage or version error, 2 drift found (--check).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";

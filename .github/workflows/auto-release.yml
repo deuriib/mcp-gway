@@ -1,0 +1,100 @@
+name: Auto Release
+
+# Full-auto tag + CHANGELOG via python-semantic-release. On every push to
+# master (i.e. a merged PR): detect bump from conventional commits
+# (feat=minor, fix/perf=patch, BREAKING=major), write versions, run
+# bump-version.mjs --write (build_command, syncs all owned surfaces),
+# prepend the CHANGELOG entry, commit, create an annotated tag, push both.
+# Pushing the tag triggers Release (tag-only publisher) unchanged.
+#
+# --no-vcs-release by design: GitHub Release creation stays in Release, which
+# also publishes PyPI + npm and attaches dist artifacts.
+#
+# Loop guard: release commits are `chore(release-X.Y.Z): ...` (commit_message
+# in pyproject) and the job exits early on them, so the version-commit push
+# never re-releases. Non-releasable pushes (docs/chore/ci/test only) exit
+# cleanly with no tag.
+#
+# Manual use: Actions -> Auto Release -> Run workflow (bump=auto|major|minor|patch,
+# dry_run=true runs everything in --noop mode and changes nothing).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Override detected bump type"
+        required: false
+        default: auto
+        type: choice
+        options: [auto, major, minor, patch]
+      dry_run:
+        description: "No-op mode: print plan without changing anything"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write # commit version sync + create annotated tag
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  auto-release:
+    name: Semantic release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Skip on release commits
+        id: guard
+        run: |
+          MSG="$(git log -1 --pretty=format:%s)"
+          echo "head=$MSG"
+          case "$MSG" in
+            "chore(release-"*) echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Release commit — nothing to do." ;;
+            *) echo "skip=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Set up Python
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "24.21.0"
+
+      - name: Install uv
+        if: steps.guard.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v6.8.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
+        run: uv sync --all-groups
+
+      - name: Release (commit, tag, push)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          FLAGS="--no-vcs-release -v"
+          case "${{ inputs.bump }}" in
+            major) FLAGS="$FLAGS --major" ;;
+            minor) FLAGS="$FLAGS --minor" ;;
+            patch) FLAGS="$FLAGS --patch" ;;
+          esac
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --noop"
+          fi
+          uv run semantic-release version $FLAGS
