@@ -1,4 +1,7 @@
 # CHANGELOG
+
+<!-- version list -->
+
 ## [4.6.0] — 2026-10-10
 
 - **feat(pi)**: native gateway registration — `.pi/extensions/mcp-gateway.ts` now calls `pi.registerMcpServer("gateway", { command: "uvx", args: ["mcp-gway", "serve"] })` inside `try/catch` (name clash with another extension degrades to a stderr warning, tools keep working). `.mcp.json` is deleted and dropped from the `files` whitelist in `package.json`; a same-named server in a user's project `mcp.json` still takes precedence.

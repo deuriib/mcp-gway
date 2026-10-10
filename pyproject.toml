@@ -32,16 +32,26 @@ requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.semantic_release]
+commit_parser = "conventional"
+tag_format = "v{version}"
+commit_message = "chore(release-{version}): sync version surfaces + auto CHANGELOG entry"
+commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["src/mcp_gway/__init__.py:__version__"]
 build_command = "node scripts/bump-version.mjs --write"
 assets = [
     "package.json",
+    "plugin.json",
+    "uv.lock",
     "plugins/opencode/mcp-gateway.ts",
     "plugins/opencode/INSTALL.md",
+    "plugins/antigravity/scripts/reinject.mjs",
+    "plugins/antigravity/INSTALL.md",
+    "plugins/pi/INSTALL.md",
+    ".pi/extensions/mcp-gateway.ts",
+    "rules/mcp-gway.md",
     "README.md",
     "AGENTS.md",
-    "uv.lock",
 ]
 
 [tool.semantic_release.branches.main]
@@ -52,6 +62,19 @@ match_source = true
 allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.changelog]
+mode = "update"
+exclude_commit_patterns = [
+    '''chore(?:\([^)]*?\))?: .+''',
+    '''ci(?:\([^)]*?\))?: .+''',
+    '''build\((?!deps\): .+)''',
+    '''Initial [Cc]ommit.*''',
+]
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+output_format = "md"
 
 [tool.ruff.lint]
 ignore = [

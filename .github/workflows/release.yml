@@ -3,12 +3,17 @@ name: Release
 # Tag-only releaser. Pushing `vX.Y.Z` is the single release decision:
 # verify version sync -> build -> publish to PyPI + npm -> create GitHub Release.
 #
-# Release process (manual, deterministic):
+# Release process (full-auto, preferred):
+#   merge PR to master -> Auto Release runs `semantic-release version`
+#   (bump from conventional commits, versions via pyproject + version files,
+#   owned surfaces via bump-version.mjs --write, CHANGELOG entry, release
+#   commit + annotated tag vX.Y.Z), pushes commit and tag.
+#   This workflow takes over from the tag push.
+# Manual fallback (unchanged):
 #   1. node scripts/bump-version.mjs <major|minor|patch>
 #   2. Hand-write the CHANGELOG.md entry
-#   3. git commit && git tag vX.Y.Z && git push origin vX.Y.Z
-#      Push the tag explicitly: --follow-tags only pushes ANNOTATED tags and
-#      this repo tags lightweight, so the release would silently not run.
+#   3. git commit && git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+#      Push the tag explicitly: only annotated tags trigger this workflow.
 #
 # No workflow_run trigger by design: it double-published every release
 # (once via Tests-success, once via the tag push). No semantic-release:
