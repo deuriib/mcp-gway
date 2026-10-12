@@ -989,7 +989,6 @@ def refresh(name: str | None, auth: bool, oauth_port: int) -> None:
 
         if not discovered:
             click.echo(f"Warning: No tools discovered for {server_name}.")
-            click.echo(f"Try: mcp-gway refresh {server_name} --auth")
             _log_cli_event(
                 "refresh",
                 "warning",
