@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v4.7.1 (2026-10-12)
+
+### Bug Fixes
+
+- **cli**: Remove redundant auth hint on zero discovered tools
+  ([`b87c7f2`](https://github.com/deuriib/mcp-gway/commit/b87c7f233a08dbcb7d5d951921323c6c63a0b7a8))
+
+### Documentation
+
+- **plan**: Track execution plan and ignore .omp/skills/
+  ([`fdd57fb`](https://github.com/deuriib/mcp-gway/commit/fdd57fb7847bbcc0f8da7a226de03e3053ae7789))
+
+
 ## v4.7.0 (2026-10-10)
 
 ### Features
