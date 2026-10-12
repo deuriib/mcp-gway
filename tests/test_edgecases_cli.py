@@ -267,6 +267,19 @@ def test_refresh_remote_ok(monkeypatch, tmp_path, tools, expect):
         assert r.exit_code == expect
 
 
+def test_refresh_no_tools_emits_warning_without_hint(monkeypatch, tmp_path):
+    reg = _seed_refresh_registry(tmp_path)
+    monkeypatch.setattr(C, "_get_registry", lambda: reg)
+    reg.add(
+        MCPServerConfig(name="r2", type="remote", url="https://api.example.com/mcp"), []
+    )
+    with patch("mcp_gway.cli.refresh_server", new=AsyncMock(return_value=[])):
+        r = _runner().invoke(C.main, ["refresh", "r2"])
+        assert r.exit_code == 0
+        assert "Warning: No tools discovered for R2." in r.output
+        assert "Try: mcp-gway refresh" not in r.output
+
+
 def test_refresh_remote_error_continues(monkeypatch, tmp_path):
     reg = _seed_refresh_registry(tmp_path)
     monkeypatch.setattr(C, "_get_registry", lambda: reg)

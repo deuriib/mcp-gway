@@ -83,5 +83,6 @@ node_modules/
 
 # Oh-my-pi (OMP)
 .omp/plugins/
+.omp/skills/
 .ruff_cache/
 .tmp-tracing-servers/
