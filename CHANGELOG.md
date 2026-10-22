@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.8.1 (2026-10-22)
+
+### Bug Fixes
+
+- **cli**: Stop crashing when stdout cannot encode an arrow
+  ([`7274ad4`](https://github.com/deuriib/mcp-gway/commit/7274ad4d3ad54c2206721fe3e8a7214365802df9))
+
+
 ## v4.8.0 (2026-10-22)
 
 ### Features
