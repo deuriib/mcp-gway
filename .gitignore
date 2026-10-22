@@ -86,3 +86,6 @@ node_modules/
 .omp/skills/
 .ruff_cache/
 .tmp-tracing-servers/
+
+## Opencode
+.opencode/

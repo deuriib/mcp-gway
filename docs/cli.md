@@ -39,3 +39,10 @@ Options for `add` — 14 flags (cli.py:97-136):
 | `--enabled / --no-enabled`     | Enable/disable without removal (default enabled) |
 | `--tools <list>`               | Comma-separated tool filter (default `*` = all)  |
 | `--retry-on-transport-error`   | Opt-in: retry once when the transport connect phase fails (default off) |
+
+## Output Encoding
+
+The CLI never aborts on an unencodable character: at startup it switches its output streams to `errors="replace"`, so a character the destination cannot represent becomes `?` instead of a `UnicodeEncodeError` traceback.
+
+This matters on Windows, where a redirected stdout uses the legacy ANSI code page (cp1252). User-facing status messages are written in ASCII (`->`, `...`) so the meaning survives any code page intact; the decorative banner glyphs degrade gracefully.
+

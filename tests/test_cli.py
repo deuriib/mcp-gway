@@ -326,6 +326,26 @@ def test_add_local_type(runner, monkeypatch):
     assert result.exit_code == 0, result.output
 
 
+def test_add_normalization_notice_stays_ascii(runner, monkeypatch):
+    async def mock_discover_tools(config, force_auth=False):
+        from mcp_gway.models import ToolInfo
+
+        return [ToolInfo(name="ping", description="Ping")]
+
+    monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "npx")
+    monkeypatch.setattr(
+        "mcp_gway.core.policy.resolve_binary", lambda basename: "/usr/bin/npx"
+    )
+    monkeypatch.setattr("mcp_gway.cli.discover_tools", mock_discover_tools)
+    monkeypatch.setattr("mcp_gway.core.discover_tools", mock_discover_tools)
+    result = runner.invoke(
+        main, ["add", "myserver", "--type", "local", "--command", "npx -y my-mcp"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Normalized name 'myserver' -> 'Myserver'" in result.output
+
+
 def test_add_with_header_option(runner, monkeypatch):
     async def mock_discover_tools(config, force_auth=False):
         from mcp_gway.models import ToolInfo
