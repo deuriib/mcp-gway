@@ -260,4 +260,4 @@ def test_refresh_renames_all_caps(tmp_path, monkeypatch) -> None:
     listing = _os.listdir(tmp_path / "servers")
     assert "Github.json" in listing
     assert "GITHUB.json" not in listing
-    assert "Renamed 'GITHUB' → 'Github'" in result.output
+    assert "Renamed 'GITHUB' -> 'Github'" in result.output

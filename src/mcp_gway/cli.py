@@ -86,10 +86,30 @@ def _log_cli_event(
         cli_logger.info(msg, extra=extra)
 
 
+def _harden_console_encoding() -> None:
+    """Degrade unrepresentable characters instead of killing the command.
+
+    A redirected stdout on Windows usually carries the legacy ANSI code page
+    (cp1252), which cannot encode characters the CLI prints - an arrow, an em
+    dash, a middle dot. Python's TextIOWrapper raises UnicodeEncodeError on the
+    first one, so the command dies *after* doing its work. Replacing the
+    character keeps the run and the output.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(errors="replace")
+        except (ValueError, OSError):
+            continue
+
+
 @click.group()
 @click.version_option(__version__, "--version", "-v", message="%(prog)s %(version)s")
 def main() -> None:
-    """MCP Gateway CLI — manage MCP servers with Code Mode."""
+    """MCP Gateway CLI - manage MCP servers with Code Mode."""
+    _harden_console_encoding()
 
 
 @main.command()
@@ -164,7 +184,7 @@ def add(
     _requested_name = name
     name = to_pascal_case_identifier(name)
     if name != _requested_name:
-        click.echo(f"Normalized name '{_requested_name}' → '{name}'")
+        click.echo(f"Normalized name '{_requested_name}' -> '{name}'")
         try:
             _canonical_taken = name in _get_registry().list()
         except Exception:
@@ -406,7 +426,7 @@ def list_servers() -> None:
         click.echo(f"{name:<20} {conn_type.upper():<10} {tool_count:<8}{suffix}")
         first = server_desc.splitlines()[0].strip() if server_desc.strip() else ""
         if first:
-            short = first if len(first) <= 100 else first[:99] + "…"
+            short = first if len(first) <= 100 else first[:99] + "..."
             click.echo(f"  {short}")
 
 
@@ -894,7 +914,7 @@ def _canonicalize_saved_name(registry: Registry, stem: str) -> str:
         return stem
     except FileExistsError:
         click.echo(
-            f"Warning: cannot rename '{stem}' → '{canonical}': "
+            f"Warning: cannot rename '{stem}' -> '{canonical}': "
             f"target exists, keeping original.",
             err=True,
         )
@@ -903,7 +923,7 @@ def _canonicalize_saved_name(registry: Registry, stem: str) -> str:
         click.echo(f"Warning: cannot rename '{stem}': {e}, keeping original.", err=True)
         return stem
     _rename_token_stems(stem, canonical)
-    click.echo(f"Renamed '{stem}' → '{canonical}'")
+    click.echo(f"Renamed '{stem}' -> '{canonical}'")
     return canonical
 
 
