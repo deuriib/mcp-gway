@@ -193,10 +193,11 @@ def test_code_mode_execute_ok_and_errors(tmp_path):
     cm2 = CodeMode(reg)
     import json as _json
 
-    assert _json.loads(cm2.execute_tool_code("result = 7")) == {
-        "result": 7,
-        "logs": [],
-    }
+    envelope = _json.loads(cm2.execute_tool_code("result = 7"))
+    assert envelope["result"] == 7
+    assert envelope["logs"] == []
+    assert envelope["calls"] == []
+    assert envelope["usage"]["truncated"] is False
     with pytest.raises(Exception, match="empty|code"):
         cm2.execute_tool_code("")
     with pytest.raises(Exception, match="str|code"):

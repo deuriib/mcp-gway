@@ -36,7 +36,7 @@ uv run mcp-gway serve --transport http --port 8080 2>&1 | head   # each line val
 
 - Lifecycle: `build_info{version}`, `process_start_time_seconds`, `uptime_seconds` (heartbeat, 30s tick), `lifetime_seconds` (set at shutdown) + a JSON `gateway shutdown summary` (uptime + totals) on exit.
 - stdio (`serve --transport stdio`, default): per-request `stdio_requests_total{method,status}` + `stdio_request_duration_seconds{method}` and a JSON access log (`transport:"stdio"`, same shape as HTTP).
-- Upstream CodeMode calls (tool execution): `upstream_tool_calls_total{server,tool,status}` (`ok`/`timeout`/`error`), `upstream_tool_duration_seconds{server,tool}`; opt-in retries counted in `upstream_retries_total{server}`.
+- Upstream CodeMode calls (tool execution): `upstream_tool_calls_total{server,tool,status}` (`ok`/`timeout`/`error`), `upstream_tool_duration_seconds{server,tool}`; opt-in retries counted in `upstream_retries_total{server}`; connections reused within a script counted in `upstream_session_reused_total{server}`.
 - Corruption visibility: `code_mode_servers_skipped_total{reason}` + structured WARN + degraded banner hint (`mcp-gway refresh <name>`) when a server fails injection at startup.
 - Label cardinality hard-capped per metric (`_MAX_LABEL_COMBOS=200`); overflow coalesces into a reserved `_other` series so a label storm cannot grow memory without bound.
 - Slow-request WARN: requests over `_SLOW_REQUEST_THRESHOLD_MS` (1000) additionally log a `slow request` JSON line with duration.

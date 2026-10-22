@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import inspect
 import re
 import time
@@ -114,7 +115,10 @@ class StarlarkSandbox:
                     )
 
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_run)
+                # Propagate the caller's context into the worker, otherwise the
+                # tool closures lose the active loop/connection cache/trace.
+                exec_ctx = contextvars.copy_context()
+                future = executor.submit(exec_ctx.run, _run)
                 try:
                     result = future.result(timeout=timeout)
                 except FuturesTimeoutError:

@@ -26,7 +26,7 @@ Standalone Python CLI (3.12+) aggregating MCP servers behind one headless HTTP/S
 ## STRUCTURE
 
 ```
-src/mcp_gway/        # gateway core: cli/gateway/code_mode/sandbox/registry/models
+src/mcp_gway/        # gateway core: cli/gateway/code_mode/sandbox/budget/registry/models
   core/              # transport/discovery/policy/parsing/install (no CLI deps)
   observability/     # logging/metrics/tracing/health (stdlib + Starlette)
   admin/             # htpy+htmx dashboard (loopback + CSRF, CSP in gateway.py)

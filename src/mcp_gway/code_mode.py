@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
+import threading
+import time
 from typing import Any
 
+from mcp_gway.budget import build_envelope
 from mcp_gway.registry import Registry
 from mcp_gway.sandbox import StarlarkSandbox
-from mcp_gway.server_factory import ServerFactory
+from mcp_gway.server_factory import (
+    _ACTIVE_CACHE,
+    _ACTIVE_LOOP,
+    _ACTIVE_TRACE,
+    ServerFactory,
+)
 
 _VALID_BINDINGS = ("server", "tool")
 
@@ -108,6 +115,30 @@ def to_pascal_case_identifier(name: str) -> str:
     if pascal[0].isdigit():
         pascal = f"_{pascal}"
     return pascal
+
+
+def _run_isolated(factory: Any) -> Any:
+    """Run a coroutine factory in a private thread with its own event loop.
+
+    ``executeToolCode`` is synchronous by contract and may be called from a
+    worker thread (gateway, admin) or from plain sync code (CLI). Giving the
+    script its own loop keeps those callers working and guarantees the
+    connection cache never leaks between executions.
+    """
+    box: dict[str, Any] = {}
+
+    def _worker() -> None:
+        try:
+            box["value"] = asyncio.run(factory())
+        except BaseException as exc:  # re-raised on the caller's thread
+            box["error"] = exc
+
+    worker = threading.Thread(target=_worker, name="mcp-gway-codemode", daemon=True)
+    worker.start()
+    worker.join()
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 class CodeMode:
@@ -346,12 +377,49 @@ class CodeMode:
                 "executeToolCode requires non-empty code [reason=invalid_params]"
             )
         _validate_code(code)
-        result = self.sandbox.execute(
-            code, timeout=timeout or self.tool_execution_timeout
-        )
+        effective_timeout = timeout or self.tool_execution_timeout
+        trace: list[dict[str, Any]] = []
+        started = time.perf_counter()
+
+        async def _drive() -> Any:
+            """Own one event loop for the whole script.
+
+            Every upstream call is marshalled onto this loop, which is what
+            makes a connection reusable: an MCP session is bound to the loop
+            that created it, so ``asyncio.run`` per call (the old shape) made
+            reuse impossible.
+            """
+            loop = asyncio.get_running_loop()
+            tokens = (
+                _ACTIVE_LOOP.set(loop),
+                _ACTIVE_CACHE.set({}),
+                _ACTIVE_TRACE.set(trace),
+            )
+            try:
+                return await asyncio.to_thread(
+                    self.sandbox.execute, code, effective_timeout
+                )
+            finally:
+                try:
+                    await self.server_factory.aclose_sessions()
+                except Exception:
+                    # WHY broad: teardown must never replace the script outcome.
+                    pass
+                _ACTIVE_TRACE.reset(tokens[2])
+                _ACTIVE_CACHE.reset(tokens[1])
+                _ACTIVE_LOOP.reset(tokens[0])
+
+        result = _run_isolated(_drive)
         logs = self.sandbox.get_logs()
+        duration_ms = int((time.perf_counter() - started) * 1000)
         try:
-            return json.dumps({"result": result, "logs": logs}, default=str)
+            return build_envelope(
+                result=result,
+                logs=logs,
+                calls=trace,
+                duration_ms=duration_ms,
+                default=str,
+            )
         except Exception as e:
             raise RuntimeError(
                 f"result serialization failed: {type(e).__name__}"
