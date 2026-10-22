@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.8.0 (2026-10-22)
+
+### Features
+
+- **code-mode**: Reuse one upstream connection per script and bound result size
+  ([`4361855`](https://github.com/deuriib/mcp-gway/commit/4361855f9e329fb1ece8e05bbea42f540b2c02cf))
+
+
 ## v4.7.1 (2026-10-12)
 
 ### Bug Fixes
