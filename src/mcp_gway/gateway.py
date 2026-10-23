@@ -490,6 +490,20 @@ class Gateway:
         except RuntimeError:
             pass
 
+    def call_many(
+        self,
+        tool_calls: list[dict[str, Any]],
+        *,
+        max_concurrency: int | None = None,
+        concurrency: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Execute multiple MCP calls with per-call failure isolation."""
+        return self.code_mode.call_many(
+            tool_calls,
+            max_concurrency=max_concurrency,
+            concurrency=concurrency,
+        )
+
     async def aclose(self) -> None:
         task = self._heartbeat_task
         self._heartbeat_task = None
