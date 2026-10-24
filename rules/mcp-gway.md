@@ -1,4 +1,4 @@
-<!-- MCP-GWAY v4.9.0 -->
+<!-- MCP-GWAY v4.10.0 -->
 ## MCP Rules — Gateway Protocol
 
 All MCP tools run via `gateway_*` helpers. **Mandatory order:**

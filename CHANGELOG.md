@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v4.10.0 (2026-10-24)
+
+### Documentation
+
+- **code-mode**: Document callMany
+  ([`d5ec512`](https://github.com/deuriib/mcp-gway/commit/d5ec5121950eb2fad43d0597e7b8f8ef3f970b1f))
+
+### Features
+
+- **code-mode**: Add callMany meta-tool
+  ([`c718e16`](https://github.com/deuriib/mcp-gway/commit/c718e16d3554bd0a03bc02c4406638213bccc90c))
+
+### Refactoring
+
+- **cli**: Remove redundant refresh hint for zero discovered tools
+  ([`ae96e83`](https://github.com/deuriib/mcp-gway/commit/ae96e8317e71f08a4a366589d6292e9924a9b0b9))
+
+
 ## v4.9.0 (2026-10-24)
 
 ### Documentation
