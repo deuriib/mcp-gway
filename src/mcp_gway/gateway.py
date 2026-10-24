@@ -217,7 +217,7 @@ CODE_MODE_TOOLS = [
             "properties": {
                 "fileName": {
                     "type": "string",
-                    "description": "Stub to read — e.g., servers/filesystem.pyi or servers/filesystem/read_file.pyi",
+                    "description": "Stub to read - e.g., servers/filesystem.pyi or servers/filesystem/read_file.pyi",
                 },
                 "startLine": {
                     "type": "integer",
@@ -261,6 +261,40 @@ CODE_MODE_TOOLS = [
                 }
             },
             "required": ["code"],
+        },
+    },
+    {
+        "name": "callMany",
+        "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeToolCode script for that.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "calls": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "description": "Independent tool calls to run in parallel. Results come back in this order.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "server": {
+                                "type": "string",
+                                "description": "Server name as listed by listToolFiles (e.g. Filesystem).",
+                            },
+                            "tool": {
+                                "type": "string",
+                                "description": "Upstream tool name (e.g. read_file).",
+                            },
+                            "arguments": {
+                                "type": "object",
+                                "description": "Keyword arguments for the tool; omit when the tool takes none.",
+                            },
+                        },
+                        "required": ["server", "tool"],
+                    },
+                }
+            },
+            "required": ["calls"],
         },
     },
 ]
@@ -909,6 +943,12 @@ class Gateway:
                         "executeToolCode requires non-empty code [reason=invalid_params]"
                     )
                 result = self.code_mode.execute_tool_code(code=arguments["code"])
+            elif name == "callMany":
+                if not isinstance(arguments, dict) or "calls" not in arguments:
+                    raise InvalidParamsError(
+                        "callMany requires calls [reason=invalid_params]"
+                    )
+                result = self.code_mode.call_many_envelope(arguments["calls"])
             else:
                 status = "error"
                 raise ValueError(f"Unknown tool: {name}")

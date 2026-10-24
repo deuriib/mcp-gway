@@ -117,6 +117,52 @@ def to_pascal_case_identifier(name: str) -> str:
     return pascal
 
 
+_MAX_CALL_MANY_ITEMS = 50
+
+
+def _prepare_call_items(
+    calls: list[object],
+) -> tuple[list[dict[str, object] | None], list[dict[str, object]], list[int]]:
+    """Split a batch into already-failed items and dispatchable calls.
+
+    A malformed item is reported in place instead of raising: one typo must not
+    discard the results of the other 49 calls.
+    """
+    outcomes: list[dict[str, object] | None] = [None] * len(calls)
+    dispatch: list[dict[str, object]] = []
+    positions: list[int] = []
+    for index, item in enumerate(calls):
+        server = item.get("server") if isinstance(item, dict) else None
+        tool = item.get("tool") if isinstance(item, dict) else None
+        arguments = item.get("arguments", {}) if isinstance(item, dict) else {}
+        if not isinstance(item, dict):
+            message = "call item must be an object with server and tool"
+        elif not isinstance(server, str) or not server.strip():
+            message = "call item requires a non-empty 'server'"
+        elif not isinstance(tool, str) or not tool.strip():
+            message = "call item requires a non-empty 'tool'"
+        elif not isinstance(arguments, dict):
+            message = "'arguments' must be an object"
+        else:
+            positions.append(index)
+            dispatch.append(
+                {
+                    "server": server,
+                    "tool": tool,
+                    "arguments": arguments,
+                    "id": item.get("id"),
+                }
+            )
+            continue
+        outcomes[index] = {
+            "server": server or "",
+            "tool": tool or "",
+            "ok": False,
+            "error": {"type": "InvalidParamsError", "message": message},
+        }
+    return outcomes, dispatch, positions
+
+
 def _run_isolated(factory: Any) -> Any:
     """Run a coroutine factory in a private thread with its own event loop.
 
@@ -519,6 +565,40 @@ class CodeMode:
             return [item for item in results if item is not None]
 
         return _run_isolated(_call_many_async)
+
+    def call_many_envelope(self, calls: object) -> str:
+        """Meta-tool adapter: validate a batch, fan it out, return the envelope.
+
+        Only a broken batch is a caller error. A broken item is data, because
+        Starlark has no try/except and a raise would discard the whole result.
+        """
+        from mcp_gway.gateway import InvalidParamsError
+
+        if not isinstance(calls, list) or not calls:
+            raise InvalidParamsError(
+                "callMany requires a non-empty calls list [reason=invalid_params]"
+            )
+        if len(calls) > _MAX_CALL_MANY_ITEMS:
+            raise InvalidParamsError(
+                f"callMany accepts at most {_MAX_CALL_MANY_ITEMS} calls "
+                "[reason=invalid_params]"
+            )
+
+        outcomes, dispatch, positions = _prepare_call_items(list(calls))
+        started = time.perf_counter()
+        if dispatch:
+            for position, result in zip(positions, self.call_many(dispatch)):
+                outcomes[position] = result
+        duration_ms = int((time.perf_counter() - started) * 1000)
+
+        results = [item for item in outcomes if item is not None]
+        return build_envelope(
+            result=results,
+            logs=[],
+            calls=[],
+            duration_ms=duration_ms,
+            default=str,
+        )
 
     def auto_execute(
         self, tool_calls: list[dict[str, object]]
