@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.10.1 (2026-10-24)
+
+### Bug Fixes
+
+- **plugin.json**: Update schema URL to the correct antigravity schema
+  ([`d87a841`](https://github.com/deuriib/mcp-gway/commit/d87a841252b2bf6a7b286c0a1ca13a8ab65062be))
+
+
 ## v4.10.0 (2026-10-24)
 
 ### Documentation
