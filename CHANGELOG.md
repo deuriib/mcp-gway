@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v4.9.0 (2026-10-24)
+
+### Documentation
+
+- **code-mode**: Clarify meta-tool contract and call_many helper
+  ([`91c7fb1`](https://github.com/deuriib/mcp-gway/commit/91c7fb19112f90a99cb07ab423fd7e69adf6571d))
+
+### Features
+
+- **code-mode**: Add bounded call_many fan-out
+  ([`d8ac1ac`](https://github.com/deuriib/mcp-gway/commit/d8ac1acc1c23be0ab9d6472453118a49ce697f9d))
+
+
 ## v4.8.1 (2026-10-22)
 
 ### Bug Fixes
