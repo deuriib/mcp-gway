@@ -1,11 +1,11 @@
 ---
 name: mcp-gway-mcp
-description: Serve and consume the gateway over MCP (v4.2.0) — stdio/http/sse transports, Code Mode discovery protocol, wiring agents, admin dashboard. Use when running serve, calling the 4 meta-tools, or connecting agents to one gateway endpoint.
+description: Serve and consume the gateway over MCP (v4.2.0) — stdio/http/sse transports, Code Mode discovery protocol, host-side parallel tool calls, wiring agents, or the admin dashboard.
 ---
 
 # mcp-gway MCP + serve surface
 
-One gateway process serves `/mcp`, probes, and the admin dashboard on the same Starlette app. Pick a transport, connect one client, then run the 4-step discovery protocol before every tool call.
+One gateway process serves `/mcp`, probes, and the admin dashboard on the same Starlette app. Pick a transport and connect one client. Code Mode exposes exactly four MCP meta-tools; use their four-step discovery protocol before execution.
 
 ## Choose your transport
 
@@ -73,9 +73,15 @@ MCP_GWAY_URL=http://127.0.0.1:9090/mcp mcp-gway serve --transport http --port 90
 MCP_GWAY_TOKEN=secret-xyz  # sent as `Authorization: Bearer …`, never written to .mcp.json
 ```
 
-## Code Mode protocol — the 4 steps with examples
+## Code Mode protocol — exactly 4 MCP meta-tools
 
-Mandatory order: `listToolFiles → readToolFile → (optional) getToolDocs → executeToolCode`. Call tools in code as `Server.tool_name(param=value)` and assign output to `result`. The same `CodeMode` class backs `mcp-gway tools …` — the CLI form is in `mcp-gway-cli`; the shapes below are identical.
+The gateway exposes exactly four MCP meta-tools: `gateway_listToolFiles`,
+`gateway_readToolFile`, `gateway_getToolDocs`, and `gateway_executeToolCode`.
+Use them in this order: `listToolFiles → readToolFile → (optional) getToolDocs
+→ executeToolCode`. Inside Starlark, call upstream tools as
+`Server.tool_name(param=value)` and assign output to `result`. The same
+`CodeMode` class backs `mcp-gway tools …` — see `mcp-gway-cli` for the CLI
+surface.
 
 Step 1 — discover. Call FIRST whenever the user names a server, tool, or capability not in the visible list. Never claim a capability is unavailable until this confirms absence.
 
@@ -133,13 +139,40 @@ result = Context7.resolve_library_id(query="react hooks", libraryName="react")
 top = result["result"][0:200]
 print("hits: %s" % len(result["result"]))
 
-# DO — fan out after step 1 (steps 2-4 run concurrently across servers/tools)
+# DO — keep Starlark calls synchronous and use the discovered exact signature
 result = ParallelSearch.web_search(objective="Python 3.13 features", search_queries=["Python 3.13 changelog"])
 
 # DON'T — try/except, classes, imports, f-strings, `is`, dot access on dicts
 ```
 
 Errors you will actually hit: unknown server/tool or blocked Starlark → `Error: …` + exit 1; both/neither of `--code`/`--file` → exit 2; stub with no params (e.g. `def web_search() -> dict`) → run `mcp-gway refresh <name>` and read again.
+
+## Host-side parallel calls
+
+`call_many` is a Python host API, not an MCP meta-tool and not callable from
+Starlark. It runs independent calls concurrently, preserves input order, and
+returns a per-call `ok` result or error. Its default concurrency is at most
+eight; hosts may set `max_concurrency`.
+
+```python
+results = gateway.call_many(
+    [
+        {
+            "id": "a",
+            "server": "filesystem",
+            "tool": "read_file",
+            "arguments": {"path": "README.md"},
+        },
+        {
+            "id": "b",
+            "server": "filesystem",
+            "tool": "read_file",
+            "arguments": {"path": "missing.txt"},
+        },
+    ],
+    max_concurrency=4,
+)
+```
 
 ## Probes + metrics — quick check
 

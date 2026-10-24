@@ -1,13 +1,16 @@
 # Code Mode
 
-Code Mode exposes four meta-tools for lazy discovery, allowing agents to find and execute tools without loading all schemas into context.
+Code Mode exposes exactly four MCP meta-tools for lazy discovery, allowing
+agents to find and execute tools without loading all schemas into context.
+The host-side `call_many` API is a separate Python helper, not a fifth MCP
+meta-tool.
 
 | Tool                | Description                                         |
 | ------------------- | --------------------------------------------------- |
-| `gateway_listToolFiles`   | Discover available server stubs (`.pyi`)         |
-| `gateway_readToolFile`    | Read exact tool names and parameters from a stub  |
+| `gateway_listToolFiles`   | Discover available server stubs (`.pyi`) |
+| `gateway_readToolFile`    | Read exact tool names and parameters from a stub |
 | `gateway_getToolDocs`     | Fetch full documentation if the stub is truncated (optional) |
-| `gateway_executeToolCode` | Execute in a hermetic Starlark sandbox            |
+| `gateway_executeToolCode` | Execute in a hermetic Starlark sandbox |
 
 ## Discovery Flow (Recommended)
 
@@ -16,7 +19,9 @@ Code Mode exposes four meta-tools for lazy discovery, allowing agents to find an
 3. `gateway_getToolDocs` (optional) — Fetch full docs if needed.
 4. `gateway_executeToolCode` — Run Starlark: `Server.tool(param=value)`
 
-> **Parallelization:** Run step 1 first. Steps 2–4 can run concurrently across servers/tools.
+The discovery workflow has four meta-tools, with `gateway_getToolDocs` optional
+when the stub already has enough detail. Complete discovery before execution;
+independent host-side tool calls can use `call_many`.
 
 ## Calling Convention (Starlark)
 
@@ -63,6 +68,43 @@ not run twice.
 
 A script that calls `N` servers concurrently is still sequential: Starlark has
 no `async`. Parallelism is a host-side concern.
+
+## Host-side fan-out
+
+Use the Python host API `Gateway.call_many(...)` when the host needs to dispatch
+multiple MCP calls in parallel without letting one error abort the rest of the
+batch. This method is not exposed as an MCP tool and cannot be called from
+Starlark. Provide calls as dictionaries with `server`, `tool`, and `arguments`;
+`id` is optional. If the host has a `Registry` rather than a `Gateway` instance,
+it can call `mcp_gway.call_many(registry, tool_calls, ...)` instead. Results
+preserve input order and each item contains the call identity plus either a
+result or an isolated error:
+
+```python
+results = gateway.call_many(
+    [
+        {
+            "id": "a",
+            "server": "filesystem",
+            "tool": "read_file",
+            "arguments": {"path": "README.md"},
+        },
+        {
+            "id": "b",
+            "server": "filesystem",
+            "tool": "read_file",
+            "arguments": {"path": "missing.txt"},
+        },
+    ],
+    max_concurrency=4,
+)
+```
+
+Each returned item has `id`, `server`, `tool`, and `ok`, plus `result` when
+`ok` is true or `error` (`type` and `message`) when it is false. The default
+concurrency is at most eight calls at a time; set `max_concurrency` to choose a
+different limit. Results retain input order regardless of completion order.
+This host-side helper leaves the hermetic Starlark runtime unchanged.
 
 ## Result Budget
 

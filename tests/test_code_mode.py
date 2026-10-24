@@ -1,5 +1,6 @@
 """Tests for Code Mode meta-tools."""
 
+import asyncio
 import json
 
 import pytest
@@ -343,3 +344,56 @@ def test_classify_tool_calls_partial_auto(tmp_path):
     assert auto[0]["tool"] == "read_file"
     assert len(manual) == 1
     assert manual[0]["tool"] == "write_file"
+
+
+def test_call_many_isolates_errors_and_keeps_order(code_mode, monkeypatch):
+    """Fan-out should concurrently execute calls while isolating failures."""
+    active_calls = 0
+    peak_calls = 0
+
+    async def mock_call_tool_async(config, tool_name, arguments):
+        nonlocal active_calls, peak_calls
+        active_calls += 1
+        peak_calls = max(peak_calls, active_calls)
+        try:
+            if tool_name == "search":
+                await asyncio.sleep(0.05)
+                return {"tool": tool_name, "query": arguments["query"]}
+            if tool_name == "get_video":
+                raise RuntimeError("video unavailable")
+            await asyncio.sleep(0.01)
+            return {"tool": tool_name, "ok": True}
+        finally:
+            active_calls -= 1
+
+    monkeypatch.setattr(
+        code_mode.server_factory, "_call_tool_async", mock_call_tool_async
+    )
+    calls = [
+        {
+            "id": "a",
+            "server": "youtube",
+            "tool": "search",
+            "arguments": {"query": "one"},
+        },
+        {"id": "b", "server": "youtube", "tool": "get_video", "arguments": {"id": "x"}},
+        {
+            "id": "c",
+            "server": "youtube",
+            "tool": "search",
+            "arguments": {"query": "two"},
+        },
+    ]
+
+    results = code_mode.call_many(calls, max_concurrency=2)
+
+    assert [item["id"] for item in results] == ["a", "b", "c"]
+    assert results[0]["ok"] is True
+    assert results[1]["ok"] is False
+    assert results[1]["error"]["type"] == "RuntimeError"
+    assert results[2]["ok"] is True
+    assert peak_calls == 2
+
+    monkeypatch.setattr(code_mode.server_factory, "is_auto_executable", lambda *_: True)
+    legacy = code_mode.auto_execute(calls)
+    assert legacy[1]["error"]["type"] == "RuntimeError"

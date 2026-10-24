@@ -11,11 +11,12 @@
 │  - serve --host 127.0.0.1 │  - GET  /health                          │
 │  (local-first default)    │  - GET  /ready, /live, /metrics           │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Code Mode (4 meta-tools)      │  Starlark Sandbox                    │
+│  Code Mode (4 MCP meta-tools)  │  Starlark Sandbox                    │
 │  - listToolFiles               │  - Hermetic execution                │
 │  - readToolFile                │  - Server injection                  │
 │  - getToolDocs                 │                                      │
 │  - executeToolCode             │                                      │
+│  Python helper: call_many (host-side; not an MCP tool)                │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Registry (single source)      │  OAuth2 (RFC 7591, reused)           │
 │  - servers/*.pyi = signatures  │  - Dynamic registration              │

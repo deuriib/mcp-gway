@@ -446,19 +446,79 @@ class CodeMode:
                 manual.append(tc)
         return auto, manual
 
+    async def _execute_agent_tool_async(self, tc: dict[str, object]) -> Any:
+        """Async core for one tool call; used by host-side fan-out helpers."""
+        server = str(tc.get("server", ""))
+        tool = str(tc.get("tool", ""))
+        arguments = dict(tc.get("arguments", {}))  # type: ignore[arg-type]
+        config = self.registry.get_config(server)
+        return await self.server_factory._call_tool_async(config, tool, arguments)
+
     def execute_agent_tool(self, tc: dict[str, object]) -> Any:
         """Execute a single tool call (auto or manual) via MCP.
 
         Returns the raw MCP result dict.
         """
-        server = str(tc.get("server", ""))
-        tool = str(tc.get("tool", ""))
-        arguments = dict(tc.get("arguments", {}))  # type: ignore[arg-type]
-        config = self.registry.get_config(server)
-        result = asyncio.run(
-            self.server_factory._call_tool_async(config, tool, arguments)
-        )
-        return result
+        return asyncio.run(self._execute_agent_tool_async(tc))
+
+    def call_many(
+        self,
+        tool_calls: list[dict[str, object]],
+        *,
+        max_concurrency: int | None = None,
+        concurrency: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Host-side fan-out with per-call success/error isolation.
+
+        Each item in the returned list preserves input order and contains either
+        ``ok=True, result=...`` or ``ok=False, error={...}``. Errors from one call
+        never cancel sibling calls, and the scheduler is bounded to keep the
+        runtime deterministic and hermetic.
+        """
+        calls = list(tool_calls or [])
+        if not calls:
+            return []
+
+        effective_concurrency = max_concurrency
+        if effective_concurrency is None:
+            effective_concurrency = concurrency
+        effective_concurrency = max(1, int(effective_concurrency or min(8, len(calls))))
+        concurrency = min(effective_concurrency, len(calls))
+
+        async def _call_many_async() -> list[dict[str, object]]:
+            sem = asyncio.Semaphore(concurrency)
+            results: list[dict[str, object] | None] = [None] * len(calls)
+
+            async def _run_one(index: int, tc: dict[str, object]) -> None:
+                async with sem:
+                    try:
+                        result = await self._execute_agent_tool_async(tc)
+                        payload = {
+                            "id": tc.get("id"),
+                            "server": tc.get("server"),
+                            "tool": tc.get("tool"),
+                            "ok": True,
+                            "result": result,
+                        }
+                    except Exception as exc:  # noqa: BLE001 — per-call isolation
+                        payload = {
+                            "id": tc.get("id"),
+                            "server": tc.get("server"),
+                            "tool": tc.get("tool"),
+                            "ok": False,
+                            "error": {
+                                "type": type(exc).__name__,
+                                "message": str(exc),
+                            },
+                        }
+                    results[index] = payload
+
+            await asyncio.gather(
+                *(_run_one(index, tc) for index, tc in enumerate(calls))
+            )
+            return [item for item in results if item is not None]
+
+        return _run_isolated(_call_many_async)
 
     def auto_execute(
         self, tool_calls: list[dict[str, object]]
@@ -469,25 +529,25 @@ class CodeMode:
         calls. Non-auto calls are returned as-is in the manual list.
         """
         auto, _manual = self.classify_tool_calls(tool_calls)
-        results: list[dict[str, object]] = []
-        for tc in auto:
-            try:
-                result = self.execute_agent_tool(tc)
-                results.append(
+        results = self.call_many(auto)
+        coerced: list[dict[str, object]] = []
+        for item in results:
+            if item.get("ok"):
+                coerced.append(
                     {
-                        "id": tc.get("id"),
-                        "server": tc.get("server"),
-                        "tool": tc.get("tool"),
-                        "result": result,
+                        "id": item.get("id"),
+                        "server": item.get("server"),
+                        "tool": item.get("tool"),
+                        "result": item.get("result"),
                     }
                 )
-            except Exception as e:
-                results.append(
+            else:
+                coerced.append(
                     {
-                        "id": tc.get("id"),
-                        "server": tc.get("server"),
-                        "tool": tc.get("tool"),
-                        "error": {"type": type(e).__name__, "message": str(e)},
+                        "id": item.get("id"),
+                        "server": item.get("server"),
+                        "tool": item.get("tool"),
+                        "error": item.get("error"),
                     }
                 )
-        return results
+        return coerced
