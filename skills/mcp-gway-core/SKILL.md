@@ -97,7 +97,7 @@ mcp-gway add t --type local --command "npx -y my-mcp" --cwd rel/path           #
 
 ## Execution stack — CodeMode → factory → sandbox
 
-`code_mode.py` — `CodeMode(registry)` + `to_pascal_case_identifier` (names normalize to PascalCase; hyphens in upstream tool names become underscores in the sandbox). Methods: `list_tool_files` / `read_tool_file` / `get_tool_docs` / `execute_tool_code` (+ agent helpers `classify_tool_calls`, `execute_agent_tool`, `auto_execute`). Tool ACL comes from `tools_to_execute` (`["*"]` = all) — `update <name> --tools` rewrites it without re-discovery.
+`code_mode.py` — `CodeMode(registry)` + `to_pascal_case_identifier` (names normalize to PascalCase; hyphens in upstream tool names become underscores in the sandbox). Four MCP meta-tools expose discovery and execution; host-only agent helpers include `classify_tool_calls`, `execute_agent_tool`, `call_many` (bounded fan-out with per-call error isolation), and `auto_execute`. `call_many` is not a fifth MCP meta-tool and is not available inside Starlark. Tool ACL comes from `tools_to_execute` (`["*"]` = all) — `update <name> --tools` rewrites it without re-discovery.
 
 `server_factory.py` — per-server structs with sanitized identifiers, `_check_tool_allowed` (ACL enforcement), `_call_tool_async` with per-config timeout + upstream telemetry (`upstream_tool_calls_total{server,tool,status}`, `upstream_tool_duration_seconds{server,tool}`). Retry is transport-phase only and opt-in (`--retry-on-transport-error`): exactly one retry when connect fails, never after `call_tool` starts (ADR-012).
 
