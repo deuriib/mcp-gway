@@ -16,7 +16,7 @@ _\(inferred from DESIGN.md brief + AGENTS.md; no interview conducted — user ch
 
 ## Product Purpose
 
-One MCP endpoint for every server an agent needs. MCP Gateway aggregates remote/local servers behind a single headless HTTP/SSE endpoint; Code Mode exposes exactly four MCP meta-tools to serve tool schemas on demand and execute in a hermetic Starlark sandbox. The separate host-side `call_many` Python API adds bounded parallel calls with per-call error isolation without expanding the MCP tool surface. Success means agents fetch only the schemas they use, and operators manage one registry from the CLI with dashboard parity.
+One MCP endpoint for every server an agent needs. MCP Gateway aggregates remote/local servers behind a single headless HTTP/SSE endpoint; Code Mode exposes five MCP meta-tools to serve tool schemas on demand, execute code in a hermetic Starlark sandbox, and fan out bounded parallel calls with per-item error isolation. The host-side `call_many` Python API remains available for direct code use, but the public MCP surface exposes `callMany` as the fifth meta-tool. Success means agents fetch only the schemas they use, and operators manage one registry from the CLI with dashboard parity.
 
 _\(inferred from the explicit user request\)_
 

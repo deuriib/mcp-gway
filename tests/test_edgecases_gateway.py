@@ -87,7 +87,7 @@ def test_mcp_post_initialize_ping_tools_list(tmp_path):
         ("ping", lambda j: j["result"] == {}),
         ("initialize", lambda j: j["result"]["protocolVersion"] == "2024-11-05"),
         ("notifications/initialized", lambda j: "result" in j),
-        ("tools/list", lambda j: len(j["result"]["tools"]) == 4),
+        ("tools/list", lambda j: len(j["result"]["tools"]) == 5),
     ]:
         r = c.post(
             "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}
