@@ -14,7 +14,7 @@
 
 > One endpoint for every MCP server your agent needs — fetch tool schemas on demand instead of loading everything upfront.
 
-MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint. Its **Code Mode** exposes exactly four MCP meta-tools (`listToolFiles`, `readToolFile`, `getToolDocs`, `executeToolCode`) so agents discover signatures lazily and execute them in a hermetic Starlark sandbox. A separate host-side Python `call_many` API supports bounded parallel calls with per-call error isolation; it is not a fifth MCP meta-tool.
+MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint. Its **Code Mode** exposes five MCP meta-tools (`listToolFiles`, `readToolFile`, `getToolDocs`, `executeToolCode`, `callMany`) so agents discover signatures lazily and fan out bounded parallel calls without leaving the MCP surface. The host-side Python `call_many` helper remains available for direct code use, but the MCP contract exposes `callMany` as the fifth meta-tool.
 
 - **CLI:** `mcp-gway` (canonical) or `mgw` (alias)
 - **Admin UI:** `mcp-gway serve --transport http` → [http://127.0.0.1:8080/](http://127.0.0.1:8080/)
@@ -43,7 +43,7 @@ For more examples and transports, see the [CLI Reference](docs/cli.md) and [Inte
 ## Features
 
 - **Multi-Server Aggregation** — Connect to multiple MCP servers (local or remote) and expose them through a single endpoint. One URL for every agent; one registry to manage.
-- **Code Mode** — Exactly four MCP meta-tools let LLMs discover schemas on demand and execute them in a hermetic sandbox, avoiding the need to load all tool definitions upfront. The host-side `call_many` Python API enables bounded parallel calls without expanding the MCP meta-tool surface.
+- **Code Mode** — Five MCP meta-tools let LLMs discover schemas on demand, execute them in a hermetic sandbox, and fan out bounded parallel calls without loading all tool definitions upfront.
 - **OAuth 2.0 Support** — Built-in OAuth flow with Dynamic Client Registration (RFC 7591) and secure token storage.
 - **Hermetic Sandbox** — Starlark-based sandbox for safe, constrained code execution.
 - **MCP Protocol Compliant** — Implements the Model Context Protocol over HTTP, SSE, and stdio.

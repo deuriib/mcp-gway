@@ -1,33 +1,35 @@
 # Code Mode
 
-Code Mode exposes exactly four MCP meta-tools for lazy discovery, allowing
-agents to find and execute tools without loading all schemas into context.
-The host-side `call_many` API is a separate Python helper, not a fifth MCP
-meta-tool.
+Code Mode exposes five MCP meta-tools for lazy discovery and bounded orchestration.
+The discovery flow still funnels through the same four Starlark-safe tools, and
+`callMany` is the fifth tool: a host-side fan-out adapter for parallel MCP calls
+without exposing new sandbox capabilities.
 
-| Tool                | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `gateway_listToolFiles`   | Discover available server stubs (`.pyi`) |
-| `gateway_readToolFile`    | Read exact tool names and parameters from a stub |
-| `gateway_getToolDocs`     | Fetch full documentation if the stub is truncated (optional) |
-| `gateway_executeToolCode` | Execute in a hermetic Starlark sandbox |
+| Tool | Description |
+| ----- | ----------- |
+| `listToolFiles` | Discover available server stubs (`.pyi`) |
+| `readToolFile` | Read exact tool names and parameters from a stub |
+| `getToolDocs` | Fetch full docs if the stub is not enough |
+| `executeToolCode` | Execute in the hermetic Starlark sandbox |
+| `callMany` | Fan out up to 50 MCP calls with per-item error isolation |
 
 ## Discovery Flow (Recommended)
 
-1. `gateway_listToolFiles` — Discover available servers.
-2. `gateway_readToolFile` — Read the `.pyi` stub for exact tool names and parameters.
-3. `gateway_getToolDocs` (optional) — Fetch full docs if needed.
-4. `gateway_executeToolCode` — Run Starlark: `Server.tool(param=value)`
+1. `listToolFiles` — discover available servers.
+2. `readToolFile` — read the `.pyi` stub for exact call signatures.
+3. `getToolDocs` (optional) — fetch full docs if needed.
+4. `executeToolCode` — run Starlark with `Server.tool(param=value)`.
+5. `callMany` — when the host needs parallel fan-out without writing Starlark.
 
-The discovery workflow has four meta-tools, with `gateway_getToolDocs` optional
-when the stub already has enough detail. Complete discovery before execution;
-independent host-side tool calls can use `call_many`.
+The discovery workflow still starts with the four tool-discovery meta-tools. The
+fifth tool is a direct host-side helper for orchestration and is not available
+inside Starlark.
 
 ## Calling Convention (Starlark)
 
 ```python
 result = Server.tool(param=value, params...)
-value = result["key"]  # Use bracket access, not dot notation
+value = result["key"]  # bracket access only
 ```
 
 ## Constraints
@@ -36,6 +38,7 @@ value = result["key"]  # Use bracket access, not dot notation
 - No `try/except`, classes, or imports.
 - Each execution scope is fresh — re-fetch or persist via MCP.
 - Use stubs from `readToolFile` as the source of truth for signatures.
+- `callMany` is a host-side tool; it is never callable from the sandbox.
 
 ## Response Envelope
 
@@ -46,77 +49,69 @@ value = result["key"]  # Use bracket access, not dot notation
   "result": "...",
   "logs": ["..."],
   "calls": [
-    {"i": 1, "server": "filesystem", "tool": "read_file", "ms": 12, "status": "ok", "bytes": 340, "reused": false}
+    {"i": 1, "server": "filesystem", "tool": "read_file", "status": "ok"}
   ],
   "usage": {"call_count": 1, "ms": 18, "limit_bytes": 262144, "truncated": false}
 }
 ```
 
-`calls` is the execution trace: what actually ran, in order, with duration and
-payload size. Use it instead of guessing why a script failed. `reused: true`
-means the call shared a connection opened earlier in the same script.
+`calls` is the execution trace: what actually ran, in order, with status and timing.
+Use it instead of guessing why a script failed.
 
 ## Session Reuse
 
-All calls in one script share one upstream connection per server. Three calls
-to `Filesystem` spawn one process and run one MCP handshake, not three.
+All calls in one script share one upstream connection per server. Three calls to
+`Filesystem` spawn one process and run one MCP handshake, not three.
 
 Reuse is scoped to a single `executeToolCode` invocation. A new script opens a
-fresh connection, so a crashed upstream never poisons the next run. A failed
-call evicts its connection and is never retried — a non-idempotent tool must
-not run twice.
+fresh connection, so a crashed upstream never poisons the next run.
 
-A script that calls `N` servers concurrently is still sequential: Starlark has
-no `async`. Parallelism is a host-side concern.
+## `callMany` contract
 
-## Host-side fan-out
+The `callMany` tool accepts a `calls` array of one to fifty items.
+Each item looks like this:
 
-Use the Python host API `Gateway.call_many(...)` when the host needs to dispatch
-multiple MCP calls in parallel without letting one error abort the rest of the
-batch. This method is not exposed as an MCP tool and cannot be called from
-Starlark. Provide calls as dictionaries with `server`, `tool`, and `arguments`;
-`id` is optional. If the host has a `Registry` rather than a `Gateway` instance,
-it can call `mcp_gway.call_many(registry, tool_calls, ...)` instead. Results
-preserve input order and each item contains the call identity plus either a
-result or an isolated error:
-
-```python
-results = gateway.call_many(
-    [
-        {
-            "id": "a",
-            "server": "filesystem",
-            "tool": "read_file",
-            "arguments": {"path": "README.md"},
-        },
-        {
-            "id": "b",
-            "server": "filesystem",
-            "tool": "read_file",
-            "arguments": {"path": "missing.txt"},
-        },
-    ],
-    max_concurrency=4,
-)
+```json
+{
+  "server": "filesystem",
+  "tool": "read_file",
+  "arguments": {"path": "README.md"},
+  "id": "a"
+}
 ```
 
-Each returned item has `id`, `server`, `tool`, and `ok`, plus `result` when
-`ok` is true or `error` (`type` and `message`) when it is false. The default
-concurrency is at most eight calls at a time; set `max_concurrency` to choose a
-different limit. Results retain input order regardless of completion order.
-This host-side helper leaves the hermetic Starlark runtime unchanged.
+Rules:
+- `calls` is required.
+- `arguments` defaults to `{}` when omitted.
+- Item shape is validated per entry; malformed items produce `ok: false` results,
+  not a batch abort.
+- A denied tool or unknown server is also reported as a per-item error.
+- Results keep input order.
+- Default concurrency stays `min(8, len(calls))`.
+
+The response is still the normal `build_envelope` payload:
+
+```json
+{
+  "result": [
+    {"id": "a", "server": "filesystem", "tool": "read_file", "ok": true, "result": {...}},
+    {"id": "b", "server": "filesystem", "tool": "read_file", "ok": false, "error": {"type": "FileNotFoundError", "message": "..."}}
+  ],
+  "logs": [],
+  "calls": [],
+  "usage": {"call_count": 0, "ms": 12, "limit_bytes": 262144, "truncated": false}
+}
+```
+
+This tool is intentionally not available inside Starlark. It is a host-side
+orchestration surface, and the sandbox keeps the same safety profile.
 
 ## Result Budget
 
 Responses are capped at `MCP_GWAY_MAX_RESULT_BYTES` (default `262144`, minimum
-`1024`, maximum `8388608`). Oversized payloads are trimmed in this order:
-log lines (last 200 kept), call trace (first 200 kept), long strings and
-collections in `result`, then the whole result as a labelled preview.
-
-Truncation is always labelled inside the value and reported as
-`usage.truncated: true`. The envelope stays valid JSON — a truncated response
-is never a broken document. When you see the marker, narrow the query or page
-the results instead of retrying the same call.
+`1024`, maximum `8388608`). Oversized payloads are trimmed in a predictable order,
+then labelled as truncated. The envelope stays valid JSON — a truncated response
+is never a broken document.
 
 ## Usage Example
 
