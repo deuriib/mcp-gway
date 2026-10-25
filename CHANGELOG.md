@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v4.10.2 (2026-10-25)
+
+### Bug Fixes
+
+- **gateway**: Support GET /.well-known/oauth-protected-resource (fixes #29)
+  ([`152d391`](https://github.com/deuriib/mcp-gway/commit/152d3913cb21d54a5f7e4626eaba3d2c159edc5e))
+
+
 ## v4.10.1 (2026-10-24)
 
 ### Bug Fixes

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__version__ = "4.10.1"
+__version__ = "4.10.2"
 
 
 def call_many(
