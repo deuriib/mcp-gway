@@ -44,7 +44,7 @@ For more examples and transports, see the [CLI Reference](docs/cli.md) and [Inte
 
 - **Multi-Server Aggregation** — Connect to multiple MCP servers (local or remote) and expose them through a single endpoint. One URL for every agent; one registry to manage.
 - **Code Mode** — Five MCP meta-tools let LLMs discover schemas on demand, execute them in a hermetic sandbox, and fan out bounded parallel calls without loading all tool definitions upfront.
-- **OAuth 2.0 Support** — Built-in OAuth flow with Dynamic Client Registration (RFC 7591) and secure token storage.
+- **OAuth 2.0 Support** — Built-in OAuth flow with Dynamic Client Registration (RFC 7591), secure token storage, and automated `/.well-known/oauth-protected-resource` discovery metadata (RFC 8707) for OAuth-capable MCP clients.
 - **Hermetic Sandbox** — Starlark-based sandbox for safe, constrained code execution.
 - **MCP Protocol Compliant** — Implements the Model Context Protocol over HTTP, SSE, and stdio.
 - **Local-First Security** — Local-first design with SSRF guards, command allow-lists, and CSRF protection.

@@ -109,6 +109,19 @@ async def test_tools_call_execute_code(gateway):
 
 
 @pytest.mark.asyncio
+async def test_oauth_protected_resource_endpoint(gateway):
+    transport = ASGITransport(app=gateway.app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/.well-known/oauth-protected-resource")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        data = response.json()
+        assert "resource" in data
+        assert "authorization_servers" in data
+        assert data["resource"] == "http://test/mcp"
+
+
+@pytest.mark.asyncio
 async def test_unknown_method(gateway):
     transport = ASGITransport(app=gateway.app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
