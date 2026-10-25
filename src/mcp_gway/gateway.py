@@ -484,12 +484,26 @@ class Gateway:
                 status_code=exc.status_code, content={"detail": exc.detail}
             )
 
+        async def _oauth_protected_resource(request: Request) -> JSONResponse:
+            base = str(request.base_url).rstrip("/")
+            return JSONResponse(
+                {
+                    "resource": f"{base}/mcp",
+                    "authorization_servers": [],
+                }
+            )
+
         self.app = Starlette(
             routes=[
                 Route("/health", self._health, methods=["GET"]),
                 Route("/ready", handle_ready, methods=["GET"]),
                 Route("/live", handle_live, methods=["GET"]),
                 Route("/metrics", handle_metrics, methods=["GET"]),
+                Route(
+                    "/.well-known/oauth-protected-resource",
+                    _oauth_protected_resource,
+                    methods=["GET"],
+                ),
                 *mcp_routes,
                 *create_admin_routes(),
             ],
