@@ -11,6 +11,7 @@
 [![Code Mode](https://img.shields.io/badge/Code%20Mode-Lazy%20Discovery-purple)](docs/code-mode.md)
 [![Local-First Security](https://img.shields.io/badge/Local--First-Security-green)](docs/security.md)
 [![Observability Built-in](https://img.shields.io/badge/Observability-Built--in-orange)](docs/observability.md)
+[![Sponsor](https://img.shields.io/badge/♥-Sponsor-EC4899?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/deuriib)
 
 > One endpoint for every MCP server your agent needs — fetch tool schemas on demand instead of loading everything upfront.
 

@@ -37,8 +37,13 @@
     "url": "https://github.com/deuriib/mcp-gway/issues"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "1.0.4",
-    "@earendil-works/pi-coding-agent": "1.0.4",
-    "@opencode/plugin": "2.0.9"
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@opencode/plugin": "2.1.4"
+  },
+  "overrides": {
+    "undici": "^8.12.2",
+    "zod": "^4.6.6",
+    "@opentelemetry/core": "^2.8.0"
   }
 }
