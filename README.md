@@ -71,6 +71,8 @@ uv run pytest -v   # 647 tests
 
 See [docs/development.md](docs/development.md) for checks, probes, and pre-commit.
 
+![Repobeats analytics](https://repobeats.com/deuriib/mcp-gway?theme=light&size=medium&period=30)
+
 ## License
 
 [MIT](LICENSE)
