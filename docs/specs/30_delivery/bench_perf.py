@@ -331,7 +331,7 @@ def measure_code_mode_overhead() -> list[CodeModeResult]:
         ("listToolFiles", "gateway_listToolFiles"),
         ("readToolFile", "gateway_readToolFile"),
         ("getToolDocs", "gateway_getToolDocs"),
-        ("executeToolCode", "gateway_executeToolCode"),
+        ("executeTool", "gateway_executeTool"),
     ]
     for tool_name, _ in tools:
         result = CodeModeResult(tool=tool_name)

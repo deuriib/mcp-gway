@@ -20,7 +20,7 @@
 
 import { readFileSync } from "node:fs";
 
-const MARKER = "MCP-GWAY v4.11.0";
+const MARKER = "MCP-GWAY v5.0.0";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
 
@@ -69,7 +69,7 @@ All MCP tools run via \`gateway_*\` helpers. **Mandatory order:**
 1. \`gateway_listToolFiles\` — discover servers
 2. \`gateway_readToolFile\` — read \`servers/<Name>.pyi\` stub for exact tool names + params
 3. \`gateway_getToolDocs\` (optional) — full docs when stub is truncated
-4. \`gateway_executeToolCode\` — run Starlark: \`Server.tool(param=value)\`
+4. \`gateway_executeTool\` — run Starlark: \`Server.tool(param=value)\`
 
 > **Parallel:** Step 1 first. Steps 2-4 can run concurrently across servers/tools.
 
@@ -81,16 +81,16 @@ value = result["key"]  # brackets, not dot
 \`\`\`
 
 - Sync only, keyword args, no \`try/except\`, no classes, no imports.
-- Each \`executeToolCode\` scope is fresh — re-fetch or persist via MCP.
+- Each \`executeTool\` scope is fresh — re-fetch or persist via MCP.
 
 ### Anti-Patterns
 
-| Anti-Pattern                            | Fix                                       |
-| :-------------------------------------- | :---------------------------------------- |
-| Guessing tool names                     | Stub from \`readToolFile\` is authoritative |
-| Skipping \`listToolFiles\`                | Always discover first when unsure         |
-| \`executeToolCode\` before \`readToolFile\` | Confirm signature first                   |
-| Assuming cross-call state               | Every call is isolated                    |
+| Anti-Pattern                        | Fix                                       |
+| :---------------------------------- | :---------------------------------------- |
+| Guessing tool names                 | Stub from \`readToolFile\` is authoritative |
+| Skipping \`listToolFiles\`            | Always discover first when unsure         |
+| \`executeTool\` before \`readToolFile\` | Confirm signature first                   |
+| Assuming cross-call state           | Every call is isolated                    |
 
 ## MCP RULES
 

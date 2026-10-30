@@ -62,7 +62,7 @@
 ### Finding 4: Code Mode Overhead
 - Not measured in this baseline
 - Requires running MCP servers with tools registered
-- **Next step:** Measure with `listToolFiles`, `readToolFile`, `getToolDocs`, `executeToolCode`
+- **Next step:** Measure with `listToolFiles`, `readToolFile`, `getToolDocs`, `executeTool`
 
 ### Finding 5: Resource Consumption
 - Not measured in this baseline

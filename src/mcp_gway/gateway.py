@@ -206,12 +206,12 @@ def _safe_error_data(exc: BaseException) -> dict[str, str] | None:
 CODE_MODE_TOOLS = [
     {
         "name": "listToolFiles",
-        "description": 'Lists the virtual .pyi stub files for connected CodeMode MCP servers (CodeMode VFS). Default server-level binding returns servers/<server>.pyi per server (e.g., servers/filesystem.pyi); tool-level binding returns servers/<server>/<tool>.pyi per tool. The <tool> filename stem is the exact callable name for executeToolCode. Workflow: listToolFiles -> readToolFile -> (optional) getToolDocs -> executeToolCode. In code, call tools as Server.tool_name(param=value) (e.g., Filesystem.read_file(path=".")). CALL THIS FIRST when the user names a server, tool, or capability not in your visible tool list — connected MCP servers are only discoverable here. Do NOT claim a server or capability is unavailable until listToolFiles confirms it is unavailable, then offer the closest alternative from the visible list or explain that it is not connected.',
+        "description": 'Lists the virtual .pyi stub files for connected CodeMode MCP servers (CodeMode VFS). Default server-level binding returns servers/<server>.pyi per server (e.g., servers/filesystem.pyi); tool-level binding returns servers/<server>/<tool>.pyi per tool. The <tool> filename stem is the exact callable name for executeTool. Workflow: listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool. In code, call tools as Server.tool_name(param=value) (e.g., Filesystem.read_file(path=".")). CALL THIS FIRST when the user names a server, tool, or capability not in your visible tool list — connected MCP servers are only discoverable here. Do NOT claim a server or capability is unavailable until listToolFiles confirms it is unavailable, then offer the closest alternative from the visible list or explain that it is not connected.',
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "readToolFile",
-        "description": "Reads a virtual .pyi stub: servers/<server>.pyi for the full server signature list, or servers/<server>/<tool>.pyi for a single tool (both listed by listToolFiles). Matching is case-insensitive and the .pyi extension is optional. Returns the authoritative callable name and arguments for executeToolCode as Server.tool_name(param=value). If the compact signature is insufficient, use getToolDocs. Workflow: listToolFiles -> readToolFile -> (optional) getToolDocs -> executeToolCode.",
+        "description": "Reads a virtual .pyi stub: servers/<server>.pyi for the full server signature list, or servers/<server>/<tool>.pyi for a single tool (both listed by listToolFiles). Matching is case-insensitive and the .pyi extension is optional. Returns the authoritative callable name and arguments for executeTool as Server.tool_name(param=value). If the compact signature is insufficient, use getToolDocs. Workflow: listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -250,8 +250,8 @@ CODE_MODE_TOOLS = [
         },
     },
     {
-        "name": "executeToolCode",
-        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., result = Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeToolCode; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"], assign output to `result`. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}.',
+        "name": "executeTool",
+        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., result = Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"], assign output to `result`. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}.',
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -265,7 +265,7 @@ CODE_MODE_TOOLS = [
     },
     {
         "name": "callMany",
-        "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeToolCode script for that.",
+        "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeTool script for that.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -640,7 +640,7 @@ class Gateway:
             if (
                 method == "tools/call"
                 and isinstance(params, dict)
-                and params.get("name") == "executeToolCode"
+                and params.get("name") == "executeTool"
             ):
                 # Starlark sandbox blocks (ThreadPool wait + asyncio.run inside);
                 # never hold the event loop: offload the whole tool call.
@@ -913,7 +913,7 @@ class Gateway:
         status = "ok"
         server_label = "gateway"
         tool_label = _san(str(name)) if name else "_other"
-        # For executeToolCode we could try to parse server from code, but keep gateway
+        # For executeTool we could try to parse server from code, but keep gateway
         try:
             if name == "listToolFiles":
                 result = self.code_mode.list_tool_files()
@@ -945,18 +945,18 @@ class Gateway:
                 result = self.code_mode.get_tool_docs(
                     server=arguments["server"], tool=arguments["tool"]
                 )
-            elif name == "executeToolCode":
+            elif name == "executeTool":
                 if not isinstance(arguments, dict) or not isinstance(
                     arguments.get("code"), str
                 ):
                     raise InvalidParamsError(
-                        "executeToolCode requires code string [reason=invalid_params]"
+                        "executeTool requires code string [reason=invalid_params]"
                     )
                 if not arguments["code"].strip():
                     raise InvalidParamsError(
-                        "executeToolCode requires non-empty code [reason=invalid_params]"
+                        "executeTool requires non-empty code [reason=invalid_params]"
                     )
-                result = self.code_mode.execute_tool_code(code=arguments["code"])
+                result = self.code_mode.execute_tool(code=arguments["code"])
             elif name == "callMany":
                 if not isinstance(arguments, dict) or "calls" not in arguments:
                     raise InvalidParamsError(

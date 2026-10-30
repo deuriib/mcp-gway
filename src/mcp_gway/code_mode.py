@@ -63,20 +63,19 @@ def _validate_code(code: str) -> None:
     for rx in _BLOCKED_PATTERNS:
         if rx.search(code):
             raise InvalidParamsError(
-                "executeToolCode rejects imports/classes [reason=code_validation]"
+                "executeTool rejects imports/classes [reason=code_validation]"
             )
     scannable = _strip_string_literals(code)
     for token in _BLOCKED_SUBSTRINGS:
         if token in scannable:
             raise InvalidParamsError(
-                f"executeToolCode rejects {token!r} (use MCP tools) "
+                f"executeTool rejects {token!r} (use MCP tools) "
                 "[reason=code_validation]"
             )
     for name in _BLOCKED_IDENTIFIERS:
         if re.search(rf"\b{re.escape(name)}\b", scannable):
             raise InvalidParamsError(
-                f"executeToolCode rejects {name!r} (use MCP tools) "
-                "[reason=code_validation]"
+                f"executeTool rejects {name!r} (use MCP tools) [reason=code_validation]"
             )
 
 
@@ -166,7 +165,7 @@ def _prepare_call_items(
 def _run_isolated(factory: Any) -> Any:
     """Run a coroutine factory in a private thread with its own event loop.
 
-    ``executeToolCode`` is synchronous by contract and may be called from a
+    ``executeTool`` is synchronous by contract and may be called from a
     worker thread (gateway, admin) or from plain sync code (CLI). Giving the
     script its own loop keeps those callers working and guarantees the
     connection cache never leaks between executions.
@@ -414,13 +413,13 @@ class CodeMode:
             pass
         return self.registry.get_tool_docs(name, actual_tool)
 
-    def execute_tool_code(self, code: str, timeout: float | None = None) -> str:
+    def execute_tool(self, code: str, timeout: float | None = None) -> str:
         from mcp_gway.gateway import InvalidParamsError
 
         self.refresh()
         if not isinstance(code, str) or not code.strip():
             raise InvalidParamsError(
-                "executeToolCode requires non-empty code [reason=invalid_params]"
+                "executeTool requires non-empty code [reason=invalid_params]"
             )
         _validate_code(code)
         effective_timeout = timeout or self.tool_execution_timeout
@@ -470,6 +469,9 @@ class CodeMode:
             raise RuntimeError(
                 f"result serialization failed: {type(e).__name__}"
             ) from None
+
+    # Backward-compatible alias for Python callers
+    execute_tool_code = execute_tool
 
     # ── Agent Mode ────────────────────────────────────────────────────
 

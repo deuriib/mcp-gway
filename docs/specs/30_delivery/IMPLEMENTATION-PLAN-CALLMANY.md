@@ -48,7 +48,7 @@
       expect FAIL (name not found).
 - [ ] **Step 3: Add the schema entry** to `CODE_MODE_TOOLS`; description states ordering,
       per-item errors, 50-item cap, and that dependencies between calls belong in
-      `executeToolCode`.
+      `executeTool`.
 - [ ] **Step 4: Run it** — expect PASS.
 - [ ] **Step 5: Commit** — `feat(code-mode): advertise callMany in tools/list`.
 

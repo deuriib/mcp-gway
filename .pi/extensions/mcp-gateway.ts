@@ -44,7 +44,7 @@ import { fileURLToPath } from "node:url";
  * a missing CLI must never break session start.
  */
 
-const MARKER = "MCP-GWAY v4.11.0";
+const MARKER = "MCP-GWAY v5.0.0";
 const RULES_HEADING = "MCP Rules — Gateway Protocol";
 const SECTION_KEY = "mcp-gateway";
 const MAX_RULES_BYTES = 256 * 1024;
@@ -70,7 +70,7 @@ All MCP tools run via \`gateway_*\` helpers. **Mandatory order:**
 1. \`gateway_listToolFiles\` — discover servers
 2. \`gateway_readToolFile\` — read \`servers/<Name>.pyi\` stub for exact tool names + params
 3. \`gateway_getToolDocs\` (optional) — full docs when stub is truncated
-4. \`gateway_executeToolCode\` — run Starlark: \`Server.tool(param=value)\`
+4. \`gateway_executeTool\` — run Starlark: \`Server.tool(param=value)\`
 `;
 
 function warn(message: string): void {

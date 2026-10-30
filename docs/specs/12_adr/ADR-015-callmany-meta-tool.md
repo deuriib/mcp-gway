@@ -31,7 +31,7 @@ environment variables, and no change to the existing concurrency semantics in
 ### 1. Keep `call_many` as a Python-only helper
 
 This minimizes the API surface but leaves a large gap for agents that do not
-write Python and are forced to fall back to `executeToolCode` for orchestration.
+write Python and are forced to fall back to `executeTool` for orchestration.
 The same fan-out engine is already implemented and tested; surfacing it does not
 add complexity, only visibility.
 

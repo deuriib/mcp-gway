@@ -73,7 +73,7 @@ async def test_tools_list(gateway):
         assert "listToolFiles" in names
         assert "readToolFile" in names
         assert "getToolDocs" in names
-        assert "executeToolCode" in names
+        assert "executeTool" in names
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,7 @@ async def test_tools_call_execute_code(gateway):
             "jsonrpc": "2.0",
             "id": 4,
             "method": "tools/call",
-            "params": {"name": "executeToolCode", "arguments": {"code": "result = 42"}},
+            "params": {"name": "executeTool", "arguments": {"code": "result = 42"}},
         }
         response = await client.post("/mcp", json=payload)
         assert response.status_code == 200
@@ -211,18 +211,18 @@ async def test_post_to_expired_session_returns_404(gateway):
     assert response["error"]["code"] == -32001
 
 
-# --- executeToolCode with MCP tool access ---
+# --- executeTool with MCP tool access ---
 
 
 @pytest.mark.asyncio
 async def test_execute_tool_code_has_no_call_tool(gateway):
-    """executeToolCode sandbox should NOT have call_tool injected."""
+    """executeTool sandbox should NOT have call_tool injected."""
     assert "call_tool" not in gateway.code_mode.sandbox._custom_globals
 
 
 @pytest.mark.asyncio
 async def test_execute_tool_code_has_server_structs(gateway):
-    """executeToolCode sandbox should have server structs for registered servers."""
+    """executeTool sandbox should have server structs for registered servers."""
     assert "youtube" in gateway.code_mode.sandbox._modules
 
 
@@ -245,7 +245,7 @@ async def test_execute_code_with_server_struct_via_gateway(gateway, monkeypatch)
             "id": 10,
             "method": "tools/call",
             "params": {
-                "name": "executeToolCode",
+                "name": "executeTool",
                 "arguments": {"code": 'result = youtube.search(query="gateway test")'},
             },
         }

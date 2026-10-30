@@ -43,7 +43,7 @@ profiling:
       - "listToolFiles"
       - "readToolFile"
       - "getToolDocs"
-      - "executeToolCode"
+      - "executeTool"
     sandbox_init: true
     sandbox_exec: true
 

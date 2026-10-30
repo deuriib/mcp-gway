@@ -106,7 +106,7 @@ def test_tools_docs(seeded_runner):
 def test_tools_exec_inline_code(seeded_runner, monkeypatch):
     runner, _registry = seeded_runner
     monkeypatch.setattr(
-        "mcp_gway.code_mode.CodeMode.execute_tool_code",
+        "mcp_gway.code_mode.CodeMode.execute_tool",
         lambda self, code, timeout=None: json.dumps(
             {"result": {"ok": True}, "logs": []}
         ),
@@ -143,13 +143,13 @@ def test_tools_exec_reads_file(seeded_runner, tmp_path, monkeypatch):
 
     from mcp_gway.code_mode import CodeMode
 
-    real = CodeMode.execute_tool_code
+    real = CodeMode.execute_tool
 
     def _fake(self, code, timeout=None):
         seen["code"] = code
         return json.dumps({"result": 1, "logs": []})
 
-    monkeypatch.setattr(CodeMode, "execute_tool_code", _fake)
+    monkeypatch.setattr(CodeMode, "execute_tool", _fake)
     result = runner.invoke(main, ["tools", "exec", "--file", str(snippet)])
     assert result.exit_code == 0, result.output
     assert "Demo.ping" in seen["code"]

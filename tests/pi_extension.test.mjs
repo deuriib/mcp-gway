@@ -182,7 +182,7 @@ check("card carries the mandatory 4-step order", () => {
 		"gateway_listToolFiles",
 		"gateway_readToolFile",
 		"gateway_getToolDocs",
-		"gateway_executeToolCode",
+		"gateway_executeTool",
 	]) {
 		assert.ok(injected.includes(step), `missing ${step}`);
 	}

@@ -92,7 +92,7 @@ Results are saved to `docs/specs/30_delivery/reports/`:
 - **listToolFiles:** Time to list available tool files
 - **readToolFile:** Time to read a tool file stub
 - **getToolDocs:** Time to fetch tool documentation
-- **executeToolCode:** Time to execute Starlark code in sandbox
+- **executeTool:** Time to execute Starlark code in sandbox
 
 ## Interpreting `/metrics`
 

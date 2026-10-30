@@ -347,7 +347,7 @@ class Registry:
             f"# Usage: {cap_name}.tool_name(param=value)",
             f'# For detailed docs: use getToolDocs(server="{name}", tool="tool_name")',
             "# Note: hyphenated MCP names are exposed sanitized (hyphens -> underscores).",
-            f"# Use sanitized names in executeToolCode as {cap_name}.tool_name(...).",
+            f"# Use sanitized names in executeTool as {cap_name}.tool_name(...).",
             "",
         ]
         raw_desc = str(getattr(config, "description", "") or "").strip()
