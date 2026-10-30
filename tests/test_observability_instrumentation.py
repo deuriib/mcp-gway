@@ -14,20 +14,20 @@ def test_tool_call_increments_metric(tmp_path: Path) -> None:
     reg = Registry(servers_dir=tmp_path / "servers")
     gw = Gateway(reg, host="127.0.0.1")
     # Mock code_mode to avoid real MCP
-    gw.code_mode.execute_tool_code = lambda code: "mocked"  # type: ignore[method-assign]
+    gw.code_mode.execute_tool = lambda code: "mocked"  # type: ignore[method-assign]
     c = TestClient(gw.app)
-    # Call via MCP POST tools/call executeToolCode
+    # Call via MCP POST tools/call executeTool
     body = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {"name": "executeToolCode", "arguments": {"code": "result='x'"}},
+        "params": {"name": "executeTool", "arguments": {"code": "result='x'"}},
     }
     r = c.post("/mcp", json=body)
     assert r.status_code == 200
     txt = c.get("/metrics").text
     assert "mcp_gway_mcp_tool_calls_total" in txt
-    # should have label server/tool/status? At least server wildcard or executeToolCode
+    # should have label server/tool/status? At least server wildcard or executeTool
     assert 'status="ok"' in txt or "ok" in txt
 
 

@@ -70,7 +70,7 @@ All MCP tools run via \`gateway_*\` helpers. **Mandatory order:**
 1. \`gateway_listToolFiles\` — discover servers
 2. \`gateway_readToolFile\` — read \`servers/<Name>.pyi\` stub for exact tool names + params
 3. \`gateway_getToolDocs\` (optional) — full docs when stub is truncated
-4. \`gateway_executeToolCode\` — run Starlark: \`Server.tool(param=value)\`
+4. \`gateway_executeTool\` — run Starlark: \`Server.tool(param=value)\`
 `;
 
 function warn(message: string): void {

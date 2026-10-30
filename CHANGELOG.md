@@ -2,6 +2,13 @@
 
 <!-- version list -->
 
+## Unreleased
+
+### Breaking Changes
+
+- **gateway**: Rename `executeToolCode` meta-tool to `executeTool` to eliminate semantic confusion with arbitrary code execution (fixes #30)
+
+
 ## v4.11.0 (2026-10-30)
 
 ### Features

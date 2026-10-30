@@ -42,9 +42,9 @@ Fifth entry in `CODE_MODE_TOOLS`, name `callMany`.
   `call_many` already ships with dict items, and the package API, `Gateway.call_many`,
   and three skills document it. Positional arrays are also easier for a model to get
   wrong. Keeping one shape beats terseness.
-- Returns the `executeToolCode` envelope (`result` / `logs` / `calls` / `usage`) with the
+- Returns the `executeTool` envelope (`result` / `logs` / `calls` / `usage`) with the
   per-call list in `result`, so an agent reads one response shape across meta-tools.
-- `logs` and `calls` are empty: the trace lives inside `executeToolCode`. Upstream
+- `logs` and `calls` are empty: the trace lives inside `executeTool`. Upstream
   per-call metrics already record through `_call_tool_async`.
 
 ## Validation rules
@@ -87,7 +87,7 @@ Malformed items are data, not exceptions: one typo must not discard the other 49
 | 5 | Limits | empty and 51 items raise `InvalidParamsError` |
 | 6 | Envelope | valid JSON with `result`/`logs`/`calls`/`usage` |
 | 7 | Budget | oversized batch truncated, still valid JSON |
-| 8 | Regression | `executeToolCode` and the other meta-tools unchanged |
+| 8 | Regression | `executeTool` and the other meta-tools unchanged |
 
 ## Documentation
 

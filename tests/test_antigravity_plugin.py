@@ -82,7 +82,7 @@ def test_rules_content():
     assert f"<!-- MCP-GWAY v{__version__} -->" in content
     assert "gateway_listToolFiles" in content
     assert "gateway_readToolFile" in content
-    assert "gateway_executeToolCode" in content
+    assert "gateway_executeTool" in content
     assert "brackets, not dot" in content
     assert "Anti-Patterns" in content
 

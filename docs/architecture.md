@@ -30,7 +30,7 @@
 │  - listToolFiles               │  - Hermetic execution                │
 │  - readToolFile                │  - Server injection                  │
 │  - getToolDocs                 │                                      │
-│  - executeToolCode             │                                      │
+│  - executeTool                 │                                      │
 │  - callMany                    │                                      │
 │  Python helper: call_many (host-side; not an MCP tool)                │
 ├──────────────────────────────────────────────────────────────────────┤

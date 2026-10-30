@@ -531,7 +531,7 @@ def tools_docs(server: str, tool: str) -> None:
     help="Execution timeout in seconds (default 30).",
 )
 def tools_exec(code: str | None, file_path: str | None, timeout: float | None) -> None:
-    """Execute Starlark code via MCP tools (same as executeToolCode).
+    """Execute Starlark code via MCP tools (same as executeTool).
 
     Local servers spawn only when core/policy.py allows — a denied
     command fails here with the policy message, never silently.
@@ -553,7 +553,7 @@ def tools_exec(code: str | None, file_path: str | None, timeout: float | None) -
     from mcp_gway.code_mode import CodeMode
 
     try:
-        output = CodeMode(_get_registry()).execute_tool_code(code, timeout=timeout)
+        output = CodeMode(_get_registry()).execute_tool(code, timeout=timeout)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         _log_cli_event(

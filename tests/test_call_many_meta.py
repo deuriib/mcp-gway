@@ -55,7 +55,7 @@ def test_tools_list_exposes_call_many():
         "listToolFiles",
         "readToolFile",
         "getToolDocs",
-        "executeToolCode",
+        "executeTool",
         "callMany",
     }
     entry = next(tool for tool in CODE_MODE_TOOLS if tool["name"] == "callMany")

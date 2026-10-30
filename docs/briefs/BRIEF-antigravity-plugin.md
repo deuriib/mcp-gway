@@ -93,6 +93,6 @@ An Antigravity plugin with OpenCode parity: skill loads automatically, context +
 
 | Key Result | Baseline | Target | Measurement |
 |------------|----------|--------|-------------|
-| KR-2.1 Mandatory order followed | ad-hoc | `listToolFiles` → `readToolFile` → `getToolDocs?` → `executeToolCode` in `/rules` + hooks | rules content diff vs `plugins/opencode/mcp-gateway.ts` MCP_RULES |
+| KR-2.1 Mandatory order followed | ad-hoc | `listToolFiles` → `readToolFile` → `getToolDocs?` → `executeTool` in `/rules` + hooks | rules content diff vs `plugins/opencode/mcp-gateway.ts` MCP_RULES |
 | KR-2.2 Starlark convention correct | guesses | Brackets-not-dot, sync-only, kwargs, fresh-scope in guidance | rules excerpt + session evidence |
 | KR-2.3 Suite green, no regression | 255 tests baseline | Full suite green + new plugin tests + ruff clean | `uv run pytest -v` + `ruff check` + `ruff format --check` |

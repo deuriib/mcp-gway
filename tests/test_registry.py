@@ -104,8 +104,7 @@ def test_pyi_still_has_usage_comments(registry, http_config):
     content = (registry.servers_dir / "testserver.pyi").read_text()
     assert "# Usage: Testserver.tool_name(param=value)" in content
     assert (
-        "# Use sanitized names in executeToolCode as Testserver.tool_name(...)."
-        in content
+        "# Use sanitized names in executeTool as Testserver.tool_name(...)." in content
     )
     assert "# For detailed docs:" in content
 

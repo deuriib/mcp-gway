@@ -4,7 +4,7 @@
 
 The Antigravity plugin integrates **mcp-gateway** with Google Antigravity (CLI, IDE, and Antigravity 2.0). It provides:
 1. **Automatic MCP Server Registration**: Connects to the local gateway at `http://127.0.0.1:8080/mcp` over loopback.
-2. **Gateway Protocol Guidance**: Injects mandatory calling rules (`gateway_listToolFiles` → `gateway_readToolFile` → `gateway_executeToolCode`) and Starlark calling conventions via `rules/AGENTS.md`.
+2. **Gateway Protocol Guidance**: Injects mandatory calling rules (`gateway_listToolFiles` → `gateway_readToolFile` → `gateway_executeTool`) and Starlark calling conventions via `rules/AGENTS.md`.
 3. **Session Reinjection**: PreInvocation hook (`scripts/reinject.mjs`, Node ESM) ensures the Gateway Protocol survives conversation compaction without duplication (deduped by the `MCP-GWAY v4.11.0` marker).
 4. **Bundled CLI Skill**: Automatically exposes the `mcp-gway` skill.
 

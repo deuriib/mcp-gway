@@ -141,7 +141,7 @@ def test_mcp_post_invalid_params_branches(tmp_path):
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
-            "params": {"name": "executeToolCode", "arguments": {"code": 123}},
+            "params": {"name": "executeTool", "arguments": {"code": 123}},
         },
     )
     assert r.json()["error"]["code"] == -32602
@@ -151,7 +151,7 @@ def test_mcp_post_invalid_params_branches(tmp_path):
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
-            "params": {"name": "executeToolCode", "arguments": {"code": "   "}},
+            "params": {"name": "executeTool", "arguments": {"code": "   "}},
         },
     )
     assert r.json()["error"]["code"] == -32602
@@ -214,7 +214,7 @@ def test_mcp_post_list_read_docs_execute_ok(tmp_path):
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "executeToolCode",
+                "name": "executeTool",
                 "arguments": {"code": "result = 1 + 1"},
             },
         },

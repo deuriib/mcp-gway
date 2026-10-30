@@ -10,7 +10,7 @@ without exposing new sandbox capabilities.
 | `listToolFiles` | Discover available server stubs (`.pyi`) |
 | `readToolFile` | Read exact tool names and parameters from a stub |
 | `getToolDocs` | Fetch full docs if the stub is not enough |
-| `executeToolCode` | Execute in the hermetic Starlark sandbox |
+| `executeTool` | Execute in the hermetic Starlark sandbox |
 | `callMany` | Fan out up to 50 MCP calls with per-item error isolation |
 
 ## Discovery Flow (Recommended)
@@ -18,7 +18,7 @@ without exposing new sandbox capabilities.
 1. `listToolFiles` — discover available servers.
 2. `readToolFile` — read the `.pyi` stub for exact call signatures.
 3. `getToolDocs` (optional) — fetch full docs if needed.
-4. `executeToolCode` — run Starlark with `Server.tool(param=value)`.
+4. `executeTool` — run Starlark with `Server.tool(param=value)`.
 5. `callMany` — when the host needs parallel fan-out without writing Starlark.
 
 The discovery workflow still starts with the four tool-discovery meta-tools. The
@@ -42,7 +42,7 @@ value = result["key"]  # bracket access only
 
 ## Response Envelope
 
-`executeToolCode` returns JSON with four keys:
+`executeTool` returns JSON with four keys:
 
 ```json
 {
@@ -63,7 +63,7 @@ Use it instead of guessing why a script failed.
 All calls in one script share one upstream connection per server. Three calls to
 `Filesystem` spawn one process and run one MCP handshake, not three.
 
-Reuse is scoped to a single `executeToolCode` invocation. A new script opens a
+Reuse is scoped to a single `executeTool` invocation. A new script opens a
 fresh connection, so a crashed upstream never poisons the next run.
 
 ## `callMany` contract

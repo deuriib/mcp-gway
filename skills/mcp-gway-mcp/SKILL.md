@@ -76,8 +76,8 @@ MCP_GWAY_TOKEN=secret-xyz  # sent as `Authorization: Bearer …`, never written 
 ## Code Mode protocol — five MCP meta-tools
 
 The gateway exposes five MCP meta-tools: `listToolFiles`, `readToolFile`,
-`getToolDocs`, `executeToolCode`, and `callMany`. Use them in this order:
-`listToolFiles → readToolFile → (optional) getToolDocs → executeToolCode → callMany`.
+`getToolDocs`, `executeTool`, and `callMany`. Use them in this order:
+`listToolFiles → readToolFile → (optional) getToolDocs → executeTool → callMany`.
 Inside Starlark, call upstream tools as `Server.tool_name(param=value)` and assign
 output to `result`. The same `CodeMode` class backs `mcp-gway tools …` — see
 `mcp-gway-cli` for the CLI surface.

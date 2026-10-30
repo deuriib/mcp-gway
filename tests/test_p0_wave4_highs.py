@@ -245,7 +245,7 @@ async def test_ssrf_streaming_cap_chunked(monkeypatch):
 
 
 async def test_gateway_execute_offloaded(monkeypatch):
-    """(5a) executeToolCode must not block the event loop (via to_thread)."""
+    """(5a) executeTool must not block the event loop (via to_thread)."""
     import asyncio as _aio
 
     from mcp_gway.gateway import Gateway
@@ -260,12 +260,12 @@ async def test_gateway_execute_offloaded(monkeypatch):
         return await real_to_thread(fn, *a, **k)
 
     monkeypatch.setattr(_aio, "to_thread", spy_to_thread)
-    monkeypatch.setattr(gw.code_mode, "execute_tool_code", lambda code: "ok")
+    monkeypatch.setattr(gw.code_mode, "execute_tool", lambda code: "ok")
     body = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {"name": "executeToolCode", "arguments": {"code": "result=1"}},
+        "params": {"name": "executeTool", "arguments": {"code": "result=1"}},
     }
     resp = await gw._handle_post(body)
     assert resp["result"]["content"][0]["text"] == "ok"

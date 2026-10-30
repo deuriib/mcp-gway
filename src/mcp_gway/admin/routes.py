@@ -1202,7 +1202,7 @@ async def p_codemode(request: Request) -> Response:
         exec_timeout = _exec_timeout(form.get("timeout"))
         try:
             result = await asyncio.wait_for(
-                asyncio.to_thread(code_mode.execute_tool_code, source),
+                asyncio.to_thread(code_mode.execute_tool, source),
                 timeout=exec_timeout,
             )
         except TimeoutError:

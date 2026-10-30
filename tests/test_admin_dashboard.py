@@ -823,7 +823,7 @@ async def test_execute_timeout_htmx_returns_prompt_toast(
         time.sleep(2.0)
         return '{"result": "late", "logs": []}'
 
-    monkeypatch.setattr(gw.code_mode, "execute_tool_code", _slow)
+    monkeypatch.setattr(gw.code_mode, "execute_tool", _slow)
     async with _aclient(gw) as ac:
         t0 = time.monotonic()
         r = await ac.post(
@@ -866,7 +866,7 @@ async def test_execute_timeout_non_htmx_redirects_with_notice(
         time.sleep(1.0)
         return '{"result": "late", "logs": []}'
 
-    monkeypatch.setattr(gw.code_mode, "execute_tool_code", _slow)
+    monkeypatch.setattr(gw.code_mode, "execute_tool", _slow)
     async with _aclient(gw) as ac:
         r = await ac.post(
             "/admin/partials/codemode",
