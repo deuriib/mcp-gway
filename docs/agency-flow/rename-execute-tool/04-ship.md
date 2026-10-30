@@ -6,7 +6,7 @@ The MCP Gateway Code Mode execution tool has been renamed from `executeToolCode`
 
 ## Version / tag
 
-Unreleased (Issue #30 / branch 30-refactor-gateway-rename-executetoolcode-to-executetool-for-clarity)
+v5.0.0 (Issue #30 / branch 30-refactor-gateway-rename-executetoolcode-to-executetool-for-clarity)
 
 ## Changelog
 
