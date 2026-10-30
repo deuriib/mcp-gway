@@ -27,10 +27,15 @@ Standalone Python CLI (3.12+) aggregating MCP servers behind one headless HTTP/S
 
 ```
 src/mcp_gway/        # gateway core: cli/gateway/code_mode/sandbox/budget/registry/models
+  domain/            # pure domain: models/policy/ports (zero framework/transport deps)
+  application/       # use cases: manage_servers/execute_code/proxy_tool/gateway_status
+  infrastructure/    # adapters: filesystem/sandbox/policy/tokens & DI container
   core/              # transport/discovery/policy/parsing/install (no CLI deps)
   observability/     # logging/metrics/tracing/health (stdlib + Starlette)
   admin/             # htpy+htmx dashboard (loopback + CSRF, CSP in gateway.py)
 tests/               # mirrors src/ layout; hermetic DNS stub in conftest.py
+  architecture/      # AST boundary fitness tests enforcing hexagonal layer purity
+  unit/              # hermetic domain & use-case tests with in-memory port doubles
 skills/              # mcp-gway{-cli,-core,-mcp} agent skill surfaces
 plugins/             # pi|antigravity|opencode host integrations (dirs kept)
 scripts/             # bump-version.mjs (11 owned sync surfaces)
@@ -40,6 +45,9 @@ scripts/             # bump-version.mjs (11 owned sync surfaces)
 
 | Task | Location | Notes |
 | Add/remove/refresh servers | `src/mcp_gway/cli.py`, `registry.py` | atomic `.json`+`.pyi`, last-write-wins |
+| Hexagonal Domain & Ports | `src/mcp_gway/domain/` | pure entities, policy, typing.Protocol ports |
+| Application Use Cases | `src/mcp_gway/application/` | orchestrates domain via ports (no I/O or web deps) |
+| Adapters & DI Container | `src/mcp_gway/infrastructure/` | concrete port adapters, DI GatewayContainer |
 | Serve transports | `src/mcp_gway/gateway.py:320-340` | http/sse routes differ, no fallback |
 | Code Mode tools | `src/mcp_gway/code_mode.py` | 5 MCP meta-tools + host-side `call_many`; Starlark `sandbox.py` |
 | Local allow-list | `src/mcp_gway/core/policy.py`, ADR-009 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS`, no rename |
@@ -55,6 +63,7 @@ scripts/             # bump-version.mjs (11 owned sync surfaces)
 ## CODE MAP
 
 - Entry: `mcp-gway = mcp_gway.cli:main` (`mgw` 1:1 alias); `serve --transport stdio|http|sse`.
+- Architecture: Hexagonal (Ports & Adapters). Inward dependency arrows: `infrastructure -> application -> domain`.
 - Core: `core/` owns transport/discovery; `gateway.py` owns HTTP/SSE; `code_mode.py` owns meta-tools.
 - Centrality unmeasured (no LSP run); map from grep + structure scouts.
 

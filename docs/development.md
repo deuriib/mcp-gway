@@ -7,9 +7,13 @@ uv run pre-commit install  # once per clone — hooks already configured in .pre
 
 # Run checks
 uv run pre-commit run --all-files  # ruff + ruff-format + hygiene (trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files)
-uv run pytest -v  # 647 tests — CLI, MCP, Code Mode, stdio, OAuth, observability
+uv run pytest -v  # 688 tests — CLI, MCP, Code Mode, stdio, OAuth, observability, hexagonal architecture
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
+
+# Architecture & Isolated Unit Tests
+uv run pytest tests/architecture/test_hexagonal_boundaries.py  # AST boundary guard
+uv run pytest tests/unit/test_domain_hexagonal.py              # In-memory unit tests
 
 # Verification probes (no Node, no build)
 curl -s http://127.0.0.1:8080/health | jq .status             # "ok"
