@@ -90,3 +90,4 @@ node_modules/
 ## Opencode
 .opencode/
 /.github/agents
+.pi/settings.json
