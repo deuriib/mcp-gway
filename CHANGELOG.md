@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v4.11.0 (2026-10-30)
+
+### Features
+
+- **arch**: Migrate to hexagonal architecture with domain, application, and infrastructure layers (fixes #34)
+- **domain**: Add pure domain port protocols for registry, sandbox execution, MCP proxy, and token storage
+- **application**: Add application use cases (`ManageServersUseCase`, `ExecuteCodeUseCase`, `ProxyToolCallUseCase`, `GatewayStatusUseCase`)
+- **infrastructure**: Add port adapters and explicit dependency injection container (`GatewayContainer`)
+
+### Testing
+
+- **architecture**: Add AST boundary fitness test guaranteeing zero framework/transport imports in domain layer
+- **unit**: Add isolated in-memory unit tests exercising use cases with test doubles
+
+
 ## v4.10.2 (2026-10-25)
 
 ### Bug Fixes
