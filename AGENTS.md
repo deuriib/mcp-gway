@@ -38,7 +38,7 @@ tests/               # mirrors src/ layout; hermetic DNS stub in conftest.py
   unit/              # hermetic domain & use-case tests with in-memory port doubles
 skills/              # mcp-gway{-cli,-core,-mcp} agent skill surfaces
 plugins/             # pi|antigravity|opencode host integrations (dirs kept)
-scripts/             # bump-version.mjs (11 owned sync surfaces)
+scripts/             # bump-version.mjs (12 owned sync surfaces)
 ```
 
 ## WHERE TO LOOK
@@ -92,5 +92,7 @@ mise run ci            # lint + format-check + test
 ## NOTES
 
 - `CHANGELOG.md` hand-written; workflow reads it, never writes it.
-- `uv.lock` + `package.json` version in lockstep via `bump-version --write`.
+- `uv.lock` + `package.json` + `package-lock.json` version in lockstep via `bump-version --write`.
+- `package-lock.json` is committed: use `npm ci` for the host-plugin tree. CI never installs npm deps — the published artifact is the `files` list (plugins, skills, rules, `mcp.json`), and the gateway itself has zero npm dependencies.
+- npm tree baseline (2026-10-31, lockfile v3): 0 critical, 0 high, 22 moderate. Every moderate advisory is `minimatch <11.0.1` or `glob <=14.0.1` reached through `@opencode/util` (bundled npm-CLI internals) and `@earendil-works/pi-coding-agent`; `npm audit` reports `fixAvailable: false` for all 22, and two of the direct parents are already at their latest published version. Do not refile as a repo bug — a fix requires upstream.
 - Retired: legacy dashboard/catalog paths never served; stale `catalog.json` deleted manually.
