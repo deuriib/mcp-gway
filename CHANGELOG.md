@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.1.0 (2026-10-31)
+
+### Features
+
+- **pi**: Surface callManyTool as an optional step in the Gateway Protocol card
+  ([`60a8c5e`](https://github.com/deuriib/mcp-gway/commit/60a8c5ebe45adc8e51e53f9bc3a2f673d683449e))
+
+
 ## v6.0.0 (2026-10-31)
 
 ### Documentation
