@@ -7,7 +7,7 @@ The Pi integration wires **mcp-gway** into the [Pi coding agent](https://github.
 1. **Gateway MCP registration** — declarative via repo-root `mcp.json` (`gateway` over stdio: `uvx mcp-gway serve` — loopback by construction, no TCP surface). The extension never calls `pi.registerMcpServer`. A same-named server in a user's project `mcp.json` still takes precedence.
 2. **Gateway Protocol card** — `.pi/extensions/mcp-gateway.ts` injects the mandatory `gateway_*` call order into the system prompt of every run, deduped by the `MCP-GWAY v5.0.0` marker.
 3. **Compression survival** — Pi re-enters the agent loop after compaction (threshold, overflow recovery, retries), so re-applying the card at the start of every run keeps the protocol available without duplicate cards.
-4. **Meta-tools** — `gw_list`, `gw_read`, `gw_docs`, `gw_exec`, `gw_add`, `gw_remove` (model-callable tools via `pi.registerTool`) shell out to `mcp-gway tools list|read|docs|exec` and `mcp-gway add|remove` — the same CodeMode operations as the `gateway_*` MCP tools — for discovery without a gateway round-trip. `gw_add` exposes no OAuth flags: add OAuth-backed servers from a real terminal, not via the tool.
+4. **Meta-tools** — `gw_list`, `gw_read`, `gw_docs`, `gw_exec`, `gw_add`, `gw_remove` (model-callable tools via `pi.registerTool`) shell out to `mcp-gway tools list|read|docs|exec` and `mcp-gway add|remove` — the same CodeMode operations as the `gateway_*` MCP tools — for discovery without a gateway round-trip. `gw_add` exposes no OAuth flags: add OAuth-backed servers from a real terminal, not via the tool. The shim set stops at discovery and single execution: **`callManyTool` (bounded fan-out) has no `gw_` equivalent**, so reach it through the MCP surface as `gateway_callManyTool` — `gw_exec` can only run one script per call.
 5. **Session inventory** — on `session_start` the extension probes `uvx --version` first (missing `uv` notifies with the install URL and skips inventory), then runs `mcp-gway tools list` once and publishes the server list as hidden context (`display: false`), so the agent knows which servers are available from the first turn. Requires `uv` on PATH.
 6. **Bundled skills** — `skills/mcp-gway*` (`mcp-gway`, `mcp-gway-cli`, `mcp-gway-mcp`, `mcp-gway-core`) are loaded through the `pi` key in `package.json`.
 
@@ -70,7 +70,7 @@ No imperative registration — `gateway` is declared in repo-root `mcp.json` (`c
    # Expected: ALL GREEN
    ```
 2. **Card injection** — start Pi in this repo and confirm no `mcp-gateway:` warning appears on stderr. The extension logs `[mcp-gateway] ...` only when `rules/mcp-gway.md` cannot be read or injection is skipped.
-3. **MCP surface** — in Pi run `/mcp`, or ask the agent to list gateway tools. You should see the `gateway_*` meta-tools.
+3. **MCP surface** — in Pi run `/mcp`, or ask the agent to list gateway tools. You should see the five `gateway_*` meta-tools: `gateway_listToolFiles`, `gateway_readToolFile`, `gateway_getToolDocs`, `gateway_executeTool`, `gateway_callManyTool`.
 4. **Protocol is live** — the Gateway Protocol card (four numbered steps starting with `gateway_listToolFiles`) is present in the system prompt.
 
 ---

@@ -6,7 +6,7 @@ Date: 2026-09-16
 
 Measures:
 - Latency p50/p95/p99 for 5 live HTTP/SSE paths
-- Code Mode overhead (discover_tools, refresh_server, 4 meta-tools)
+- Code Mode overhead (discover_tools, refresh_server, 5 meta-tools)
 - Resource consumption (CPU, memory, startup) across 3 transports
 - Generates JSON + markdown reports
 
@@ -332,6 +332,7 @@ def measure_code_mode_overhead() -> list[CodeModeResult]:
         ("readToolFile", "gateway_readToolFile"),
         ("getToolDocs", "gateway_getToolDocs"),
         ("executeTool", "gateway_executeTool"),
+        ("callManyTool", "gateway_callManyTool"),
     ]
     for tool_name, _ in tools:
         result = CodeModeResult(tool=tool_name)

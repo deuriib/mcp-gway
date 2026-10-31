@@ -1,4 +1,4 @@
-"""callMany: the fifth MCP meta-tool over the existing host-side fan-out."""
+"""callManyTool: the fifth MCP meta-tool over the existing host-side fan-out."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _stub(monkeypatch: pytest.MonkeyPatch, code_mode: CodeMode, *, fail_on: str 
     return seen
 
 
-def test_tools_list_exposes_call_many():
+def test_tools_list_exposes_call_many_tool():
     names = [tool["name"] for tool in CODE_MODE_TOOLS]
 
     assert set(names) == {
@@ -56,9 +56,9 @@ def test_tools_list_exposes_call_many():
         "readToolFile",
         "getToolDocs",
         "executeTool",
-        "callMany",
+        "callManyTool",
     }
-    entry = next(tool for tool in CODE_MODE_TOOLS if tool["name"] == "callMany")
+    entry = next(tool for tool in CODE_MODE_TOOLS if tool["name"] == "callManyTool")
     assert entry["inputSchema"]["required"] == ["calls"]
     assert entry["inputSchema"]["properties"]["calls"]["maxItems"] == 50
 
@@ -150,7 +150,7 @@ def test_missing_calls_argument_is_rejected(tmp_path):
     gateway = Gateway(_code_mode(tmp_path).registry)
 
     with pytest.raises(InvalidParamsError):
-        gateway._handle_tool_call({"name": "callMany", "arguments": {}})
+        gateway._handle_tool_call({"name": "callManyTool", "arguments": {}})
 
 
 def test_gateway_dispatches_call_many(tmp_path, monkeypatch):
@@ -161,7 +161,7 @@ def test_gateway_dispatches_call_many(tmp_path, monkeypatch):
 
     response = gateway._handle_tool_call(
         {
-            "name": "callMany",
+            "name": "callManyTool",
             "arguments": {
                 "calls": [{"server": "alpha", "tool": "echo", "arguments": {"x": 1}}]
             },

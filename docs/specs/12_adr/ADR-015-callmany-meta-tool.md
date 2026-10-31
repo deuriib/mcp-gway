@@ -1,7 +1,10 @@
 # ADR-015: Expose `callMany` as the fifth Code Mode meta-tool
 
 **Date:** 2026-10-24  
-**Status:** Accepted
+**Status:** Accepted — amended 2026-10-30: the MCP tool was renamed `callMany` →
+`callManyTool` to match the `<verb>Noun` pattern of the other four meta-tools
+(issue #39). Decision, payload shape, limits, and semantics are unchanged; the
+host-side `call_many` engine keeps its name.
 
 ## Context
 

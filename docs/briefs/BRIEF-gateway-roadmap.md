@@ -34,7 +34,7 @@ This brief persists the backlog and the reasoning behind its order.
 | # | Item | Why it matters | Size | Risk | Status |
 |---|------|----------------|------|------|--------|
 | 1 | `call_many` fan-out | Starlark is synchronous; N calls cost N sequential round trips. Connection reuse removed spawn cost, not serialized latency | M (1–2 d) | Touches the concurrency contract of the per-script session cache | done |
-| 2 | Direct passthrough per server | `tools/list` returns only the 4 meta-tools, so no client can call an upstream tool without executing code. Blocks drop-in gateway use | L (2–4 d) | Tool-name collisions; auth/policy surface | queued |
+| 2 | Direct passthrough per server | `tools/list` returns only the 5 meta-tools, so no client can call an upstream tool without executing code. Blocks drop-in gateway use | L (2–4 d) | Tool-name collisions; auth/policy surface | queued |
 | 3 | Cross-script session pool | Saves the handshake on repeat scripts | S–M | Stale sessions surviving between runs | gated on evidence |
 | 4 | MCP `2026-07-28` stateless negotiation | Protocol currency, not differentiation | unknown | Spec still moving; speculative work | watch |
 

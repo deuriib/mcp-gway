@@ -264,7 +264,7 @@ CODE_MODE_TOOLS = [
         },
     },
     {
-        "name": "callMany",
+        "name": "callManyTool",
         "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeTool script for that.",
         "inputSchema": {
             "type": "object",
@@ -957,10 +957,10 @@ class Gateway:
                         "executeTool requires non-empty code [reason=invalid_params]"
                     )
                 result = self.code_mode.execute_tool(code=arguments["code"])
-            elif name == "callMany":
+            elif name == "callManyTool":
                 if not isinstance(arguments, dict) or "calls" not in arguments:
                     raise InvalidParamsError(
-                        "callMany requires calls [reason=invalid_params]"
+                        "callManyTool requires calls [reason=invalid_params]"
                     )
                 result = self.code_mode.call_many_envelope(arguments["calls"])
             else:

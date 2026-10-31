@@ -1,4 +1,8 @@
-"""Code Mode — 4 meta-tools for LLM-driven tool orchestration."""
+"""Code Mode — 5 MCP meta-tools for LLM-driven tool orchestration.
+
+`listToolFiles`, `readToolFile`, `getToolDocs`, `executeTool`, and `callManyTool`
+(the last one a thin adapter over the host-side `call_many` engine).
+"""
 
 from __future__ import annotations
 
@@ -578,11 +582,11 @@ class CodeMode:
 
         if not isinstance(calls, list) or not calls:
             raise InvalidParamsError(
-                "callMany requires a non-empty calls list [reason=invalid_params]"
+                "callManyTool requires a non-empty calls list [reason=invalid_params]"
             )
         if len(calls) > _MAX_CALL_MANY_ITEMS:
             raise InvalidParamsError(
-                f"callMany accepts at most {_MAX_CALL_MANY_ITEMS} calls "
+                f"callManyTool accepts at most {_MAX_CALL_MANY_ITEMS} calls "
                 "[reason=invalid_params]"
             )
 

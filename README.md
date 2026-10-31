@@ -15,7 +15,7 @@
 
 > One endpoint for every MCP server your agent needs — fetch tool schemas on demand instead of loading everything upfront.
 
-MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint. Its **Code Mode** exposes five MCP meta-tools (`listToolFiles`, `readToolFile`, `getToolDocs`, `executeTool`, `callMany`) so agents discover signatures lazily and fan out bounded parallel calls without leaving the MCP surface. The host-side Python `call_many` helper remains available for direct code use, but the MCP contract exposes `callMany` as the fifth meta-tool.
+MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE endpoint. Its **Code Mode** exposes five MCP meta-tools (`listToolFiles`, `readToolFile`, `getToolDocs`, `executeTool`, `callManyTool`) so agents discover signatures lazily and fan out bounded parallel calls without leaving the MCP surface. The host-side Python `call_many` helper remains available for direct code use, but the MCP contract exposes `callManyTool` as the fifth meta-tool.
 
 - **CLI:** `mcp-gway` (canonical) or `mgw` (alias)
 - **Admin UI:** `mcp-gway serve --transport http` → [http://127.0.0.1:8080/](http://127.0.0.1:8080/)

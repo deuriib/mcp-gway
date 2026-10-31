@@ -2,7 +2,7 @@
 
 Code Mode exposes five MCP meta-tools for lazy discovery and bounded orchestration.
 The discovery flow still funnels through the same four Starlark-safe tools, and
-`callMany` is the fifth tool: a host-side fan-out adapter for parallel MCP calls
+`callManyTool` is the fifth tool: a host-side fan-out adapter for parallel MCP calls
 without exposing new sandbox capabilities.
 
 | Tool | Description |
@@ -11,7 +11,7 @@ without exposing new sandbox capabilities.
 | `readToolFile` | Read exact tool names and parameters from a stub |
 | `getToolDocs` | Fetch full docs if the stub is not enough |
 | `executeTool` | Execute in the hermetic Starlark sandbox |
-| `callMany` | Fan out up to 50 MCP calls with per-item error isolation |
+| `callManyTool` | Fan out up to 50 MCP calls with per-item error isolation |
 
 ## Discovery Flow (Recommended)
 
@@ -19,7 +19,7 @@ without exposing new sandbox capabilities.
 2. `readToolFile` — read the `.pyi` stub for exact call signatures.
 3. `getToolDocs` (optional) — fetch full docs if needed.
 4. `executeTool` — run Starlark with `Server.tool(param=value)`.
-5. `callMany` — when the host needs parallel fan-out without writing Starlark.
+5. `callManyTool` — when the host needs parallel fan-out without writing Starlark.
 
 The discovery workflow still starts with the four tool-discovery meta-tools. The
 fifth tool is a direct host-side helper for orchestration and is not available
@@ -38,7 +38,7 @@ value = result["key"]  # bracket access only
 - No `try/except`, classes, or imports.
 - Each execution scope is fresh — re-fetch or persist via MCP.
 - Use stubs from `readToolFile` as the source of truth for signatures.
-- `callMany` is a host-side tool; it is never callable from the sandbox.
+- `callManyTool` is a host-side tool; it is never callable from the sandbox.
 
 ## Response Envelope
 
@@ -66,9 +66,9 @@ All calls in one script share one upstream connection per server. Three calls to
 Reuse is scoped to a single `executeTool` invocation. A new script opens a
 fresh connection, so a crashed upstream never poisons the next run.
 
-## `callMany` contract
+## `callManyTool` contract
 
-The `callMany` tool accepts a `calls` array of one to fifty items.
+The `callManyTool` tool accepts a `calls` array of one to fifty items.
 Each item looks like this:
 
 ```json

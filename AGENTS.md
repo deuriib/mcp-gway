@@ -49,7 +49,7 @@ scripts/             # bump-version.mjs (11 owned sync surfaces)
 | Application Use Cases | `src/mcp_gway/application/` | orchestrates domain via ports (no I/O or web deps) |
 | Adapters & DI Container | `src/mcp_gway/infrastructure/` | concrete port adapters, DI GatewayContainer |
 | Serve transports | `src/mcp_gway/gateway.py:320-340` | http/sse routes differ, no fallback |
-| Code Mode tools | `src/mcp_gway/code_mode.py` | 5 MCP meta-tools + host-side `call_many`; Starlark `sandbox.py` |
+| Code Mode tools | `src/mcp_gway/code_mode.py` | Five MCP meta-tools + host-side `call_many`; Starlark `sandbox.py` |
 | Local allow-list | `src/mcp_gway/core/policy.py`, ADR-009 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS`, no rename |
 | Version/release | `scripts/bump-version.mjs`, `.github/workflows/release.yml` | push-to-master auto via semantic-release, pyproject is truth |
 | Specs/ADRs | `docs/specs/` (10_design/12_adr/15_requirements/30_delivery/40_workspace/50_archive) | archived specs are history, not live |

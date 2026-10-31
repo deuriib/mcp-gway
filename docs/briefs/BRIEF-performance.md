@@ -24,7 +24,7 @@ Tener una auditoría profesional, reproducible y local-first que diga con datos 
 ### In Scope
 
 - Auditoría de latencia/throughput en 5 paths vivos `/mcp` (GET+POST), `/health`, `/ready`, `/live`, `/metrics` [engineering]
-- Overhead de Code Mode (4 meta-tools), sandbox Starlark y `discover_tools` / `refresh` [engineering]
+- Overhead de Code Mode (5 meta-tools), sandbox Starlark y `discover_tools` / `refresh` [engineering]
 - Recursos en local: CPU/memoria/arranque en `serve --transport stdio|http|sse`, `127.0.0.1` por defecto [engineering]
 - Comportamiento bajo carga: sesiones SSE, `asyncio.Queue`, timeouts, métricas Prometheus hand-rolled [engineering]
 - Matriz de evidencia REQ→test→artifact para el gate [engineering]
