@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v6.0.0 (2026-10-31)
+
+### Documentation
+
+- **code-mode**: Sync callManyTool across docs, skills, and Pi guide
+  ([`21c2400`](https://github.com/deuriib/mcp-gway/commit/21c240059ba9512d0b73d8640c99e30a07697c19))
+
+### Refactoring
+
+- **code-mode**: Rename callMany meta-tool to callManyTool
+  ([`381f7c7`](https://github.com/deuriib/mcp-gway/commit/381f7c70f60aca162d8fbd5c0a413388f291f706))
+
+### Breaking Changes
+
+- **code-mode**: Tools/list advertises callManyTool instead of callMany. Clients calling the old
+  name must update. Payload, 1-50 item limit, ordering, and per-item error isolation are unchanged.
+
+
 ## v5.0.0 (2026-10-30)
 
 ### Breaking Changes
