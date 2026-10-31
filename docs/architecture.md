@@ -31,7 +31,7 @@
 │  - readToolFile                │  - Server injection                  │
 │  - getToolDocs                 │                                      │
 │  - executeTool                 │                                      │
-│  - callMany                    │                                      │
+│  - callManyTool                │                                      │
 │  Python helper: call_many (host-side; not an MCP tool)                │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Registry (single source)      │  OAuth2 (RFC 7591, reused)           │

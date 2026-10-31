@@ -1,4 +1,4 @@
-# Design: `callMany` — expose host-side fan-out as the fifth meta-tool
+# Design: `callManyTool` — expose host-side fan-out as the fifth meta-tool
 
 **Status:** approved by owner (2026-10-24: approach A + MCP meta-tool surface)
 **Date:** 2026-10-24
@@ -11,7 +11,7 @@ exists: `CodeMode.call_many` (`code_mode.py:464`), `Gateway.call_many`
 
 Agents that do not write Starlark have no way to fan out: `tools/list` exposes only the
 four Code Mode meta-tools (`gateway.py:849`), and `call_many` is Python-only. Expose the
-existing helper as `callMany` so an agent gets bounded parallelism with per-call error
+existing helper as `callManyTool` so an agent gets bounded parallelism with per-call error
 isolation over plain MCP.
 
 The engine is not rebuilt. This is an adapter: validate, delegate, envelope.
@@ -31,7 +31,7 @@ documented in the skills; changing it is a separate slice.
 
 ## New surface
 
-Fifth entry in `CODE_MODE_TOOLS`, name `callMany`.
+Fifth entry in `CODE_MODE_TOOLS`, name `callManyTool`.
 
 ```json
 {"calls": [{"server": "Filesystem", "tool": "read_file", "arguments": {"path": "a.txt"}}]}
@@ -80,7 +80,7 @@ Malformed items are data, not exceptions: one typo must not discard the other 49
 
 | # | Case | Assertion |
 |---|------|-----------|
-| 1 | tools/list | `callMany` present, `calls` required |
+| 1 | tools/list | `callManyTool` present, `calls` required |
 | 2 | Happy path | 2 servers, order preserved, `ok: true` |
 | 3 | Per-item failure | one failure, sibling succeeds, no raise |
 | 4 | Malformed item | per-item error, batch continues |

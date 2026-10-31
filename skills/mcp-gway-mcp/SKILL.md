@@ -5,7 +5,7 @@ description: Serve and consume the gateway over MCP (v4.2.0) — stdio/http/sse 
 
 # mcp-gway MCP + serve surface
 
-One gateway process serves `/mcp`, probes, and the admin dashboard on the same Starlette app. Pick a transport and connect one client. Code Mode exposes five MCP meta-tools; use the discovery protocol before execution, then fan out with `callMany` when the task is independent and batched.
+One gateway process serves `/mcp`, probes, and the admin dashboard on the same Starlette app. Pick a transport and connect one client. Code Mode exposes five MCP meta-tools; use the discovery protocol before execution, then fan out with `callManyTool` when the task is independent and batched.
 
 ## Choose your transport
 
@@ -76,8 +76,8 @@ MCP_GWAY_TOKEN=secret-xyz  # sent as `Authorization: Bearer …`, never written 
 ## Code Mode protocol — five MCP meta-tools
 
 The gateway exposes five MCP meta-tools: `listToolFiles`, `readToolFile`,
-`getToolDocs`, `executeTool`, and `callMany`. Use them in this order:
-`listToolFiles → readToolFile → (optional) getToolDocs → executeTool → callMany`.
+`getToolDocs`, `executeTool`, and `callManyTool`. Use them in this order:
+`listToolFiles → readToolFile → (optional) getToolDocs → executeTool → callManyTool`.
 Inside Starlark, call upstream tools as `Server.tool_name(param=value)` and assign
 output to `result`. The same `CodeMode` class backs `mcp-gway tools …` — see
 `mcp-gway-cli` for the CLI surface.
@@ -148,7 +148,7 @@ Errors you will actually hit: unknown server/tool or blocked Starlark → `Error
 
 ## Host-side parallel calls
 
-`callMany` is the fifth MCP meta-tool and the public MCP-facing form of the
+`callManyTool` is the fifth MCP meta-tool and the public MCP-facing form of the
 existing host-side `call_many` helper. It is not callable from Starlark. The
 batch accepts `calls` with 1–50 items, preserves input order, and returns a
 per-item `ok` result or error. Its default concurrency is at most eight;

@@ -132,11 +132,12 @@ MCP_GWAY_ALLOW_REMOTE=1 mcp-gway serve --transport http --host 0.0.0.0 --port 80
 
 ## tools — Code Mode in the terminal
 
-The CLI provides matching operations for the same four Code Mode capabilities
-(`listToolFiles → readToolFile → getToolDocs → executeTool`);
-`getToolDocs` is optional when the stub is sufficient. Host-side `call_many` is
-a separate Python API, not a CLI command or fifth MCP meta-tool. Protocol
-details and a host API example: see `mcp-gway-mcp`.
+The CLI provides matching operations for the same four discovery and execution
+capabilities (`listToolFiles → readToolFile → getToolDocs → executeTool`);
+`getToolDocs` is optional when the stub is sufficient. There is no `callmany`
+subcommand: fan-out is reached through the fifth MCP meta-tool `callManyTool`
+(or the host-side `call_many` Python API) — see `mcp-gway-mcp`. Protocol
+details and a host API example live there too.
 
 ```bash
 mcp-gway tools list                          # servers/ + *.pyi per server

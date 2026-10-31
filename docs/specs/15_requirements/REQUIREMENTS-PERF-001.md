@@ -11,7 +11,7 @@
 | REQ-F-001 | Medir latencia p50/p95/p99 de `/mcp` POST (JSON-RPC 2.0) en local `127.0.0.1` con carga concurrente configurable | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
 | REQ-F-002 | Medir latencia p50/p95/p99 de `/mcp` GET (SSE) y `/mcp/messages` POST bajo sesiones SSE concurrentes | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
 | REQ-F-003 | Medir latencia p50/p95/p99 de `/health`, `/ready`, `/live`, `/metrics` (5 paths vivos totales) | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
-| REQ-F-004 | Cuantificar overhead de Code Mode: `discover_tools`, `refresh_server`, 4 meta-tools en sandbox Starlark | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (profiling + trace) |
+| REQ-F-004 | Cuantificar overhead de Code Mode: `discover_tools`, `refresh_server`, 5 meta-tools en sandbox Starlark | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (profiling + trace) |
 | REQ-F-005 | Medir consumo CPU/memoria/arranque en `serve --transport stdio|http|sse` en `127.0.0.1` | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (resource sampling + report) |
 | REQ-F-006 | Ejecutar suite 255 tests + `ruff check` + `ruff format --check` antes y después | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (CI parity) |
 | REQ-F-007 | Producir SLO draft defendible + runbook reproducible versionado | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | review (doc + runbook) |
