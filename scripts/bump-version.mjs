@@ -16,6 +16,7 @@
 //
 // Owned sync surfaces (closed list — add here, never inline):
 //   package.json                      "version": "X.Y.Z"  (2-space JSON)
+//   package-lock.json                 "version" + packages[""].version (lockstep)
 //   src/mcp_gway/__init__.py          __version__ = "X.Y.Z"
 //   plugin.json                       "version": "X.Y.Z"
 //   uv.lock                           root package version (lockstep)
@@ -153,6 +154,16 @@ function syncFile(root, rel, version) {
 		if (data.version === version) return { rel, status: "clean" };
 		data.version = version;
 		synced = `${JSON.stringify(data, null, 2)}\n`;
+	} else if (rel === "package-lock.json") {
+		// The lockfile carries the root version twice: top-level and packages[""].
+		const data = JSON.parse(original);
+		const root = data.packages?.[""];
+		if (data.version === version && (!root || root.version === version)) {
+			return { rel, status: "clean" };
+		}
+		data.version = version;
+		if (root) root.version = version;
+		synced = `${JSON.stringify(data, null, 2)}\n`;
 	} else if (rel.endsWith("uv.lock")) {
 		synced = original.replace(LOCK_ROOT_RE, `$1${version}`);
 	} else if (rel.endsWith("src/mcp_gway/__init__.py")) {
@@ -165,6 +176,7 @@ function syncFile(root, rel, version) {
 
 const OWNED = [
 	"package.json",
+	"package-lock.json",
 	"src/mcp_gway/__init__.py",
 	"plugin.json",
 	"uv.lock",
