@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.1.1 (2026-10-31)
+
+### Bug Fixes
+
+- **release**: Commit package-lock.json in the release tag
+  ([`39f9da9`](https://github.com/deuriib/mcp-gway/commit/39f9da9b0d59c8e3222b78a2f561bc79f3de54ab))
+
+
 ## v6.1.0 (2026-10-31)
 
 ### Features

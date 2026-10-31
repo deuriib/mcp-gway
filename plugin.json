@@ -1,7 +1,7 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "mcp-gateway",
-  "version": "6.1.0",
+  "version": "6.1.1",
   "description": "One MCP endpoint for every server your agent needs.",
   "author": {
     "email": "deuriib@gmail.com",
