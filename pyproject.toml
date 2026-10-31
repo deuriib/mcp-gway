@@ -41,6 +41,7 @@ version_variables = ["src/mcp_gway/__init__.py:__version__"]
 build_command = "node scripts/bump-version.mjs --write"
 assets = [
     "package.json",
+    "package-lock.json",
     "plugin.json",
     "uv.lock",
     "plugins/opencode/mcp-gateway.ts",
