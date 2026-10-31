@@ -7,8 +7,9 @@ All MCP tools run via `gateway_*` helpers. **Mandatory order:**
 2. `gateway_readToolFile` — read `servers/<Name>.pyi` stub for exact tool names + params
 3. `gateway_getToolDocs` (optional) — full docs when stub is truncated
 4. `gateway_executeTool` — run Starlark: `Server.tool(param=value)`
+5. `gateway_callManyTool` (optional) — fan out 1–50 independent calls in one round trip; a failed item returns `ok=false` without cancelling its siblings. Never use it for chained calls: if one call needs another's result, write that in step 4.
 
-> **Parallel:** Step 1 first. Steps 2-4 can run concurrently across servers/tools.
+> **Parallel:** Step 1 first. Steps 2-4 can run concurrently across servers/tools. Step 5 replaces N sequential step-4 calls with one round trip.
 
 ### Calling Convention (Starlark)
 

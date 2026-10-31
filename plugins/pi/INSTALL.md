@@ -71,7 +71,7 @@ No imperative registration — `gateway` is declared in repo-root `mcp.json` (`c
    ```
 2. **Card injection** — start Pi in this repo and confirm no `mcp-gateway:` warning appears on stderr. The extension logs `[mcp-gateway] ...` only when `rules/mcp-gway.md` cannot be read or injection is skipped.
 3. **MCP surface** — in Pi run `/mcp`, or ask the agent to list gateway tools. You should see the five `gateway_*` meta-tools: `gateway_listToolFiles`, `gateway_readToolFile`, `gateway_getToolDocs`, `gateway_executeTool`, `gateway_callManyTool`.
-4. **Protocol is live** — the Gateway Protocol card (four numbered steps starting with `gateway_listToolFiles`) is present in the system prompt.
+4. **Protocol is live** — the Gateway Protocol card (five numbered steps starting with `gateway_listToolFiles`, the fifth an optional fan-out) is present in the system prompt.
 
 ---
 

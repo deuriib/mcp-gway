@@ -14,6 +14,16 @@ const LIST_TIMEOUT_MS = 15_000;
 const CMD_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_CHARS = 12_000;
 
+// The five Code Mode meta-tools as the card names them. Any card copy that
+// omits one has drifted from rules/mcp-gway.md.
+const GATEWAY_TOOLS = [
+	"gateway_listToolFiles",
+	"gateway_readToolFile",
+	"gateway_getToolDocs",
+	"gateway_executeTool",
+	"gateway_callManyTool",
+];
+
 const ext = await import(
 	pathToFileURL(resolve(here, "..", ".pi", "extensions", "mcp-gateway.ts")).href
 );
@@ -172,19 +182,28 @@ check("degrades without throwing on a malformed event", () => {
 	assert.doesNotThrow(() => handlerFor(api)({}, {}));
 });
 
-check("card carries the mandatory 4-step order", () => {
+check("card carries the mandatory order plus the optional fan-out step", () => {
 	const { api } = makePi();
 	ext.default(api);
 	const event = { systemPrompt: "", systemPromptOptions: { sections: {} } };
 	handlerFor(api)(event, {});
 	const injected = event.systemPromptOptions.sections["mcp-gateway"];
-	for (const step of [
-		"gateway_listToolFiles",
-		"gateway_readToolFile",
-		"gateway_getToolDocs",
-		"gateway_executeTool",
-	]) {
+	for (const step of GATEWAY_TOOLS) {
 		assert.ok(injected.includes(step), `missing ${step}`);
+	}
+});
+
+check("every card copy advertises the same five tools (no drift)", () => {
+	for (const rel of [
+		"rules/mcp-gway.md",
+		".pi/extensions/mcp-gateway.ts",
+		"plugins/opencode/mcp-gateway.ts",
+		"plugins/antigravity/scripts/reinject.mjs",
+	]) {
+		const text = readFileSync(resolve(here, "..", rel), "utf8");
+		for (const step of GATEWAY_TOOLS) {
+			assert.ok(text.includes(step), `${rel} missing ${step}`);
+		}
 	}
 });
 
