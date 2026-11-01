@@ -8,7 +8,7 @@
 
 ## Summary
 
-Auditoría de performance local-first para MCP Gateway v2.2.0. El cambio es 100% documentación y herramientas de medición: script de benchmark reproducible en `docs/specs/30_delivery/`, runbook de reproducción, plantilla de findings, y contrato de arquitectura actualizado con NFRs de performance. No se toca código fuente (`src/mcp_gateway/`).
+Auditoría de performance local-first para MCP Gateway v2.2.0. El cambio es 100% documentación y herramientas de medición: script de benchmark reproducible en `docs/specs/30_delivery/`, runbook de reproducción, plantilla de findings, y contrato de arquitectura actualizado con NFRs de performance. No se toca código fuente (`src/mcp_gway/`).
 
 Principio: medir con excelencia y dedicación; optimizar solo con datos.
 
@@ -73,7 +73,7 @@ No se toca `src/` porque es auditoría, no optimización. Optimizaciones van en 
 
 ## Blast Radius
 
-- **Engineering (services/data):** Solo `docs/specs/30_delivery/` (benchmark + runbook + findings). No toca `src/mcp_gateway/` ni `servers/`. Riesgo: cero afectación a código ejecutable en producción.
+- **Engineering (services/data):** Solo `docs/specs/30_delivery/` (benchmark + runbook + findings). No toca `src/mcp_gway/` ni `servers/`. Riesgo: cero afectación a código ejecutable en producción.
 - **Finance (budget/controls):** Sin impacto. No hay cambios de infraestructura ni costos adicionales.
 - **Legal (exposure):** Sin impacto. No hay datos PII nuevos ni exports.
 - **Marketing (brand/GTM):** Sin impacto. Interno, sin anuncio externo.
