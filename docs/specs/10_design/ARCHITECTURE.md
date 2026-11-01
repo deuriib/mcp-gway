@@ -41,10 +41,10 @@ Principio: medir con excelencia y dedicación; optimizar solo con datos.
 | `bench_perf.py` (nuevo, `docs/specs/30_delivery/`) | Orquesta carga concurrente contra 5 paths, perfila Code Mode/sandbox, mide recursos | CLI: `--target-url`, `--concurrency`, `--duration`, `--warmup`, `--output`; salida JSON + MD |
 | `src/mcp_gway/gateway.py` | HTTP/SSE server (Starlette + uvicorn): `mcp_routes` condicional por `transport` (`gateway.py:320-340`) — **http**: `POST /mcp` + `GET /mcp` → 405 `Allow: POST`, 6 entradas; **sse**: `GET /mcp` (SSE) + `POST /mcp` → 405 `Allow: GET` + `POST /mcp/messages`, 7 entradas; probes `/health`, `/ready`, `/live`, `/metrics` siempre | ASGI app por proceso con rutas exclusivas por transporte (`app.state.transport`); `_mcp_post` handler único para POST `/mcp` (http) y `/mcp/messages` (sse) |
 | `src/mcp_gway/code_mode.py` | Exactly 5 MCP meta-tools: `listToolFiles`, `readToolFile`, `getToolDocs`, `executeTool`, `callManyTool`; `callManyTool` is a thin adapter over the host-side `call_many` engine | Starlark sandbox via `sandbox.py`; `Server.tool_name(param=value)` |
-| `src/mcp_gateway/sandbox.py` | Starlark sandbox hermético (L1-L4 validation, timeout, ACL) | `execute(code: str) -> {"result": ..., "logs": [...]}` |
-| `src/mcp_gateway/core/client.py` | `create_client_transport`, `discover_tools`, `refresh_server` | Auto-detección transporte: streamable-http → sse → http |
-| `src/mcp_gateway/observability/metrics.py` | `MetricsRegistry` hand-rolled Prometheus (counter/gauge/histogram) | `/metrics` exposition; `X-Warning: exposed` gating |
-| `src/mcp_gateway/observability/health.py` | `/health`, `/ready`, `/live`, `/metrics` probes | `GET` endpoints; `X-Warning` solo en `/metrics` |
+| `src/mcp_gway/sandbox.py` | Starlark sandbox hermético (L2 runtime isolation, L3 timeout); L1 validation en `code_mode.py:_validate_code`, L4 Tool ACL en `server_factory.py` | `StarlarkSandbox.execute(code: str, timeout: float) -> object`; `get_logs() -> list[str]` |
+| `src/mcp_gway/core/client.py` | `create_client_transport`, `discover_tools`, `refresh_server` | Transporte según `config.transport` (streamable-http \| sse \| http); auto-detección en `core/transport.py:detect_transport` |
+| `src/mcp_gway/observability/metrics.py` | `MetricsRegistry` hand-rolled Prometheus (counter/gauge/histogram) | `MetricsRegistry.exposition()` → Prometheus text format |
+| `src/mcp_gway/observability/health.py` | `/health`, `/ready`, `/live`, `/metrics` probes (`handle_health`, `handle_ready`, `handle_live`, `handle_metrics`) | `GET` endpoints; `X-Warning` solo en `/metrics` |
 
 ## Data Flow
 
