@@ -18,6 +18,7 @@ from mcp_gway.registry import Registry
 from mcp_gway.sandbox import StarlarkSandbox
 from mcp_gway.server_factory import (
     _ACTIVE_CACHE,
+    _ACTIVE_LOCKS,
     _ACTIVE_LOOP,
     _ACTIVE_TRACE,
     ServerFactory,
@@ -526,6 +527,10 @@ class CodeMode:
         ``ok=True, result=...`` or ``ok=False, error={...}``. Errors from one call
         never cancel sibling calls, and the scheduler is bounded to keep the
         runtime deterministic and hermetic.
+
+        Servers run concurrently; calls to the *same* server run in order so the
+        per-execution connection cache (the one ``executeTool`` relies on) is
+        reused instead of spawning one upstream process per item.
         """
         calls = list(tool_calls or [])
         if not calls:
@@ -565,10 +570,24 @@ class CodeMode:
                         }
                     results[index] = payload
 
-            await asyncio.gather(
-                *(_run_one(index, tc) for index, tc in enumerate(calls))
-            )
-            return [item for item in results if item is not None]
+            # The cache and its per-server locks live for this batch only: they
+            # give the fan-out the same "one connection per server" guarantee
+            # executeTool gets, without serializing calls to that server.
+            cache_token = _ACTIVE_CACHE.set({})
+            locks_token = _ACTIVE_LOCKS.set({})
+            try:
+                await asyncio.gather(
+                    *(_run_one(index, tc) for index, tc in enumerate(calls))
+                )
+                return [item for item in results if item is not None]
+            finally:
+                try:
+                    await self.server_factory.aclose_sessions()
+                except Exception:
+                    # WHY broad: teardown must never replace the batch outcome.
+                    pass
+                _ACTIVE_LOCKS.reset(locks_token)
+                _ACTIVE_CACHE.reset(cache_token)
 
         return _run_isolated(_call_many_async)
 

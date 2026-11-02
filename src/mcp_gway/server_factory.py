@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from contextlib import AsyncExitStack
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
@@ -46,9 +47,40 @@ class _CachedConnection:
             pass
 
 
+async def _open_connection(config: Any, setup: Any) -> tuple[_CachedConnection, bool]:
+    """Open transport + session once, retrying the connect phase if opted in.
+
+    ``setup`` runs the transport/initialize phase — the only retry-eligible
+    step, because the tool call has not started yet and re-running it cannot
+    duplicate a side effect (BR-112).
+    """
+    stack = AsyncExitStack()
+    retried = False
+    try:
+        try:
+            session = await setup(stack)
+        except Exception:
+            if not getattr(config, "retry_on_transport_error", False):
+                raise
+            retried = True
+            await stack.aclose()
+            stack = AsyncExitStack()
+            session = await setup(stack)
+    except BaseException:
+        await stack.aclose()
+        raise
+    return _CachedConnection(session=session, stack=stack), retried
+
+
 _ACTIVE_LOOP: ContextVar[Any] = ContextVar("mcp_gway_active_loop", default=None)
 _ACTIVE_CACHE: ContextVar[dict[str, _CachedConnection] | None] = ContextVar(
     "mcp_gway_active_cache", default=None
+)
+# Per-server single-flight locks for the active execution. Only fan-out sets
+# them: concurrent calls to one server then share the first connection instead
+# of each spawning their own upstream process.
+_ACTIVE_LOCKS: ContextVar[dict[str, asyncio.Lock] | None] = ContextVar(
+    "mcp_gway_active_locks", default=None
 )
 _ACTIVE_TRACE: ContextVar[list[dict[str, Any]] | None] = ContextVar(
     "mcp_gway_active_trace", default=None
@@ -116,7 +148,9 @@ class ServerFactory:
         When a script is executing, a live connection is cached per server for
         the whole run: six calls to one server spawn one process, not six. The
         cache is per execution, so a crashed upstream is evicted rather than
-        shared across scripts.
+        shared across scripts. ``callManyTool`` installs the same cache plus
+        per-server locks, so a concurrent batch shares one connection instead
+        of spawning one upstream per item.
         """
         from mcp import ClientSession
 
@@ -142,14 +176,12 @@ class ServerFactory:
         start = time.perf_counter()
         tracer = get_tracer()
         entry: _CachedConnection | None = None
-        stack: Any = None
         with tracer.span(
             f"tool {server}.{tool_label}",
             kind="client",
             attributes={"mcp.server": server, "mcp.tool": tool_label},
         ) as span:
             try:
-                from contextlib import AsyncExitStack
 
                 async def _setup(stack: Any) -> Any:
                     """Transport + initialize phase — the ONLY retry-eligible step.
@@ -170,48 +202,60 @@ class ServerFactory:
                     entry = cache.get(server)
                 if entry is not None:
                     cache_hit = True
-                    result = await asyncio.wait_for(
-                        entry.session.call_tool(tool_name, arguments),
-                        timeout=timeout_sec,
-                    )
                 else:
-                    stack = AsyncExitStack()
-                    try:
-                        try:
-                            session = await _setup(stack)
-                        except Exception:
-                            if not getattr(config, "retry_on_transport_error", False):
-                                raise
-                            retried = True
-                            await stack.aclose()
-                            stack = AsyncExitStack()
-                            session = await _setup(stack)
-                        result = await asyncio.wait_for(
-                            session.call_tool(tool_name, arguments),
-                            timeout=timeout_sec,
-                        )
-                    except BaseException:
-                        await stack.aclose()
-                        raise
-                    if cache is not None:
-                        entry = _CachedConnection(session=session, stack=stack)
-                        cache[server] = entry
+                    locks = _ACTIVE_LOCKS.get()
+                    lock = (
+                        locks.setdefault(server, asyncio.Lock())
+                        if locks is not None and cache is not None
+                        else None
+                    )
+                    if lock is None:
+                        entry, retried = await _open_connection(config, _setup)
+                        if cache is not None:
+                            cache[server] = entry
+                    else:
+                        # Single-flight setup: the first call opens the
+                        # connection, the rest wait for it and then run
+                        # concurrently on the shared session.
+                        async with lock:
+                            cached = cache.get(server)
+                            if cached is not None:
+                                entry = cached
+                                cache_hit = True
+                            else:
+                                entry, retried = await _open_connection(config, _setup)
+                                cache[server] = entry
+                result = await asyncio.wait_for(
+                    entry.session.call_tool(tool_name, arguments),
+                    timeout=timeout_sec,
+                )
                 status = "ok"
                 span.set("mcp.status", status)
                 if cache_hit:
                     span.set("mcp.session_reused", True)
                 extracted = _extract_result(result)
                 result_bytes = _approx_bytes(extracted)
+                # WHY: with no per-execution cache nothing else owns this
+                # transport — leaving it open leaks the upstream process (a
+                # stdio child survives the request), so close it here.
+                if cache is None:
+                    await entry.aclose()
                 return extracted
             except BaseException as exc:  # noqa: BLE001 — telemetry classifies, then re-raises
                 status = "timeout" if isinstance(exc, TimeoutError) else "error"
-                if (
-                    entry is not None
-                    and cache is not None
-                    and cache.get(server) is entry
-                ):
-                    cache.pop(server, None)
-                    await entry.aclose()
+                if entry is not None:
+                    if (
+                        cache is not None
+                        and _ACTIVE_LOCKS.get() is None
+                        and cache.get(server) is entry
+                    ):
+                        # Script path: a broken connection is evicted so the
+                        # next call reconnects. Fan-out keeps it — siblings may
+                        # still be using it, and the batch closes it at the end.
+                        cache.pop(server, None)
+                        await entry.aclose()
+                    elif cache is None:
+                        await entry.aclose()
                 try:
                     span.fail(f"{type(exc).__name__}: {exc}")
                     span.set("mcp.status", status)
