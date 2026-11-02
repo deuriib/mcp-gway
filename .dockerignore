@@ -1,0 +1,68 @@
+# Docker build context — keep the `test` stage able to see everything its
+# pytest suite reads (src/, tests/, scripts/, plugins/, rules/, .pi/,
+# plugin.json, package*.json, README.md, AGENTS.md), while excluding real junk.
+
+# VCS
+.git
+.gitignore
+.worktrees
+
+# CI / local config
+.github
+.mise
+.env
+.env.*
+!.env.example
+
+# mise personal overrides (may contain secrets) — never baked in
+mise.local.toml
+**/*.local.toml
+
+# Python bytecode + caches
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Packaging artifacts
+build
+dist
+*.egg-info
+.eggs
+wheelhouse
+
+# Virtualenvs / toolchains
+.venv
+venv
+env
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov
+coverage.xml
+
+# Node (host plugins + tooling — not needed inside the Python image)
+node_modules
+.cache
+
+# Local runtime state (may contain server configs/tokens) — never baked in
+servers
+unused-servers
+
+# Docs are source-of-truth in the repo, not the image
+docs
+
+# Misc / AI / editor
+.agents
+.agentmemory
+.superpowers
+.frame-ship
+.claude
+.opencode
+.pi/settings.json
+.tmp-tracing-servers
+.DS_Store
+*.log

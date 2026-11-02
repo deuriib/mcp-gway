@@ -1,0 +1,35 @@
+# mcp-gway — development override (hot-reload, debug port).
+#
+# Layered over docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Uses the `dev` stage (editable install + watchfiles). Source is bind-mounted
+# read-only over /app/src; watchfiles restarts the gateway on any .py change,
+# so there is no image rebuild on source edits.
+
+services:
+  mcp-gway:
+    build:
+      target: dev
+    image: mcp-gway:dev
+    # watchfiles restarts the gateway whenever /app/src changes.
+    command:
+      [
+        "watchfiles",
+        "--filter",
+        "python",
+        "mcp-gway serve --transport http --host 0.0.0.0 --port 8080",
+        "/app/src",
+      ]
+    volumes:
+      # Bind-mount source (editable install resolves imports to /app/src).
+      - ./src:/app/src:ro
+      - mcp-gway-config:/home/gateway/.config/mcp-gway
+    environment:
+      MCP_GWAY_ALLOW_REMOTE: "1"
+      MCP_GWAY_LOG_LEVEL: debug
+    ports:
+      - "${MCP_GWAY_PORT:-8080}:8080"
+      # debugpy listen port — attach a debugger (see README.md "Container").
+      - "5678:5678"
+    restart: "no"
