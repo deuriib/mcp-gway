@@ -11,6 +11,9 @@
 #   mise run serve        # uv run mcp-gway serve --transport http --host 127.0.0.1 --port 8080 (local-first)
 #   mise run bump minor   # node scripts/bump-version.mjs minor + --write (release)
 #   mise run version-check# node scripts/bump-version.mjs --check (CI parity)
+#   mise run docker:build # docker build --target runtime -t mcp-gway:local .
+#   mise run docker:dev   # docker compose dev override (hot-reload via watchfiles)
+#   mise run docker:test  # build test stage + run pytest inside it (CI parity)
 #
 # Notas:
 # - `mise.toml` es la única fuente de versiones (pin exacto). `.python-version`
@@ -63,3 +66,18 @@ run = "node scripts/bump-version.mjs"
 [tasks."version-check"]
 description = "Verify version sync across owned surfaces (CI parity)"
 run = "node scripts/bump-version.mjs --check"
+
+[tasks."docker:build"]
+description = "Build the runtime container image (pinned digests, non-root)"
+run = "docker build --target runtime -t mcp-gway:local ."
+
+[tasks."docker:dev"]
+description = "Run the dev container (hot-reload via watchfiles)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build"
+
+[tasks."docker:test"]
+description = "Build the test stage and run pytest inside it (CI parity)"
+run = [
+    "docker build --target test -t mcp-gway:test .",
+    "docker run --rm mcp-gway:test",
+]

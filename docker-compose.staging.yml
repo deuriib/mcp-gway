@@ -1,0 +1,24 @@
+# mcp-gway — staging override (tagged image, injected env, no source mounts).
+#
+# Layered over docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+#
+# Pulls the `:staging` image tag and injects env vars from a secrets-manager
+# reference (adapt `env_file` to your provider, e.g. `run/secrets/*`). No
+# source bind-mounts — staging runs the exact image that ships.
+
+services:
+  mcp-gway:
+    build: !reset null
+    image: mcp-gway:staging
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.staging
+        required: false
+    environment:
+      MCP_GWAY_ALLOW_REMOTE: "1"
+      MCP_GWAY_LOG_LEVEL: info
+    ports:
+      - "${MCP_GWAY_PORT:-8080}:8080"
+    restart: unless-stopped

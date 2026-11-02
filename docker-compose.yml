@@ -1,0 +1,55 @@
+# mcp-gway — base service definition.
+#
+# Environment overrides are layered on top of this file:
+#   docker compose up                              # base (runtime image, port 8080)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+#
+# Host port is ${MCP_GWAY_PORT:-8080} (set it to avoid clashing with a local
+# `mcp-gway serve` on 8080).
+#
+# Secrets/OAuth tokens live in the named volume (never in env files); see
+# .env.example for the env vars the gateway reads.
+
+name: mcp-gway
+
+services:
+  mcp-gway:
+    build:
+      context: .
+      target: runtime
+    image: mcp-gway:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # The container binds 0.0.0.0 (see Dockerfile CMD) so the published port
+      # is reachable. Fail-closed without this opt-in — see AGENTS.md.
+      MCP_GWAY_ALLOW_REMOTE: "1"
+    volumes:
+      # Registry servers + OAuth tokens persist outside the container.
+      - mcp-gway-config:/home/gateway/.config/mcp-gway
+    ports:
+      - "${MCP_GWAY_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+    restart: "no"
+
+volumes:
+  mcp-gway-config:

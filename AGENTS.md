@@ -39,6 +39,11 @@ tests/               # mirrors src/ layout; hermetic DNS stub in conftest.py
 skills/              # mcp-gway{-cli,-core,-mcp} agent skill surfaces
 plugins/             # pi|antigravity|opencode host integrations (dirs kept)
 scripts/             # bump-version.mjs (12 owned sync surfaces)
+Dockerfile           # multistage: builder → test → runtime (+ dev); digests pinned
+docker-compose.yml   # base service (runtime image, healthcheck, config volume)
+docker-compose.{dev,staging,prod}.yml  # layered env overrides (Compose ≥ 2.24)
+.dockerignore        # context filters (keeps tests/scripts/plugins for test stage)
+.env.example         # documented env vars (no real secrets committed)
 ```
 
 ## WHERE TO LOOK
@@ -49,6 +54,7 @@ scripts/             # bump-version.mjs (12 owned sync surfaces)
 | Application Use Cases | `src/mcp_gway/application/` | orchestrates domain via ports (no I/O or web deps) |
 | Adapters & DI Container | `src/mcp_gway/infrastructure/` | concrete port adapters, DI GatewayContainer |
 | Serve transports | `src/mcp_gway/gateway.py:320-340` | http/sse routes differ, no fallback |
+| Container build | `Dockerfile`, `docker-compose*.yml`, `.dockerignore` | multistage, digest-pinned, non-root uid 1000 |
 | Code Mode tools | `src/mcp_gway/code_mode.py` | Five MCP meta-tools + host-side `call_many`; Starlark `sandbox.py` |
 | Local allow-list | `src/mcp_gway/core/policy.py`, ADR-009 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS`, no rename |
 | Version/release | `scripts/bump-version.mjs`, `.github/workflows/release.yml` | push-to-master auto via semantic-release, pyproject is truth |
@@ -87,6 +93,9 @@ mise run test          # uv run pytest -v (CI parity)
 mise run lint          # uv run ruff check src/ tests/
 mise run format-check  # uv run ruff format --check src/ tests/
 mise run ci            # lint + format-check + test
+mise run docker:build  # docker build --target runtime -t mcp-gway:local .
+mise run docker:test   # build test stage + run pytest inside it (CI parity)
+mise run docker:dev    # dev override: hot-reload via watchfiles + debugpy
 ```
 
 ## NOTES
@@ -96,3 +105,4 @@ mise run ci            # lint + format-check + test
 - `package-lock.json` is committed: use `npm ci` for the host-plugin tree. CI never installs npm deps — the published artifact is the `files` list (plugins, skills, rules, `mcp.json`), and the gateway itself has zero npm dependencies.
 - npm tree baseline (2026-10-31, lockfile v3): 0 critical, 0 high, 22 moderate. Every moderate advisory is `minimatch <11.0.1` or `glob <=14.0.1` reached through `@opencode/util` (bundled npm-CLI internals) and `@earendil-works/pi-coding-agent`; `npm audit` reports `fixAvailable: false` for all 22, and two of the direct parents are already at their latest published version. Do not refile as a repo bug — a fix requires upstream.
 - Retired: legacy dashboard/catalog paths never served; stale `catalog.json` deleted manually.
+- Container (OPS-03/OPS-06): runtime image is non-root (`uid 1000`), digest-pinned, and prod override enforces `read_only: true` + `cap_drop: [ALL]`. The container binds `0.0.0.0`, so `MCP_GWAY_ALLOW_REMOTE=1` is mandatory — the gateway exits 2 without it (fail-closed). Builder/test/dev stages use the official `ghcr.io/jdx/mise:*-debian` image (`mise install --locked` drives python/uv/node from `mise.toml` + `mise.lock`); the runtime copies only the relocatable CPython + `/opt/venv`. `.dockerignore` keeps `tests/`/`scripts/`/`plugins/` because the `test` stage's pytest suite reads them (see `tests/test_version_surfaces.py`).

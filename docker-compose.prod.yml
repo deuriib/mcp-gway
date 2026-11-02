@@ -1,0 +1,44 @@
+# mcp-gway — production override (pinned digest, read-only FS, drop all caps).
+#
+# Layered over docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Pulls a digest-pinned image (published by release.yml when images are ready),
+# mounts the root filesystem read-only, drops every Linux capability, and
+# enforces explicit CPU/memory limits. Front this with a reverse proxy + auth
+# before exposing to the internet (AGENTS.md anti-pattern: never 0.0.0.0
+# without a firewall/auth in front).
+#
+# `build: !reset null` requires Docker Compose v2.24+.
+
+services:
+  mcp-gway:
+    build: !reset null
+    # Production must run a digest-pinned, published image. Override with:
+    #   MCP_GWAY_IMAGE=ghcr.io/deuriib/mcp-gway:6.1.1@sha256:<digest>
+    # The default points at the image built by `mise run docker:build` so the
+    # override can be exercised locally before release.yml publishes images.
+    image: ${MCP_GWAY_IMAGE:-mcp-gway:local}
+    # Digest pinning makes the tag→image mapping immutable, so `missing` is
+    # enough; `always` would fail for the locally-built default image.
+    pull_policy: missing
+    read_only: true
+    tmpfs:
+      # Writable scratch for the runtime despite read_only: true.
+      - /tmp:size=64m
+      - /home/gateway/.cache:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MCP_GWAY_ALLOW_REMOTE: "1"
+      MCP_GWAY_LOG_LEVEL: info
+    ports:
+      - "${MCP_GWAY_PORT:-8080}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+    restart: unless-stopped

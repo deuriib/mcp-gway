@@ -67,10 +67,65 @@ For more examples and transports, see the [CLI Reference](docs/cli.md) and [Inte
 
 ```bash
 uv sync --all-groups
-uv run pytest -v   # 688 tests
+uv run pytest -v   # 690 tests
 ```
 
 See [docs/development.md](docs/development.md) for checks, probes, and pre-commit.
+
+## Container
+
+The gateway ships as a multistage `Dockerfile` (`builder` → `test` → `runtime`, plus a
+`dev` stage) with per-environment compose overrides. The builder, test and dev stages
+use the official [`ghcr.io/jdx/mise`](https://ghcr.io/jdx/mise) `-debian` image and
+install the toolchain (Python, uv, Node) from `mise.toml` + `mise.lock` — the same
+single source of truth the local dev environment uses. Base images are pinned by
+digest, and the runtime image runs as a non-root user (`uid 1000`) with a read-only
+root filesystem in production. The runtime image is ~270 MB (trimmed standalone
+CPython + a `--no-dev` virtualenv; `tests/` and dev tooling stay in the `test` stage).
+
+```bash
+mise run docker:build   # build the runtime image (mcp-gway:local)
+mise run docker:test    # build the test stage and run pytest inside it
+mise run docker:dev     # dev override: hot-reload via watchfiles + debugpy (5678)
+```
+
+Or with `docker compose` directly:
+
+```bash
+# Base (runtime image, local registry volume, port 8080)
+docker compose up --build
+
+# Development — source bind-mounted, hot-reloads on change
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Staging — tagged image, no source mounts
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+
+# Production — pinned digest, read-only FS, all capabilities dropped
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**Environment** — copy `.env.example` to `.env` and adjust. The container binds
+`0.0.0.0` so the published host port is reachable, which requires the
+`MCP_GWAY_ALLOW_REMOTE=1` opt-in; without it the gateway exits rather than exposing
+itself (fail-closed). Secrets and OAuth tokens live in the named `mcp-gway-config`
+volume (`~/.config/mcp-gway/` inside the container), never in env files
+(OPS-04 / DENY-13).
+
+**Production hardening** — the `prod` override enforces `read_only: true`, drops all
+Linux capabilities (`cap_drop: [ALL]`), sets `no-new-privileges`, and pins CPU/memory
+limits. It runs whatever `${MCP_GWAY_IMAGE}` points at, defaulting to the locally built
+`mcp-gway:local`; set it to a digest-pinned published image
+(`ghcr.io/deuriib/mcp-gway:<tag>@sha256:<digest>`) before deploying. Front it with a
+reverse proxy and auth before exposing it publicly.
+
+**Debugging** — the `dev` override installs `debugpy` and publishes port `5678`. Attach
+from your editor or run a one-off debug session with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec mcp-gway \
+  python -m debugpy --listen 0.0.0.0:5678 -m mcp_gway.cli serve --transport http --host 0.0.0.0 --port 8080
+```
 
 ![Repobeats analytics](https://repobeats.com/deuriib/mcp-gway?theme=light&size=medium&period=30)
 
