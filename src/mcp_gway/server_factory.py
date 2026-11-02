@@ -99,6 +99,55 @@ def _sanitize_identifier(name: str) -> str:
     return sanitized
 
 
+def _parse_signature_params(line: str) -> tuple[str, ...]:
+    """Parameter names in declaration order from a generated `.pyi` def line.
+
+    Stubs are produced by ``Registry._make_signature`` from each tool's input
+    schema, so parameters are flat (no defaults other than ``None``, no nested
+    parentheses) and the declared order is the schema's property order.
+    """
+    open_index = line.find("(")
+    close_index = line.find(") ->", open_index)
+    if open_index < 0 or close_index < 0:
+        return ()
+    raw = line[open_index + 1 : close_index].strip()
+    if not raw:
+        return ()
+    names: list[str] = []
+    for chunk in raw.split(","):
+        name = chunk.split(":", 1)[0].strip()
+        if name:
+            names.append(name)
+    return tuple(names)
+
+
+def _bind_positional_arguments(
+    tool_name: str,
+    param_names: tuple[str, ...],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    """Map positional arguments onto the tool's declared parameter order."""
+    if not args:
+        return dict(kwargs)
+    if len(args) > len(param_names):
+        raise TypeError(
+            f"tool '{tool_name}' takes {len(param_names)} positional argument(s) "
+            f"but {len(args)} were given [reason=invalid_arguments]"
+        )
+    bound: dict[str, Any] = {}
+    for index, value in enumerate(args):
+        name = param_names[index]
+        if name in kwargs:
+            raise TypeError(
+                f"tool '{tool_name}' got multiple values for argument '{name}' "
+                "[reason=invalid_arguments]"
+            )
+        bound[name] = value
+    bound.update(kwargs)
+    return bound
+
+
 class ServerFactory:
     """Creates injectable server objects for the Starlark sandbox.
 
@@ -320,6 +369,7 @@ class ServerFactory:
         """
         config = self._registry.get_config(server_name)
         tool_names = self._get_tool_names(server_name)
+        signatures = self._get_tool_signatures(server_name)
 
         class ServerStruct:
             pass
@@ -328,11 +378,19 @@ class ServerFactory:
         struct.__name__ = server_name
 
         for tool_name in tool_names:
-            self._bind_tool_method(struct, config, tool_name)
+            self._bind_tool_method(
+                struct, config, tool_name, signatures.get(tool_name, ())
+            )
 
         return struct
 
-    def _bind_tool_method(self, struct: object, config: Any, tool_name: str) -> None:
+    def _bind_tool_method(
+        self,
+        struct: object,
+        config: Any,
+        tool_name: str,
+        param_names: tuple[str, ...] = (),
+    ) -> None:
         """Bind a synchronous tool method to the struct.
 
         Uses sanitized attribute names (hyphens → underscores) so that
@@ -340,9 +398,10 @@ class ServerFactory:
         The original tool_name is preserved for MCP calls.
         """
 
-        def make_tool_fn(cfg: Any, tn: str) -> Any:
-            def tool_fn(**kwargs: Any) -> Any:
-                coro = self._call_tool_async(cfg, tn, kwargs)
+        def make_tool_fn(cfg: Any, tn: str, params: tuple[str, ...]) -> Any:
+            def tool_fn(*args: Any, **kwargs: Any) -> Any:
+                arguments = _bind_positional_arguments(tn, params, args, kwargs)
+                coro = self._call_tool_async(cfg, tn, arguments)
                 loop = _ACTIVE_LOOP.get()
                 if loop is None:
                     return asyncio.run(coro)
@@ -368,7 +427,22 @@ class ServerFactory:
             return tool_fn
 
         safe_name = _sanitize_identifier(tool_name)
-        setattr(struct, safe_name, make_tool_fn(config, tool_name))
+        setattr(struct, safe_name, make_tool_fn(config, tool_name, param_names))
+
+    def _get_tool_signatures(self, server_name: str) -> dict[str, tuple[str, ...]]:
+        """Declared parameter order per tool, parsed from the `.pyi` stub."""
+        content = self._registry.read_pyi(server_name)
+        signatures: dict[str, tuple[str, ...]] = {}
+        for line in content.splitlines():
+            if not line.startswith("def "):
+                continue
+            declared = line[len("def ") :].split("(", 1)[0].strip()
+            original = declared
+            match = re.search(r"\[original:\s*([^\]]+)\]", line)
+            if match and match.group(1).strip():
+                original = match.group(1).strip()
+            signatures[original] = _parse_signature_params(line)
+        return signatures
 
     def _check_tool_allowed(self, config: Any, tool_name: str) -> None:
         """Enforce tools_to_execute allow-list; ["*"] allows all."""

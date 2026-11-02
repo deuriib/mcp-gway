@@ -4,7 +4,12 @@ import pytest
 
 from mcp_gway.models import MCPServerConfig, ToolInfo
 from mcp_gway.registry import Registry
-from mcp_gway.server_factory import ServerFactory, _extract_result
+from mcp_gway.server_factory import (
+    ServerFactory,
+    _bind_positional_arguments,
+    _extract_result,
+    _parse_signature_params,
+)
 
 
 @pytest.fixture
@@ -117,3 +122,63 @@ def test_extract_result_without_content():
 
     result = _extract_result(PlainResult())
     assert isinstance(result, PlainResult)
+
+
+# --- Positional argument binding ---
+
+
+def test_parse_signature_params_keeps_declared_order():
+    line = "def search(query: str, limit: int = None) -> dict:  # Search"
+    assert _parse_signature_params(line) == ("query", "limit")
+
+
+def test_parse_signature_params_empty_signature():
+    assert _parse_signature_params("def ping() -> dict:  # ping") == ()
+
+
+def test_get_tool_signatures_keys_by_original_name(factory):
+    signatures = factory._get_tool_signatures("youtube")
+    assert signatures["search"] == ("query",)
+    assert signatures["get_video"] == ("id",)
+
+
+def test_bind_positional_arguments_maps_by_order():
+    bound = _bind_positional_arguments("t", ("a", "b"), ("x",), {"c": 3})
+    assert bound == {"a": "x", "c": 3}
+
+
+def test_bind_positional_arguments_rejects_duplicate():
+    with pytest.raises(TypeError, match="multiple values"):
+        _bind_positional_arguments("t", ("a",), ("x",), {"a": "y"})
+
+
+def test_bind_positional_arguments_rejects_overflow():
+    with pytest.raises(TypeError, match="takes 1 positional"):
+        _bind_positional_arguments("t", ("a",), ("x", "y"), {})
+
+
+def test_struct_method_forwards_positional_arguments(factory, monkeypatch):
+    captured = {}
+
+    async def fake_call(config, tool_name, arguments):
+        captured["tool"] = tool_name
+        captured["arguments"] = arguments
+        return {"ok": True}
+
+    monkeypatch.setattr(factory, "_call_tool_async", fake_call)
+    struct = factory.make_server_struct("youtube")
+    assert struct.search("python") == {"ok": True}
+    assert captured == {"tool": "search", "arguments": {"query": "python"}}
+
+
+def test_struct_method_keeps_keyword_arguments(factory, monkeypatch):
+    captured = {}
+
+    async def fake_call(config, tool_name, arguments):
+        captured["arguments"] = arguments
+        return {"ok": True}
+
+    monkeypatch.setattr(factory, "_call_tool_async", fake_call)
+    struct = factory.make_server_struct("youtube")
+    struct.get_video(id="abc")
+    assert captured["arguments"] == {"id": "abc"}
