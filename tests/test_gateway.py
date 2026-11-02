@@ -1,6 +1,7 @@
 """Tests for the HTTP/SSE gateway server."""
 
 import asyncio
+import threading
 import time
 
 import pytest
@@ -280,3 +281,55 @@ async def test_gateway_has_no_catalog_state(gateway):
     assert getattr(gateway.app.state, "serve_host", None) == "127.0.0.1"
     assert not hasattr(gateway.app.state, "dashboard_host")
     assert not hasattr(gateway.app.state, "catalog_service")
+
+
+@pytest.mark.asyncio
+async def test_tool_calls_run_off_the_event_loop(gateway, monkeypatch):
+    """#50: a blocking tool handler must never run on the loop thread.
+
+    Handlers are synchronous — the Starlark sandbox waits on a worker pool and
+    callManyTool joins its fan-out thread — so running one inline froze /health,
+    /metrics, and every concurrent request until the upstream answered.
+    """
+    loop_thread = threading.get_ident()
+    handler_threads: list[int] = []
+    inner = gateway._handle_tool_call
+
+    def spy(params):
+        handler_threads.append(threading.get_ident())
+        return inner(params)
+
+    async def echo_upstream(config, tool_name, arguments):
+        return {"ok": True}
+
+    monkeypatch.setattr(gateway, "_handle_tool_call", spy)
+    monkeypatch.setattr(
+        gateway.code_mode.server_factory, "_call_tool_async", echo_upstream
+    )
+
+    transport = ASGITransport(app=gateway.app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 77,
+            "method": "tools/call",
+            "params": {
+                "name": "callManyTool",
+                "arguments": {
+                    "calls": [
+                        {"id": "a", "server": "youtube", "tool": "search"},
+                        {"id": "b", "server": "youtube", "tool": "search"},
+                    ]
+                },
+            },
+        }
+        response = await client.post("/mcp", json=payload)
+        health = await client.get("/health")
+
+    assert response.status_code == 200
+    assert '"ok": true' in response.json()["result"]["content"][0]["text"]
+    assert health.status_code == 200
+    assert handler_threads, "the tool handler never ran"
+    assert all(tid != loop_thread for tid in handler_threads), (
+        "tool handlers must be offloaded with asyncio.to_thread"
+    )

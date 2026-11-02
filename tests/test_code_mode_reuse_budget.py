@@ -15,10 +15,11 @@ from mcp_gway.registry import Registry
 
 
 class _FakeTransport:
-    """Counts transport entries so reuse is observable."""
+    """Counts transport entries/exits so reuse and teardown are observable."""
 
     def __init__(self) -> None:
         self.enters = 0
+        self.exits = 0
 
     def __call__(self, *_a: object, **_k: object) -> _FakeTransport:
         return self
@@ -28,6 +29,7 @@ class _FakeTransport:
         return SimpleNamespace(read=True), SimpleNamespace(write=True)
 
     async def __aexit__(self, *exc: object) -> bool:
+        self.exits += 1
         return False
 
 
@@ -194,3 +196,71 @@ def test_logs_are_capped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(logs) <= 201
     assert logs[0].startswith("…["), "dropped log lines must be labelled"
     assert envelope["usage"]["truncated"] is True
+
+
+def test_call_many_reuses_one_connection_per_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#50: a batch must not spawn one upstream process per item."""
+    cm = _code_mode(tmp_path)
+    transport = _wire(monkeypatch)
+
+    outcomes = cm.call_many(
+        [
+            {"id": "a", "server": "srv", "tool": "echo", "arguments": {"x": 1}},
+            {"id": "b", "server": "srv", "tool": "echo", "arguments": {"x": 2}},
+            {"id": "c", "server": "srv", "tool": "echo", "arguments": {"x": 3}},
+        ]
+    )
+
+    assert [item["ok"] for item in outcomes] == [True, True, True]
+    assert transport.enters == 1, "one batch must spawn one upstream connection"
+    assert len(_FakeSession.created) == 1
+    assert _FakeSession.created[0].initialized == 1
+    assert _FakeSession.created[0].calls == ["echo", "echo", "echo"]
+    assert transport.exits == 1, "the batch must close what it opened"
+
+
+def test_call_many_closes_after_a_failed_item(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed sibling must not leave the shared connection open."""
+    cm = _code_mode(tmp_path)
+    transport = _wire(monkeypatch)
+
+    async def flaky_call(self: _FakeSession, name: str, arguments: dict) -> object:
+        self.calls.append(name)
+        if name == "boom":
+            raise ConnectionError("upstream dropped")
+        return SimpleNamespace(content=[SimpleNamespace(text=json.dumps({"ok": True}))])
+
+    monkeypatch.setattr(_FakeSession, "call_tool", flaky_call)
+
+    outcomes = cm.call_many(
+        [
+            {"id": "a", "server": "srv", "tool": "echo", "arguments": {"x": 1}},
+            {"id": "b", "server": "srv", "tool": "boom", "arguments": {}},
+        ]
+    )
+
+    assert outcomes[0]["ok"] is True
+    assert outcomes[1]["ok"] is False
+    assert outcomes[1]["error"]["type"] == "ConnectionError"
+    assert transport.enters == 1
+    assert transport.exits == 1, "a failed item must not leak the connection"
+
+
+def test_tool_call_without_cache_closes_its_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#50: a call outside an execution must not leak its upstream process."""
+    import asyncio
+
+    cm = _code_mode(tmp_path)
+    transport = _wire(monkeypatch)
+    config = cm.registry.get_config("srv")
+
+    asyncio.run(cm.server_factory._call_tool_async(config, "echo", {"x": 1}))
+
+    assert transport.enters == 1
+    assert transport.exits == 1, "uncached calls must close their transport"

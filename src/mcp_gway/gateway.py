@@ -637,13 +637,11 @@ class Gateway:
             }
 
         try:
-            if (
-                method == "tools/call"
-                and isinstance(params, dict)
-                and params.get("name") == "executeTool"
-            ):
-                # Starlark sandbox blocks (ThreadPool wait + asyncio.run inside);
-                # never hold the event loop: offload the whole tool call.
+            if method == "tools/call":
+                # Every meta-tool handler is synchronous and may block: the
+                # Starlark sandbox waits on a worker pool, and callManyTool
+                # joins a fan-out thread. Offload the whole call or one batch
+                # freezes the loop (health, metrics, every other request).
                 result = await asyncio.to_thread(self._handle_method, method, params)
             else:
                 result = self._handle_method(method, params)
