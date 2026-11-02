@@ -32,6 +32,153 @@ def _sanitize_identifier(name: str) -> str:
     return sanitized
 
 
+_RESULT_ASSIGN_RE = re.compile(r"(?m)^[ \t]*result\b[^\n]*?(?<![=!<>])=(?!=)")
+
+# A statement starting with one of these is not a value expression, so it can
+# never become `result = <statement>`.
+_NON_EXPRESSION_PREFIXES = (
+    "if ",
+    "if(",
+    "elif ",
+    "elif(",
+    "else",
+    "for ",
+    "for(",
+    "def ",
+    "return",
+    "load(",
+    "load (",
+    "break",
+    "continue",
+    "pass",
+    "result",
+)
+
+_IMPLICIT_RESULT_NOTE = (
+    "note: script did not assign 'result'; the response result is null. "
+    "End the script with an expression, or assign `result` explicitly."
+)
+
+
+def _assigns_result(code: str) -> bool:
+    """True when the source binds ``result`` anywhere (including branches)."""
+    return bool(_RESULT_ASSIGN_RE.search(code))
+
+
+def _line_depths(code: str) -> list[int]:
+    """Bracket depth at the start of each line, ignoring strings and comments."""
+    depths: list[int] = []
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for line in code.splitlines():
+        depths.append(depth)
+        for char in line:
+            if quote is not None:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                continue
+            if char in ("'", '"'):
+                quote = char
+            elif char == "#":
+                break
+            elif char in "([{":
+                depth += 1
+            elif char in ")]}":
+                depth = max(0, depth - 1)
+    return depths
+
+
+def _last_statement_block(code: str) -> tuple[int, int] | None:
+    """Line range of the final top-level statement, or ``None`` when absent."""
+    lines = code.splitlines()
+    end = len(lines) - 1
+    while end >= 0:
+        stripped = lines[end].strip()
+        if stripped and not stripped.startswith("#"):
+            break
+        end -= 1
+    if end < 0:
+        return None
+    depths = _line_depths(code)
+    start = end
+    for index in range(end + 1):
+        line = lines[index]
+        if depths[index] != 0 or not line.strip() or line[:1] in (" ", "\t"):
+            continue
+        if line.lstrip().startswith("#"):
+            continue
+        start = index
+    return start, end
+
+
+def _has_top_level_assignment(statement: str) -> bool:
+    """True when the statement assigns at bracket depth zero."""
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for line in statement.splitlines():
+        for position, char in enumerate(line):
+            if quote is not None:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                continue
+            if char in ("'", '"'):
+                quote = char
+                continue
+            if char == "#":
+                break
+            if char in "([{":
+                depth += 1
+                continue
+            if char in ")]}":
+                depth = max(0, depth - 1)
+                continue
+            if char != "=" or depth != 0:
+                continue
+            before = line[position - 1] if position else ""
+            after = line[position + 1] if position + 1 < len(line) else ""
+            if before in "=!<>" or after == "=":
+                continue
+            return True
+    return False
+
+
+def _apply_implicit_result(code: str) -> str | None:
+    """Turn the final top-level expression into ``result = <expr>``.
+
+    Returns ``None`` whenever the rewrite would be a guess: a block statement
+    tail, an assignment tail, or no tail at all. Callers must still validate
+    the returned source before compiling it — a wrong guess has to fall back to
+    the original, never run half-rewritten.
+    """
+    block = _last_statement_block(code)
+    if block is None:
+        return None
+    start, end = block
+    lines = code.splitlines()
+    statement = lines[start : end + 1]
+    text = "\n".join(statement)
+    if not text.strip():
+        return None
+    if text.lstrip().startswith(_NON_EXPRESSION_PREFIXES):
+        return None
+    if _has_top_level_assignment(text):
+        return None
+    rewritten = (
+        lines[:start] + [f"result = {statement[0]}"] + statement[1:] + lines[end + 1 :]
+    )
+    return "\n".join(rewritten)
+
+
 class SandboxTimeoutError(Exception):
     """Raised when code execution exceeds the timeout."""
 
@@ -103,16 +250,37 @@ class StarlarkSandbox:
                 "\n".join(preamble_lines) + "\n" + code if preamble_lines else code
             )
 
+            def _compose(source: str) -> str:
+                if not preamble_lines:
+                    return source
+                return "\n".join(preamble_lines) + "\n" + source
+
             def _run() -> object:
-                ast = sl.parse("code.star", full_code)
+                # Implicit result: only when the author never binds `result` and
+                # the final statement is an unmistakable expression. Compiled
+                # before evaluating, because re-running after a failed lookup
+                # would duplicate MCP side effects.
+                ast = None
+                inferred = False
+                if not _assigns_result(code):
+                    rewritten = _apply_implicit_result(code)
+                    if rewritten is not None:
+                        try:
+                            ast = sl.parse("code.star", _compose(rewritten))
+                            inferred = True
+                        except Exception:
+                            # WHY: the rewrite is a guess; if it does not parse,
+                            # the original source owns the error path.
+                            ast = None
+                if ast is None:
+                    ast = sl.parse("code.star", full_code)
                 sl.eval(mod, ast, self.globals)
-                try:
-                    return mod["result"]
-                except (KeyError, Exception):
-                    raise RuntimeError(
-                        "Code did not assign to 'result' variable. "
-                        "Assign your output to 'result' to return it."
-                    )
+                # Module.__getitem__ yields None for unbound names, so a missing
+                # `result` is invisible at runtime — say it in the captured logs
+                # instead of pretending the script returned null on purpose.
+                if not inferred and not _assigns_result(code):
+                    self._logs.append(_IMPLICIT_RESULT_NOTE)
+                return mod["result"]
 
             with ThreadPoolExecutor(max_workers=1) as executor:
                 # Propagate the caller's context into the worker, otherwise the

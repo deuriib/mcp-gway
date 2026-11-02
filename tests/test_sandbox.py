@@ -198,3 +198,85 @@ def test_print_noop_returns_none():
     sandbox = StarlarkSandbox()
     result = sandbox.execute("x = print('test'); result = x")
     assert result is None
+
+
+# --- Implicit result tests ---
+
+
+def test_implicit_result_from_final_call():
+    """A trailing call expression is returned without `result =`."""
+    sandbox = StarlarkSandbox()
+
+    class MockServer:
+        def echo(self, value=""):
+            return value
+
+    sandbox.inject_server("mock", MockServer())
+    assert sandbox.execute('mock.echo("hi")') == "hi"
+
+
+def test_implicit_result_ignores_trailing_blanks_and_comments():
+    sandbox = StarlarkSandbox()
+    assert sandbox.execute("1 + 2\n\n# trailing comment\n") == 3
+
+
+def test_implicit_result_handles_multiline_call():
+    sandbox = StarlarkSandbox()
+
+    class MockServer:
+        def pair(self, a=None, b=None):
+            return [a, b]
+
+    sandbox.inject_server("mock", MockServer())
+    assert sandbox.execute("mock.pair(\n    a=1,\n    b=2,\n)") == [1, 2]
+
+
+def test_implicit_result_not_applied_to_trailing_block():
+    """Block tails are not guessed; they keep today's null result."""
+    sandbox = StarlarkSandbox()
+    assert sandbox.execute("def helper(x):\n    return x + 1\n") is None
+    assert any("did not assign 'result'" in line for line in sandbox.get_logs())
+
+
+def test_implicit_result_not_applied_to_trailing_assignment():
+    sandbox = StarlarkSandbox()
+    assert sandbox.execute("a = 1\nb = 2") is None
+
+
+def test_explicit_result_wins_over_implicit():
+    sandbox = StarlarkSandbox()
+    assert sandbox.execute("result = 1\n2 + 2") == 1
+
+
+def test_implicit_result_evaluates_script_once():
+    """The rewrite must happen before evaluation, never as a retry."""
+    calls = []
+
+    class Counting:
+        def bump(self):
+            calls.append(1)
+            return len(calls)
+
+    sandbox = StarlarkSandbox()
+    sandbox.inject_server("counter", Counting())
+    assert sandbox.execute("counter.bump()") == 1
+    assert len(calls) == 1
+
+
+def test_explicit_null_result_is_not_rewritten():
+    sandbox = StarlarkSandbox()
+    assert sandbox.execute("result = None\n9") is None
+    assert sandbox.get_logs() == []
+
+
+def test_positional_arguments_reach_injected_server():
+    class MockServer:
+        def read(self, path="", encoding="utf-8"):
+            return {"path": path, "encoding": encoding}
+
+    sandbox = StarlarkSandbox()
+    sandbox.inject_server("mock", MockServer())
+    assert sandbox.execute('mock.read("/tmp/a")') == {
+        "path": "/tmp/a",
+        "encoding": "utf-8",
+    }
