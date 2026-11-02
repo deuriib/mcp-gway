@@ -151,8 +151,9 @@ mcp-gway tools docs --server Context7 --tool resolve_library_id
 `exec` runs Starlark and prints `{"result": …, "logs": […]}`. Exactly ONE of `--code`/`--file` (both or neither → exit 2); empty code → exit 2; unknown server/tool or blocked Starlark → `Error: …` + exit 1. Local spawns obey `core/policy.py` — denied commands fail with the policy message, never silently.
 
 ```bash
-# Variant 1 — inline snippet (assign `result`)
+# Variant 1 — inline snippet (assign `result`, or end with an expression)
 mcp-gway tools exec --code 'result = Context7.resolve_library_id(query="react hooks", libraryName="react")'
+mcp-gway tools exec --code 'Context7.resolve_library_id("react hooks", "react")'   # same result
 
 # Variant 2 — script file (same sandbox, better for multi-line)
 cat > run.star << 'EOF'

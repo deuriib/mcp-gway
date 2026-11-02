@@ -165,6 +165,44 @@ def test_execute_code_print_captured(code_mode):
     assert result["logs"] == ["hello"]
 
 
+def test_execute_tool_accepts_positional_arguments(code_mode, monkeypatch):
+    """Positional args bind to the declared stub order end to end."""
+    captured = {}
+
+    async def mock_call_tool_async(config, tool_name, arguments):
+        captured["tool"] = tool_name
+        captured["arguments"] = arguments
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        code_mode.server_factory, "_call_tool_async", mock_call_tool_async
+    )
+    payload = json.loads(code_mode.execute_tool_code('youtube.search("starlark")'))
+    assert payload["result"] == {"ok": True}
+    assert captured == {"tool": "search", "arguments": {"query": "starlark"}}
+
+
+def test_execute_tool_returns_implicit_result(code_mode, monkeypatch):
+    """A trailing expression is returned without an explicit `result =`."""
+
+    async def mock_call_tool_async(config, tool_name, arguments):
+        return {"items": ["a", "b"]}
+
+    monkeypatch.setattr(
+        code_mode.server_factory, "_call_tool_async", mock_call_tool_async
+    )
+    payload = json.loads(code_mode.execute_tool_code('youtube.search("x")'))
+    assert payload["result"] == {"items": ["a", "b"]}
+    assert payload["logs"] == []
+
+
+def test_execute_tool_notes_missing_result(code_mode):
+    """A script that neither returns nor assigns result says so in logs."""
+    payload = json.loads(code_mode.execute_tool_code("x = 1"))
+    assert payload["result"] is None
+    assert any("did not assign 'result'" in line for line in payload["logs"])
+
+
 # --- Hyphenated tool name tests ---
 
 

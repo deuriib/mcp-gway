@@ -15,10 +15,16 @@ All MCP tools run via `gateway_*` helpers. **Mandatory order:**
 
 ```python
 result = Server.tool(param=value, params....)
-value = result["key"]  # brackets, not dot
+Server.tool("value")          # positional args follow the stub order
+value = result["key"]         # brackets, not dot
+Server.tool(param=value)      # trailing expression → returned implicitly
 ```
 
-- Sync only, keyword args, no `try/except`, no classes, no imports.
+- Sync only, no `try/except`, no classes, no imports.
+- Arguments may be keyword or positional; positional ones bind in stub order.
+  Mixing both for the same parameter is an error.
+- A script that never binds `result` and ends in one expression returns it.
+  Block or assignment tails keep `null` and say so in `logs`.
 - Each `executeTool` scope is fresh — re-fetch or persist via MCP.
 
 ### Anti-Patterns
