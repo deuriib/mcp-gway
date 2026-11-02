@@ -119,6 +119,12 @@ limits. It runs whatever `${MCP_GWAY_IMAGE}` points at, defaulting to the locall
 (`ghcr.io/deuriib/mcp-gway:<tag>@sha256:<digest>`) before deploying. Front it with a
 reverse proxy and auth before exposing it publicly.
 
+**Published images** — every release pushes `ghcr.io/deuriib/mcp-gway` tagged
+`<version>`, `<major>.<minor>`, `<major>`, and `latest`, with build provenance and an
+SBOM attestation attached, then smoke-tests the pushed digest before finishing. The
+digest to pin is printed in the release run summary. Only `linux/amd64` is published
+today; build locally on other architectures.
+
 **Debugging** — the `dev` override installs `debugpy` and publishes port `5678`. Attach
 from your editor or run a one-off debug session with:
 

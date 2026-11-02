@@ -3,11 +3,12 @@
 # Layered over docker-compose.yml:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# Pulls a digest-pinned image (published by release.yml when images are ready),
-# mounts the root filesystem read-only, drops every Linux capability, and
-# enforces explicit CPU/memory limits. Front this with a reverse proxy + auth
-# before exposing to the internet (AGENTS.md anti-pattern: never 0.0.0.0
-# without a firewall/auth in front).
+# Pulls a digest-pinned image (release.yml publishes ghcr.io/deuriib/mcp-gway
+# and records the digest in the run summary), mounts the root filesystem
+# read-only, drops every Linux capability, and enforces explicit CPU/memory
+# limits. Front this with a reverse proxy + auth before exposing it to the
+# internet (AGENTS.md anti-pattern: never 0.0.0.0 without a firewall/auth in
+# front).
 #
 # `build: !reset null` requires Docker Compose v2.24+.
 
@@ -17,7 +18,7 @@ services:
     # Production must run a digest-pinned, published image. Override with:
     #   MCP_GWAY_IMAGE=ghcr.io/deuriib/mcp-gway:6.1.1@sha256:<digest>
     # The default points at the image built by `mise run docker:build` so the
-    # override can be exercised locally before release.yml publishes images.
+    # override can be exercised locally without pulling from GHCR.
     image: ${MCP_GWAY_IMAGE:-mcp-gway:local}
     # Digest pinning makes the tag→image mapping immutable, so `missing` is
     # enough; `always` would fail for the locally-built default image.

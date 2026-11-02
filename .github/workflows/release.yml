@@ -4,8 +4,9 @@ name: Release
 # detect bump from conventional commits (feat=minor, fix/perf=patch,
 # BREAKING=major), write versions, run bump-version.mjs --write
 # (build_command, syncs all owned surfaces), prepend the CHANGELOG entry,
-# commit, create an annotated tag, push both — then publish to PyPI + npm
-# and create the GitHub Release in the publish job below.
+# commit, create an annotated tag, push both — then publish to PyPI + npm,
+# create the GitHub Release, and push the runtime image to GHCR (see the
+# `publish` and `image` jobs below).
 #
 # Publish lives in THIS workflow (same run) by design: pushes made with
 # GITHUB_TOKEN never trigger downstream workflows, so splitting version
@@ -266,3 +267,110 @@ jobs:
           body_path: release-notes.md
           files: dist/*
           generate_release_notes: false
+
+  image:
+    name: Publish image ${{ needs.release.outputs.version }}
+    needs: [release]
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+      id-token: write # provenance attestation
+      attestations: write # SBOM/provenance attestations
+    env:
+      # amd64 only: the arm64 path needs QEMU here and has not been validated
+      # end-to-end. Widen to "linux/amd64,linux/arm64" once it has (both the
+      # mise base image and starlark-pyo3 publish aarch64 artifacts, so the
+      # only missing piece is a validated build).
+      PLATFORMS: linux/amd64
+      IMAGE: ghcr.io/${{ github.repository }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify tag points at merged code
+        run: |
+          git fetch origin +main:refs/remotes/origin/main
+          SHA="$(git rev-parse "refs/tags/v${{ needs.release.outputs.version }}^{commit}")"
+          git merge-base --is-ancestor "$SHA" origin/main || {
+            echo "::error::tag v${{ needs.release.outputs.version }} ($SHA) is not on main — images only come from merged PR code"
+            exit 1
+          }
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.10.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5.7.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=v${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}},value=v${{ needs.release.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=mcp-gway
+            org.opencontainers.image.description=MCP server aggregator with Code Mode sandbox and HTTP/SSE gateway
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#container
+
+      # push only: provenance/sbom produce a manifest list, which the `docker`
+      # exporter used by `load` cannot represent. The smoke test below pulls the
+      # published digest instead — stronger evidence, since it tests exactly
+      # what users will run.
+      - name: Build and push runtime image
+        id: build
+        uses: docker/build-push-action@v6.15.0
+        with:
+          context: .
+          target: runtime
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,mode=max,scope=release
+
+      # A pushed image that cannot start is worse than no image: gate the
+      # release on the version banner, the deep imports, and the non-root uid.
+      - name: Smoke-test the published digest
+        run: |
+          REF="$IMAGE@${{ steps.build.outputs.digest }}"
+          docker pull "$REF"
+          docker run --rm "$REF" --version
+          docker run --rm --entrypoint python "$REF" \
+            -c "import ssl, starlette, starlette.routing, uvicorn, starlark, mcp_gway; print('imports ok')"
+          test "$(docker run --rm --entrypoint sh "$REF" -c 'id -u')" = "1000"
+
+      - name: Record the digest
+        run: |
+          {
+            echo "### Image published"
+            echo
+            echo '```'
+            echo "$IMAGE@${{ steps.build.outputs.digest }}"
+            echo '```'
+            echo
+            echo "Pin production to that reference (\`MCP_GWAY_IMAGE\`)."
+            echo
+            echo "First push creates a **private** GHCR package — set its visibility"
+            echo "to public in the package settings if the image is meant to be pulled"
+            echo "without credentials."
+          } >> "$GITHUB_STEP_SUMMARY"
