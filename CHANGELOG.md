@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v6.2.0 (2026-11-02)
+
+### Documentation
+
+- **code-mode**: Document implicit result and positional arguments
+  ([`4f0514b`](https://github.com/deuriib/mcp-gway/commit/4f0514be61898993ce51b33948b5411c74facb5b))
+
+### Features
+
+- **sandbox**: Return trailing expression as implicit result
+  ([`3d5ac00`](https://github.com/deuriib/mcp-gway/commit/3d5ac00a5c69e0c4f78671b0d3f1f0774f491d2b))
+
+- **server-factory**: Bind positional tool arguments in stub order
+  ([`f70fa9f`](https://github.com/deuriib/mcp-gway/commit/f70fa9f954580a4f401ff6aaee75925b50d2662d))
+
+
 ## v6.1.2 (2026-11-02)
 
 ### Bug Fixes

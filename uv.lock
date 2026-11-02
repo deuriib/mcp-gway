@@ -754,7 +754,7 @@ wheels = [
 
 [[package]]
 name = "mcp-gway"
-version = "6.1.2"
+version = "6.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
