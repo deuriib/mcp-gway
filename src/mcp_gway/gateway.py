@@ -251,13 +251,13 @@ CODE_MODE_TOOLS = [
     },
     {
         "name": "executeTool",
-        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., result = Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"], assign output to `result`. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}.',
+        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). CALLS: keyword or positional arguments; positional ones bind in the order the stub declares them (Filesystem.read_file(".")). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"]. RETURN: assign `result`, or end the script with an expression and it is returned implicitly; a script that does neither returns null and says so in logs. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}.',
         "inputSchema": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": 'Starlark code calling tools as result = Server.tool_name(param="value") — assign `result` to your final answer',
+                    "description": 'Starlark code calling tools as Server.tool_name(param="value") or Server.tool_name("value") — assign `result`, or end with an expression',
                 }
             },
             "required": ["code"],

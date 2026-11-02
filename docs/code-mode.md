@@ -29,13 +29,23 @@ inside Starlark.
 
 ```python
 result = Server.tool(param=value, params...)
-value = result["key"]  # bracket access only
+Server.tool("value")          # positional args follow the stub order
+value = result["key"]         # bracket access only
+Server.tool(param=value)      # trailing expression → returned implicitly
 ```
+
+The trailing expression form is shorthand: a script that never binds `result` and
+ends in a single expression has that expression returned. Multi-line calls work
+too, and the rewrite is decided before the script runs, so nothing is executed
+twice. When the tail is a block statement (`def`) or an assignment, the result
+stays `null` and `logs` explains why — the sandbox never guesses.
 
 ## Constraints
 
-- Synchronous only; use keyword arguments.
+- Synchronous only.
 - No `try/except`, classes, or imports.
+- Arguments may be keyword or positional; positional ones bind in the order the
+  stub declares. Mixing both for the same parameter is an error.
 - Each execution scope is fresh — re-fetch or persist via MCP.
 - Use stubs from `readToolFile` as the source of truth for signatures.
 - `callManyTool` is a host-side tool; it is never callable from the sandbox.

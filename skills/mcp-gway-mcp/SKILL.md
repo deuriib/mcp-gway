@@ -133,16 +133,23 @@ mcp-gway refresh ParallelSearch && \
 L1 validation blocks imports/classes/file-IO/network; L2 sandbox exposes only MCP tools; L3 bounds the timeout; L4 enforces the `tools_to_execute` ACL (`["*"]` = all). Each call runs in a fresh isolated scope — re-fetch or persist via MCP, never assume cross-call state.
 
 ```python
-# DO — keyword args, bracket access, % formatting, print goes to logs
+# DO — keyword or positional args, bracket access, % formatting, print goes to logs
 result = Context7.resolve_library_id(query="react hooks", libraryName="react")
+Context7.resolve_library_id("react hooks", "react")   # same call, stub order
 top = result["result"][0:200]
 print("hits: %s" % len(result["result"]))
 
 # DO — keep Starlark calls synchronous and use the discovered exact signature
 result = ParallelSearch.web_search(objective="Python 3.13 features", search_queries=["Python 3.13 changelog"])
 
+# DO — a trailing expression is returned, no `result =` needed
+Context7.resolve_library_id("react hooks", "react")
+
 # DON'T — try/except, classes, imports, f-strings, `is`, dot access on dicts
 ```
+
+A script that ends in a block (`def`) or an assignment keeps `result: null` and
+says so in `logs`; the sandbox never guesses a return value.
 
 Errors you will actually hit: unknown server/tool or blocked Starlark → `Error: …` + exit 1; both/neither of `--code`/`--file` → exit 2; stub with no params (e.g. `def web_search() -> dict`) → run `mcp-gway refresh <name>` and read again.
 
