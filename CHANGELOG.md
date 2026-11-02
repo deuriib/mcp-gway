@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v6.1.2 (2026-11-02)
+
+### Bug Fixes
+
+- **code-mode**: Share one upstream session per callManyTool batch
+  ([`5f99d81`](https://github.com/deuriib/mcp-gway/commit/5f99d812636c89cd507df60e0af9aede7afe62f4))
+
+- **gateway**: Offload every tools/call to a worker thread
+  ([`17c96e7`](https://github.com/deuriib/mcp-gway/commit/17c96e796415b2dd5528040ec4a42373946bac34))
+
+### Documentation
+
+- Document published container images
+  ([`86bcd87`](https://github.com/deuriib/mcp-gway/commit/86bcd872167f38ebfb7807b0273d12863807bfcd))
+
+- Document the container workflow
+  ([`3d910d9`](https://github.com/deuriib/mcp-gway/commit/3d910d9225c061111fcfcc4a9b0a40159afdf81d))
+
+- **architecture**: Fix stale src/mcp_gateway paths in components table
+  ([`686a2fb`](https://github.com/deuriib/mcp-gway/commit/686a2fbca9c806c9531be5a861eff5aa16491e86))
+
+
 ## v6.1.1 (2026-10-31)
 
 ### Bug Fixes
