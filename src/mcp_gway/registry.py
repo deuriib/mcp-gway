@@ -108,6 +108,7 @@ class Registry:
                     config_data["oauth"] = config.oauth
                 else:
                     config_data["oauth"] = config.oauth.model_dump()
+            config_data["oauth_port"] = getattr(config, "oauth_port", 8989)
             if config.resolved_transport:
                 config_data["resolved_transport"] = config.resolved_transport
         return config_data

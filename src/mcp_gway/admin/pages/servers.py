@@ -144,17 +144,54 @@ def _inspect_anchor(name: str) -> Element:
     )[icon_eye()]
 
 
-def server_grid(rows: list[ServerRow]) -> Node:
+def auth_status_badge(name: str, state: dict[str, str] | None) -> Node:
+    """Anchor for the per-server OAuth status.
+
+    Idle renders an empty anchor so the Authenticate button always has a swap
+    target. While authenticating it self-polls; success and failure stop the
+    polling and keep the reason in the title attribute.
+    """
+    status = (state or {}).get("status", "")
+    message = (state or {}).get("message", "")
+    anchor = f"auth-status-{name}"
+    if status == "authenticating":
+        return span(
+            {
+                "id": anchor,
+                "hx-get": f"/admin/partials/servers/{name}/auth-status",
+                "hx-trigger": "every 2s",
+                "hx-swap": "outerHTML",
+            }
+        )[badge("authenticating", tone="blue")]
+    if status == "authenticated":
+        return span({"id": anchor, "title": message})[
+            badge("authenticated", tone="green")
+        ]
+    if status == "failed":
+        return span({"id": anchor, "title": message})[badge("auth failed", tone="red")]
+    return span({"id": anchor})
+
+
+def server_grid(
+    rows: list[ServerRow],
+    auth_states: dict[str, dict[str, str]] | None = None,
+) -> Node:
     """INNER content for #server-grid: row elements or an empty state."""
     if not rows:
         return empty_state(
             "No servers yet.",
             "Add your first MCP server — local commands respect the allow-list (Policy page).",
         )
-    return div({"class": "flex flex-col gap-2"})[[server_row(row) for row in rows]]
+    states = auth_states or {}
+    return div({"class": "flex flex-col gap-2"})[
+        [
+            server_row(row, auth_status_badge(row.name, states.get(row.name)))
+            for row in rows
+        ]
+    ]
 
 
-def server_row(row: ServerRow) -> Element:
+def server_row(row: ServerRow, auth_status: Node = None) -> Element:
     """One id-bearing row element (outerHTML swap target for row actions)."""
     row_classes = _ROW_CLASSES + (" opacity-60" if not row.enabled else "")
     actions = div({"class": "flex items-center gap-2 justify-end"})[
@@ -182,11 +219,11 @@ def server_row(row: ServerRow) -> Element:
             title="Authenticate",
             hx={
                 "hx-post": f"/admin/partials/servers/{row.name}/auth",
-                "hx-target": f"#row-{row.name}",
+                "hx-target": f"#auth-status-{row.name}",
                 "hx-swap": "outerHTML",
             },
         )
-        if row.has_oauth
+        if row.type == "remote"
         else None,
         circular_button(
             icon_trash(),
@@ -212,6 +249,9 @@ def server_row(row: ServerRow) -> Element:
                     }
                 )[row.name],
                 badge("disabled", tone="gray") if not row.enabled else None,
+                auth_status
+                if auth_status is not None
+                else auth_status_badge(row.name, None),
                 span({"class": (f"text-[12px] text-[{theme.TEXT_SILVER}] truncate")})[
                     row.detail
                 ],
@@ -238,7 +278,11 @@ def server_row(row: ServerRow) -> Element:
 
 
 def servers_content(
-    *, q: str, rows: list[ServerRow], allow_list: AllowListDisplay
+    *,
+    q: str,
+    rows: list[ServerRow],
+    allow_list: AllowListDisplay,
+    auth_states: dict[str, dict[str, str]] | None = None,
 ) -> Node:
     """Full Servers page: header actions, add modal and the live grid."""
     header = div({"class": "flex flex-wrap items-end justify-between gap-4"})[
@@ -291,7 +335,7 @@ def servers_content(
             "Clear the search or add a new MCP server.",
         )
     else:
-        grid_inner = server_grid(rows)
+        grid_inner = server_grid(rows, auth_states)
     return div({"class": "flex flex-col gap-5"})[
         header,
         div({"id": "server-grid", "class": "flex flex-col gap-2"})[grid_inner],
@@ -397,6 +441,7 @@ def server_detail_content(
     name: str,
     allow_list: AllowListDisplay,
     refresh_seconds: int,
+    auth_state: dict[str, str] | None = None,
 ) -> Node:
     """Full detail page: header, config card (masked headers) and tools column."""
     header = div({"class": "flex flex-col gap-2"})[
@@ -426,6 +471,7 @@ def server_detail_content(
                 name=name,
                 csrf_token=csrf_token,
                 allow_list=allow_list,
+                auth_state=auth_state,
             )
         ],
     )
@@ -480,6 +526,7 @@ def detail_config_inner(
     name: str,
     csrf_token: str,
     allow_list: AllowListDisplay,
+    auth_state: dict[str, str] | None = None,
 ) -> list[Node]:
     """Inner content of #detail-config: facts, actions and the edit form.
 
@@ -549,11 +596,13 @@ def detail_config_inner(
             icon=icon_key(),
             hx={
                 "hx-post": f"/admin/partials/servers/{row.name}/auth",
-                "hx-swap": "none",
+                "hx-target": f"#auth-status-{row.name}",
+                "hx-swap": "outerHTML",
             },
         )
-        if row.has_oauth
+        if row.type == "remote"
         else None,
+        auth_status_badge(row.name, auth_state),
         pill_button(
             "Remove",
             variant="danger",
@@ -649,10 +698,19 @@ def _edit_config_details(
                         ),
                     ),
                 ],
-                _field(
-                    "OAuth scope",
-                    text_input("oauth_scope", placeholder="blank keeps current"),
-                ),
+                div({"class": "grid md:grid-cols-2 gap-4"})[
+                    _field(
+                        "OAuth scope",
+                        text_input("oauth_scope", placeholder="blank keeps current"),
+                    ),
+                    _field(
+                        "OAuth port",
+                        text_input(
+                            "oauth_port",
+                            value=str(getattr(config, "oauth_port", 8989)),
+                        ),
+                    ),
+                ],
             ]
         )
     return modal(

@@ -15,7 +15,6 @@ class ServerRow:
     tool_count: int
     enabled: bool
     detail: str
-    has_oauth: bool
     is_code_mode: bool
     description: str = ""
 
@@ -61,9 +60,6 @@ def server_rows(registry: Registry) -> list[ServerRow]:
                 tool_count=_tool_count(registry, name),
                 enabled=bool(getattr(config, "enabled", True)) if config else True,
                 detail=_detail(config),
-                has_oauth=bool(config.oauth)
-                if config and config.oauth is not None
-                else False,
                 is_code_mode=bool(getattr(config, "is_code_mode_client", True)),
                 description=_description(config),
             )

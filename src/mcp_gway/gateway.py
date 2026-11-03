@@ -551,6 +551,7 @@ class Gateway:
         self.app.state.gateway = self  # type: ignore[attr-defined]
         self.app.state.start_time = self.start_time  # type: ignore[attr-defined]
         self.app.state.csrf_token = secrets.token_urlsafe(32)  # type: ignore[attr-defined]
+        self.app.state.auth_states = {}  # type: ignore[attr-defined]
         try:
             install_asyncio_exception_handler()
         except Exception:

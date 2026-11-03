@@ -1036,6 +1036,8 @@ class MCPServerConfig(BaseModel):
     url: str | None = None
     headers: dict[str, str] | None = None
     oauth: OAuthConfig | bool | None = None
+    # Loopback port for the OAuth browser callback (DCR and manual alike).
+    oauth_port: int = Field(default=8989, ge=1, le=65535)
 
     # Internal: resolved after connection test, stored in JSON
     resolved_transport: Literal["sse", "streamable-http", "http"] | None = None

@@ -33,6 +33,7 @@ from mcp_gway.admin.pages.policy import policy_content
 from mcp_gway.admin.pages.servers import (
     AllowListDisplay,
     add_server_form,
+    auth_status_badge,
     detail_config_inner,
     server_detail_content,
     server_grid,
@@ -272,6 +273,25 @@ def _allow_list_display() -> AllowListDisplay:
     return AllowListDisplay(values=frozenset(get_allow_list()), is_default=not raw)
 
 
+def _auth_states(request: Request) -> dict[str, dict[str, str]]:
+    """Per-process OAuth progress, keyed by server name (never persisted)."""
+    states = getattr(request.app.state, "auth_states", None)
+    if states is None:
+        states = {}
+        request.app.state.auth_states = states
+    return states
+
+
+def _auth_state(request: Request, name: str) -> dict[str, str] | None:
+    return _auth_states(request).get(name)
+
+
+def _set_auth_state(
+    request: Request, name: str, status: str, message: str = ""
+) -> None:
+    _auth_states(request)[name] = {"status": status, "message": message}
+
+
 # --------------------------------------------------------------------------
 # Full pages
 # --------------------------------------------------------------------------
@@ -322,7 +342,12 @@ async def h_servers(request: Request) -> Response:
         return denied
     q = request.query_params.get("q", "")
     rows = data.filter_rows(data.server_rows(_registry(request)), q)
-    content = servers_content(q=q, rows=rows, allow_list=_allow_list_display())
+    content = servers_content(
+        q=q,
+        rows=rows,
+        allow_list=_allow_list_display(),
+        auth_states=_auth_states(request),
+    )
     return _page(
         request,
         title="Servers",
@@ -378,6 +403,7 @@ async def h_server_detail(request: Request) -> Response:
         name=name,
         allow_list=_allow_list_display(),
         refresh_seconds=_refresh_seconds(request),
+        auth_state=_auth_state(request, name),
     )
     return _page(
         request,
@@ -499,7 +525,7 @@ async def p_servers(request: Request) -> Response:
         return denied
     q = request.query_params.get("q", "")
     rows = data.filter_rows(data.server_rows(_registry(request)), q)
-    return _frag(server_grid(rows))
+    return _frag(server_grid(rows, _auth_states(request)))
 
 
 async def p_add_server(request: Request) -> Response:
@@ -521,7 +547,10 @@ async def p_add_server(request: Request) -> Response:
 
     def _error(message: str) -> Response:
         rows = data.server_rows(registry)
-        grid = server_grid(data.filter_rows(rows, str(form.get("q", ""))))
+        grid = server_grid(
+            data.filter_rows(rows, str(form.get("q", ""))),
+            _auth_states(request),
+        )
         return HTMLResponse(str(grid) + str(toast(message, tone="red")))
 
     name_raw = str(form.get("name", "")).strip()
@@ -623,6 +652,10 @@ async def p_add_server(request: Request) -> Response:
                 scope=client_scope or None,
             )
         try:
+            oauth_port = _parse_oauth_port(form.get("oauth_port"))
+        except ValueError as exc:
+            return _error(str(exc))
+        try:
             config = MCPServerConfig(
                 name=name,
                 type="remote",
@@ -630,6 +663,7 @@ async def p_add_server(request: Request) -> Response:
                 url=url,
                 headers=headers,
                 oauth=oauth_config,
+                oauth_port=oauth_port,
                 timeout=timeout,
                 enabled=enabled,
                 retry_on_transport_error=retry,
@@ -673,7 +707,7 @@ async def p_add_server(request: Request) -> Response:
         config, [ToolInfo(name=t.name, description=t.description) for t in discovered]
     )
     rows = data.server_rows(registry)
-    grid = server_grid(rows)
+    grid = server_grid(rows, _auth_states(request))
     if not discovered:
         message = (
             f"Added {name} with 0 tools — run Refresh to discover "
@@ -760,8 +794,16 @@ async def _refresh_one(
     policy_error = _policy_gate_local(request, name, config, "admin_refresh")
     if policy_error:
         return False, policy_error
+    reasons: list[str] = []
     try:
-        discovered = await refresh_server(config, name, auth, oauth_port)
+        discovered = await refresh_server(
+            config,
+            name,
+            auth,
+            oauth_port,
+            allow_interactive_auth=False,
+            on_error=reasons.append,
+        )
     except Exception as exc:
         logging.getLogger(_ADMIN_LOG).warning(
             "refresh failed", extra={"server": name, "reason": type(exc).__name__}
@@ -771,9 +813,25 @@ async def _refresh_one(
             f"Refresh failed for {name}: {type(exc).__name__} — check it is running, then try Refresh again.",
         )
     if not discovered:
+        reason = reasons[-1] if reasons else ""
+        if reason == "auth":
+            return (
+                False,
+                f"{name} requires OAuth — click Authenticate, then try Refresh again.",
+            )
+        if reason == "timeout":
+            return (
+                False,
+                f"Discovery timed out for {name} — check it is running, then try Refresh again.",
+            )
+        if reason == "transport":
+            return (
+                False,
+                f"Could not connect to {name} — check it is running, then try Refresh again.",
+            )
         return (
             False,
-            f"No tools discovered for {name} — authenticate first for OAuth servers, then try Refresh again.",
+            f"No tools discovered for {name} — check the server is running, then try Refresh again.",
         )
     if not str(getattr(config, "description", "") or "").strip():
         try:
@@ -811,7 +869,7 @@ async def p_refresh_all(request: Request) -> Response:
         )
     else:
         tone, message = "green", f"Refreshed all {len(names)} servers."
-    return _notice_frag(server_grid(rows), message, tone)
+    return _notice_frag(server_grid(rows, _auth_states(request)), message, tone)
 
 
 async def p_refresh_one(request: Request) -> Response:
@@ -825,7 +883,10 @@ async def p_refresh_one(request: Request) -> Response:
     if row is None:
         return _notice_frag(toast_clear(), message, "red" if not success else "green")
     tone = "green" if success else "red"
-    return HTMLResponse(_render(server_row(row)) + str(toast(message, tone=tone)))
+    status = auth_status_badge(name, _auth_state(request, name))
+    return HTMLResponse(
+        _render(server_row(row, status)) + str(toast(message, tone=tone))
+    )
 
 
 async def p_auth(request: Request) -> Response:
@@ -836,55 +897,87 @@ async def p_auth(request: Request) -> Response:
     name = _resolve_name(registry, request.path_params["name"])
     config, config_error = _load_config(registry, name)
     if config_error:
-        row = _find_row(registry, name)
-        node = server_row(row) if row is not None else toast_clear()
-        return HTMLResponse(str(node) + str(toast(config_error, tone="red")))
-    if config.type != "remote" or not getattr(config, "oauth", None):
-        row = _find_row(registry, name)
-        node = server_row(row) if row is not None else toast_clear()
+        return HTMLResponse(str(toast(config_error, tone="red")))
+    if config.type != "remote":
         return HTMLResponse(
-            str(node)
-            + str(
-                toast(
-                    "Authentication requires a remote server with OAuth — add OAuth client credentials to this server first.",
-                    tone="red",
-                )
-            )
+            str(toast("Authentication only applies to remote servers.", tone="red"))
         )
 
+    # oauth may be None: the flow supports dynamic client registration, so a
+    # server added without client credentials is still authenticatable.
+    port = int(getattr(config, "oauth_port", 8989) or 8989)
+    _set_auth_state(request, name, "authenticating", "waiting for the browser callback")
+    states = _auth_states(request)
+    admin_log = logging.getLogger(_ADMIN_LOG)
+
     async def _run() -> None:
+        messages: list[str] = []
+
+        def emit(message: str) -> None:
+            messages.append(message)
+            admin_log.info(
+                "oauth progress",
+                extra={"server": name, "detail": message[:200]},
+            )
+
         try:
             from mcp_gway.core import refresh_server
 
-            discovered = await refresh_server(config, name, True, 8989)
-            if discovered:
-                registry.update(name, discovered)
-                logging.getLogger(_ADMIN_LOG).info(
-                    "background auth ok",
-                    extra={"server": name, "tools": len(discovered)},
-                )
-            else:
-                logging.getLogger(_ADMIN_LOG).warning(
-                    "background auth discovered nothing", extra={"server": name}
-                )
+            discovered = await refresh_server(
+                config,
+                name,
+                True,
+                port,
+                output_callback=emit,
+            )
         except Exception as exc:
-            logging.getLogger(_ADMIN_LOG).warning(
+            admin_log.warning(
                 "background auth failed",
                 extra={"server": name, "reason": type(exc).__name__},
             )
+            states[name] = {
+                "status": "failed",
+                "message": f"{type(exc).__name__}: {exc}",
+            }
+            return
+        if discovered:
+            registry.update(name, discovered)
+            states[name] = {
+                "status": "authenticated",
+                "message": f"{len(discovered)} tools",
+            }
+            admin_log.info(
+                "background auth ok",
+                extra={"server": name, "tools": len(discovered)},
+            )
+        else:
+            detail = next(
+                (m for m in reversed(messages) if m.lower().startswith("error")),
+                "no tools discovered after authentication",
+            )
+            states[name] = {"status": "failed", "message": detail[:300]}
+            admin_log.warning(
+                "background auth discovered nothing", extra={"server": name}
+            )
 
     asyncio.create_task(_run())
-    row = _find_row(registry, name)
-    node = server_row(row) if row is not None else toast_clear()
     return HTMLResponse(
-        str(node)
+        str(auth_status_badge(name, states[name]))
         + str(
             toast(
-                "Authentication started — authorize in the opened browser window, then Refresh to discover tools.",
+                "Authentication started — this page updates automatically.",
                 tone="blue",
             )
         )
     )
+
+
+async def p_auth_status(request: Request) -> Response:
+    denied = await _gate(request)
+    if denied:
+        return denied
+    name = _resolve_name(_registry(request), request.path_params["name"])
+    return HTMLResponse(str(auth_status_badge(name, _auth_state(request, name))))
 
 
 async def p_enabled(request: Request) -> Response:
@@ -900,7 +993,7 @@ async def p_enabled(request: Request) -> Response:
     row = _find_row(registry, name)
     if row is None:
         return _frag(toast_clear())
-    return _frag(server_row(row))
+    return _frag(server_row(row, auth_status_badge(name, _auth_state(request, name))))
 
 
 async def p_tools_list(request: Request) -> Response:
@@ -935,6 +1028,19 @@ def _reject(request: Request, name: str, message: str) -> Response:
     return RedirectResponse(
         f"/admin/servers/{name}?notice=config-not-saved", status_code=303
     )
+
+
+def _parse_oauth_port(raw: object, default: int = 8989) -> int:
+    value = str(raw or "").strip()
+    if not value:
+        return default
+    try:
+        port = int(value)
+    except ValueError:
+        raise ValueError("OAuth port must be an integer between 1 and 65535") from None
+    if not 1 <= port <= 65535:
+        raise ValueError("OAuth port must be between 1 and 65535")
+    return port
 
 
 def _oauth_field(raw: object) -> str:
@@ -1039,6 +1145,13 @@ async def p_set_config(request: Request) -> Response:
         client_id = _oauth_field(form.get("oauth_client_id"))
         client_secret = _oauth_field(form.get("oauth_client_secret"))
         client_scope = _oauth_field(form.get("oauth_scope"))
+        try:
+            data["oauth_port"] = _parse_oauth_port(
+                form.get("oauth_port"),
+                default=int(getattr(config, "oauth_port", 8989) or 8989),
+            )
+        except ValueError as exc:
+            return _error(str(exc))
         if client_id or client_secret or client_scope:
             stored = config.oauth if isinstance(config.oauth, OAuthConfig) else None
             data["oauth"] = OAuthConfig(
@@ -1081,6 +1194,7 @@ async def p_set_config(request: Request) -> Response:
         name=name,
         csrf_token=_form_token(request),
         allow_list=_allow_list_display(),
+        auth_state=_auth_state(request, name),
     )
     return _notice_frag(inner, f"Config updated for {name}.", "green")
 
@@ -1310,6 +1424,11 @@ def create_admin_routes() -> list[Route]:
             "/admin/partials/servers/{name}/refresh", p_refresh_one, methods=["POST"]
         ),
         Route("/admin/partials/servers/{name}/auth", p_auth, methods=["POST"]),
+        Route(
+            "/admin/partials/servers/{name}/auth-status",
+            p_auth_status,
+            methods=["GET"],
+        ),
         Route("/admin/partials/servers/{name}/tools", p_tools_list, methods=["GET"]),
         Route(
             "/admin/partials/servers/{name}/config",

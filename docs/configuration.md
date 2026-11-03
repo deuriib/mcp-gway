@@ -62,3 +62,20 @@ mkdir -p ~/.config/mcp-gway/tokens
 echo '{"access_token": "YOUR_TOKEN"}' > ~/.config/mcp-gway/tokens/supabase.json
 chmod 600 ~/.config/mcp-gway/tokens/supabase.json
 ```
+
+### OAuth from the dashboard
+
+Every remote server exposes **Authenticate** on the Servers list and the server
+detail page, including servers added without client credentials — those use
+dynamic client registration (RFC 7591). The flow runs in the background: the
+status next to the button moves from `authenticating` to `authenticated` or
+`auth failed`, and the tools panel picks up the discovered tools on its next
+poll.
+
+Refresh never blocks on the browser. If discovery returns `401`, Refresh now
+says the server requires OAuth and points at Authenticate; a timeout or a
+refused connection is reported as such instead of the old generic "no tools".
+
+The callback port is per server (`oauth_port`, default `8989`): set it in the
+add form or in **Edit config** when that port is busy. Tokens and DCR client
+info persist under `~/.config/mcp-gway/tokens/` with `0600`.

@@ -51,6 +51,18 @@ def _csrf(client_gateway: Gateway) -> dict[str, str]:
     return {"X-CSRF-Token": client_gateway.app.state.csrf_token}
 
 
+def _wait_for(client: TestClient, path: str, needle: str, timeout: float = 2.0) -> str:
+    """Poll a fragment until it contains `needle` (bounded, 20ms steps)."""
+    deadline = time.monotonic() + timeout
+    last = ""
+    while time.monotonic() < deadline:
+        last = client.get(path).text
+        if needle in last:
+            return last
+        time.sleep(0.02)
+    raise AssertionError(f"{needle!r} not in {last!r}")
+
+
 def test_index_serves_dashboard_with_cdn_assets(tmp_path: Path) -> None:
     gw = _gw(tmp_path)
     c = _client(gw)
@@ -304,7 +316,13 @@ def test_tools_have_no_web_mutation_path(tmp_path: Path) -> None:
     assert "ping" in listing.text
 
 
-def test_auth_guard_without_oauth_config(tmp_path: Path) -> None:
+def test_auth_starts_for_dcr_server_without_oauth_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_refresh(*args: Any, **kwargs: Any) -> list[ToolInfo]:
+        return []
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
     gw = _gw(tmp_path)
     _seed_demo(gw.registry)
     c = _client(gw)
@@ -312,8 +330,23 @@ def test_auth_guard_without_oauth_config(tmp_path: Path) -> None:
         "/admin/partials/servers/Demo/auth",
         headers={**_csrf(gw), "HX-Request": "true"},
     )
+
     assert r.status_code == 200
-    assert "requires a remote server with OAuth" in r.text
+    assert "authenticating" in r.text
+    assert "Authentication started" in r.text
+    _wait_for(c, "/admin/partials/servers/Demo/auth-status", "auth failed")
+
+
+def test_local_server_rejects_authentication(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    _seed_local(gw.registry)
+    c = _client(gw)
+    r = c.post(
+        "/admin/partials/servers/Loc1/auth",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    assert "only applies to remote servers" in r.text
 
 
 def test_remove_hx_redirect_and_plain_redirect(tmp_path: Path) -> None:
@@ -1177,3 +1210,205 @@ def test_overview_connect_card_survives_empty_registry(tmp_path: Path) -> None:
     assert "No servers yet." in r.text
     assert "Connect" in r.text
     assert "opencode plugin add github:deuriib/mcp-gateway" in r.text
+
+
+# --- Dashboard OAuth flow ---
+
+
+def test_remote_dcr_server_exposes_authenticate(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    detail = c.get("/admin/servers/Demo")
+    listing = c.get("/admin/servers")
+
+    assert "Authenticate" in detail.text
+    assert 'id="auth-status-Demo"' in detail.text
+    assert 'title="Authenticate"' in listing.text
+
+
+def test_auth_success_marks_authenticated_and_discovers_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_refresh(*args: Any, **kwargs: Any) -> list[ToolInfo]:
+        return [ToolInfo(name="ping2", description="after auth")]
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    r = c.post(
+        "/admin/partials/servers/Demo/auth",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    assert r.status_code == 200
+    status = _wait_for(c, "/admin/partials/servers/Demo/auth-status", "authenticated")
+
+    assert "authenticated" in status
+    assert "1 tools" in status
+    assert "ping2" in str(gw.registry.get_pyi_tools("Demo"))
+
+
+def test_auth_failure_surfaces_the_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_refresh(*args: Any, **kwargs: Any) -> list[ToolInfo]:
+        raise RuntimeError("browser flow exploded")
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    c.post(
+        "/admin/partials/servers/Demo/auth",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    status = _wait_for(c, "/admin/partials/servers/Demo/auth-status", "auth failed")
+
+    assert "RuntimeError" in status
+    assert "browser flow exploded" in status
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("auth", "requires OAuth"),
+        ("timeout", "timed out"),
+        ("transport", "Could not connect"),
+    ],
+)
+def test_refresh_reports_discovery_failure_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reason: str,
+    expected: str,
+) -> None:
+    async def fake_refresh(
+        config: Any,
+        name: str,
+        auth: bool,
+        port: int = 8989,
+        *,
+        allow_interactive_auth: bool = True,
+        on_error: Any = None,
+        output_callback: Any = None,
+    ) -> list[ToolInfo]:
+        if on_error is not None:
+            on_error(reason)
+        return []
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    r = c.post(
+        "/admin/partials/servers/Demo/refresh",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+
+    assert r.status_code == 200
+    assert expected in r.text
+
+
+def test_refresh_does_not_block_on_interactive_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, bool] = {}
+
+    async def fake_refresh(
+        config: Any,
+        name: str,
+        auth: bool,
+        port: int = 8989,
+        *,
+        allow_interactive_auth: bool = True,
+        **kwargs: Any,
+    ) -> list[ToolInfo]:
+        seen["allow_interactive_auth"] = allow_interactive_auth
+        return []
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    c.post(
+        "/admin/partials/servers/Demo/refresh",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+
+    assert seen["allow_interactive_auth"] is False
+
+
+def test_oauth_port_defaults_and_validates(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    cfg = MCPServerConfig(
+        name="Port1", type="remote", url="https://port.example.com/mcp"
+    )
+    assert cfg.oauth_port == 8989
+
+    custom = MCPServerConfig(
+        name="Port2",
+        type="remote",
+        url="https://port.example.com/mcp",
+        oauth_port=9123,
+    )
+    assert custom.oauth_port == 9123
+
+    with pytest.raises(ValidationError):
+        MCPServerConfig(
+            name="Port3",
+            type="remote",
+            url="https://port.example.com/mcp",
+            oauth_port=0,
+        )
+
+
+def test_auth_uses_the_configured_oauth_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, int] = {}
+
+    async def fake_refresh(
+        config: Any, name: str, auth: bool, port: int = 8989, **kwargs: Any
+    ) -> list[ToolInfo]:
+        seen["port"] = port
+        return []
+
+    monkeypatch.setattr("mcp_gway.core.refresh_server", fake_refresh)
+    gw = _gw(tmp_path)
+    registry = gw.registry
+    registry.add(
+        MCPServerConfig(
+            name="Railway",
+            type="remote",
+            url="https://railway.example.com/mcp",
+            oauth_port=9123,
+        ),
+        [],
+    )
+    c = _client(gw)
+
+    c.post(
+        "/admin/partials/servers/Railway/auth",
+        headers={**_csrf(gw), "HX-Request": "true"},
+    )
+    _wait_for(c, "/admin/partials/servers/Railway/auth-status", "auth failed")
+
+    assert seen["port"] == 9123
+
+
+def test_parse_oauth_port() -> None:
+    from mcp_gway.admin.routes import _parse_oauth_port
+
+    assert _parse_oauth_port("") == 8989
+    assert _parse_oauth_port("", default=9123) == 9123
+    assert _parse_oauth_port(" 9000 ") == 9000
+    for bad in ("abc", "0", "65536", "-1"):
+        with pytest.raises(ValueError):
+            _parse_oauth_port(bad)
