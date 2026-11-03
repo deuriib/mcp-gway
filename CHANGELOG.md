@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.4.0 (2026-11-03)
+
+### Features
+
+- **observability**: Persist JSON logs under the XDG data dir
+  ([`25276ab`](https://github.com/deuriib/mcp-gway/commit/25276abb44e651821e52a64f0bc64cf2e7efa3cb))
+
+
 ## v6.3.0 (2026-11-03)
 
 ### Documentation
