@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import click
@@ -332,11 +332,22 @@ async def resolve_server_description(
     return fetched
 
 
+def _classify_discovery_failure(exc: BaseException) -> str:
+    """Bucket a discovery failure for the operator-facing message."""
+    text = f"{type(exc).__name__}: {exc}".casefold()
+    if "401" in text or "unauthorized" in text or "invalid_token" in text:
+        return "auth"
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    return "transport"
+
+
 async def discover_tools(
     config: MCPServerConfig,
     *,
     force_auth: bool = False,
     metrics: object | None = None,
+    on_error: Callable[[str], None] | None = None,
 ) -> list[ToolInfo]:
     status = "error"
     start = time.perf_counter()
@@ -368,9 +379,13 @@ async def discover_tools(
     except TimeoutError:
         status = "timeout"
         logger.debug("Discovery timed out for server %s", config.name)
+        if on_error is not None:
+            on_error("timeout")
         return []
     except Exception as e:
         logger.debug("Could not connect to server %s: %s", config.name, e)
+        if on_error is not None:
+            on_error(_classify_discovery_failure(e))
         return []
     finally:
         # FEAT-007 (BR-103): revive discovery_duration_seconds — the metric was
@@ -399,12 +414,24 @@ async def refresh_server(
     force_auth: bool,
     oauth_port: int = 8989,
     metrics: object | None = None,
+    *,
+    allow_interactive_auth: bool = True,
+    output_callback: Callable[[str], None] | None = None,
+    on_error: Callable[[str], None] | None = None,
 ) -> list[ToolInfo]:
-    discovered = await discover_tools(cfg, force_auth=False, metrics=metrics)
+    emit = output_callback or click.echo
+    discovered = await discover_tools(
+        cfg, force_auth=False, metrics=metrics, on_error=on_error
+    )
 
-    needs_auth = (force_auth or _is_remote_config(cfg)) and getattr(
-        cfg, "oauth", None
-    ) is not False
+    # A background CLI flow may open a browser and wait up to five minutes;
+    # serving paths pass allow_interactive_auth=False so a Refresh request
+    # never blocks on operator interaction.
+    needs_auth = (
+        allow_interactive_auth
+        and (force_auth or _is_remote_config(cfg))
+        and getattr(cfg, "oauth", None) is not False
+    )
     if not discovered and needs_auth:
         from mcp_gway.oauth import run_oauth_flow
 
@@ -424,7 +451,7 @@ async def refresh_server(
             server_url=server_url,
             server_name=srv_name,
             client_metadata=client_metadata,
-            output_callback=click.echo,
+            output_callback=emit,
             callback_port=oauth_port,
             oauth_config=getattr(cfg, "oauth", None),
         )
@@ -433,9 +460,9 @@ async def refresh_server(
                 await client.aclose()
             except Exception:
                 pass
-            click.echo("Authentication successful. Discovering tools...")
-            discovered = await discover_tools(cfg, force_auth=True)
+            emit("Authentication successful. Discovering tools...")
+            discovered = await discover_tools(cfg, force_auth=True, on_error=on_error)
         else:
-            click.echo("Authentication failed.")
+            emit("Authentication failed.")
 
     return discovered
