@@ -1,4 +1,4 @@
-"""Now-playing footer content — inner fragment polled every 5s by the shell."""
+"""Now-playing footer content — inner fragment polled at the serve cadence."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from htpy import Node, div, span
 from mcp_gway.admin import theme
 from mcp_gway.admin.components import badge
 from mcp_gway.admin.icons import icon_dot
+from mcp_gway.admin.refresh import refresh_caption
 
 
 def status_fragment(
@@ -18,9 +19,11 @@ def status_fragment(
     uptime: str,
     health: str,
     exposed: bool,
+    refresh_seconds: int,
 ) -> Node:
     """Inner footer content: LIVE badge, transport facts, health and version."""
     healthy = health == "ok"
+    live = refresh_seconds > 0
     health_badge = badge(
         "healthy" if healthy else str(health),
         tone="green" if healthy else "orange",
@@ -35,13 +38,14 @@ def status_fragment(
             span(
                 {
                     "class": (
-                        f"flex items-center gap-1.5 text-[{theme.GREEN}] "
-                        "font-bold uppercase tracking-[1.4px]"
+                        f"flex items-center gap-1.5 font-bold uppercase "
+                        "tracking-[1.4px] "
+                        f"text-[{theme.GREEN if live else theme.TEXT_SILVER}]"
                     )
                 }
-            )[icon_dot(9), "LIVE"],
+            )[icon_dot(9), "LIVE" if live else "PAUSED"],
             span({"class": f"text-[{theme.TEXT_SILVER}] text-[10px]"})[
-                "polls every 5s"
+                refresh_caption(refresh_seconds)
             ],
         ],
         div(

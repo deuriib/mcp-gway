@@ -54,6 +54,7 @@ The server reads these `MCP_GWAY_*` vars (plus `HOME`); everything else is a fla
 | `MCP_GWAY_LOG_LEVEL` | `trace/debug/info/warning/error/critical` (`warn` → `warning`). CLI INFO events emit only when set; WARN/ERROR always | `info` | `cli.py:67,529`, `--log-level` overrides it per-run |
 | `MCP_GWAY_LOG_TO_FILE` | Persist the same JSON lines to a rotating file. `0/false/no/off` disables it | `1` (enabled) | `observability/logging.py` |
 | `MCP_GWAY_LOG_DIR` | Absolute directory for `gateway.log`. Relative values are ignored with a WARN | `$XDG_DATA_HOME/mcp-gway/logs`, else `~/.local/share/mcp-gway/logs` | `observability/logging.py`, `domain/policy.py` |
+| `MCP_GWAY_ADMIN_REFRESH_SECONDS` | Admin dashboard polling cadence in whole seconds. `0` disables polling; invalid values make `serve` exit 2 | `5` | `admin/refresh.py`, `cli.py` |
 | `MCP_GWAY_MAX_RESULT_BYTES` | Byte cap on a Code Mode envelope handed to an agent | `262144` (min `1024`, max `8388608`) | `budget.py` |
 | `MCP_GWAY_EXEC_TIMEOUT` | Default Code Mode execution bound in seconds (float). Per-call `timeout` wins | 30s `executeTool`, 120s `callManyTool` | `code_mode.py` |
 | `MCP_GWAY_IMAGE` | Digest-pinned image for the prod Compose profile | `mcp-gway:local` (locally built) | `docker-compose.prod.yml` |

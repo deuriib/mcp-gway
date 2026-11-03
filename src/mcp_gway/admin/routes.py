@@ -47,6 +47,7 @@ from mcp_gway.admin.pages.tools import (
     execute_form,
     tools_content,
 )
+from mcp_gway.admin.refresh import DEFAULT_ADMIN_REFRESH_SECONDS
 from mcp_gway.core.policy import home_dir
 from mcp_gway.observability.health import check_registry, check_routes
 
@@ -170,6 +171,14 @@ def _fmt_uptime(seconds: float) -> str:
     return f"{secs}s"
 
 
+def _refresh_seconds(request: Request) -> int:
+    return getattr(
+        request.app.state,
+        "admin_refresh_seconds",
+        DEFAULT_ADMIN_REFRESH_SECONDS,
+    )
+
+
 def _status_node(request: Request) -> Any:
     gateway = _gateway(request)
     state = request.app.state
@@ -190,6 +199,7 @@ def _status_node(request: Request) -> Any:
         uptime=uptime,
         health=health,
         exposed=host not in _LOOPBACK,
+        refresh_seconds=_refresh_seconds(request),
     )
 
 
@@ -211,6 +221,7 @@ def _page(
                 content=content,
                 status_content=_status_node(request),
                 version=__version__,
+                refresh_seconds=_refresh_seconds(request),
                 notice=notice_text,
             )
         )
@@ -363,6 +374,7 @@ async def h_server_detail(request: Request) -> Response:
         csrf_token=_form_token(request),
         name=name,
         allow_list=_allow_list_display(),
+        refresh_seconds=_refresh_seconds(request),
     )
     return _page(
         request,

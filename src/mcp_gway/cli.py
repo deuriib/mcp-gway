@@ -692,11 +692,23 @@ def _serve_http(
         logger = logging.getLogger(__name__)
         logger.warning("server exposed on non-loopback host %s", host)
     t0 = time.monotonic()
+    from mcp_gway.admin.refresh import resolve_refresh_seconds
+
+    try:
+        admin_refresh_seconds = resolve_refresh_seconds()
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(2)
     try:
         registry = Registry(servers_dir=servers_dir)
         from mcp_gway.gateway import Gateway
 
-        gateway = Gateway(registry, host=host, transport=transport)
+        gateway = Gateway(
+            registry,
+            host=host,
+            transport=transport,
+            admin_refresh_seconds=admin_refresh_seconds,
+        )
         names = registry.list()
     except Exception as e:
         click.echo(

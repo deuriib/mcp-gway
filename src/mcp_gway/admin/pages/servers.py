@@ -34,6 +34,7 @@ from mcp_gway.admin.icons import (
     icon_refresh,
     icon_trash,
 )
+from mcp_gway.admin.refresh import DEFAULT_ADMIN_REFRESH_SECONDS, refresh_trigger
 from mcp_gway.models import MCPServerConfig, ToolInfo
 
 
@@ -395,6 +396,7 @@ def server_detail_content(
     csrf_token: str,
     name: str,
     allow_list: AllowListDisplay,
+    refresh_seconds: int,
 ) -> Node:
     """Full detail page: header, config card (masked headers) and tools column."""
     header = div({"class": "flex flex-col gap-2"})[
@@ -429,7 +431,9 @@ def server_detail_content(
     )
     right = div({"class": "flex flex-col gap-4"})[
         card(
-            div({"id": "detail-tools"})[tools_panel(tools, name=row.name)],
+            div({"id": "detail-tools"})[
+                tools_panel(tools, name=row.name, refresh_seconds=refresh_seconds)
+            ],
         ),
         card(
             feature_heading("Signatures"),
@@ -685,16 +689,30 @@ def _edit_config_details(
     )
 
 
-def tools_panel(tools: list[ToolInfo], *, name: str = "") -> Node:
+def tools_panel(
+    tools: list[ToolInfo],
+    *,
+    name: str = "",
+    refresh_seconds: int = DEFAULT_ADMIN_REFRESH_SECONDS,
+) -> Node:
     """INNER content for #detail-tools (with name) or #detail-tools-list (without).
 
     Read-only: discovered tools sync exclusively when servers are added or
     refreshed (no web mutation path \u2014 CLI `update` stays canonical). With
-    `name`, the list wrapper polls every 5s so background refreshes show up
-    without a manual reload."""
+    `name`, the list wrapper polls at the configured cadence so background
+    refreshes show up without a manual reload; `0` disables the polling."""
     lines = _tool_lines(tools)
     if not name:
         return lines
+    wrapper: dict[str, str] = {"id": "detail-tools-list"}
+    if refresh_seconds > 0:
+        wrapper.update(
+            {
+                "hx-get": f"/admin/partials/servers/{name}/tools",
+                **refresh_trigger(refresh_seconds),
+                "hx-swap": "innerHTML",
+            }
+        )
     return div[
         div({"class": "flex items-baseline justify-between gap-3"})[
             feature_heading("Tools"),
@@ -702,12 +720,5 @@ def tools_panel(tools: list[ToolInfo], *, name: str = "") -> Node:
                 "synced on add/refresh"
             ],
         ],
-        div(
-            {
-                "id": "detail-tools-list",
-                "hx-get": f"/admin/partials/servers/{name}/tools",
-                "hx-trigger": "every 5s",
-                "hx-swap": "innerHTML",
-            }
-        )[lines],
+        div(wrapper)[lines],
     ]

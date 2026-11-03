@@ -32,6 +32,7 @@ from markupsafe import Markup
 from mcp_gway.admin import theme
 from mcp_gway.admin.components import nav_item, status_bar_footer, toast
 from mcp_gway.admin.icons import icon_close, icon_hub, icon_menu
+from mcp_gway.admin.refresh import refresh_trigger
 
 HTMX_SRC = "https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
 HTMX_INTEGRITY = (
@@ -228,11 +229,19 @@ def base_layout(
     content: Node,
     status_content: Node,
     version: str,
+    refresh_seconds: int,
     notice: str = "",
 ) -> Node:
     """Full HTML document. `content` is page body; `status_content` seeds the
-    polled footer (partial replaces it via innerHTML every 5s); `notice` seeds
-    a server-rendered toast for no-JS redirect flows."""
+    polled footer (partial replaces it via innerHTML at the configured cadence);
+    `notice` seeds a server-rendered toast for no-JS redirect flows."""
+    footer_hx: dict[str, str] = {}
+    if refresh_seconds > 0:
+        footer_hx = {
+            "hx-get": "/admin/partials/status",
+            **refresh_trigger(refresh_seconds),
+            "hx-swap": "innerHTML",
+        }
     return html[
         head[
             meta(charset="utf-8"),
@@ -262,13 +271,7 @@ def base_layout(
                     {"id": "main", "class": "flex-1 min-w-0 overflow-y-auto p-6 pb-8"}
                 )[content],
             ],
-            status_bar_footer(
-                hx={
-                    "hx-get": "/admin/partials/status",
-                    "hx-trigger": "every 5s",
-                    "hx-swap": "innerHTML",
-                }
-            )[status_content],
+            status_bar_footer(hx=footer_hx)[status_content],
             div(id="toast")[toast(notice) if notice else None],
         ],
     ]

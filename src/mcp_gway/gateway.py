@@ -19,6 +19,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from mcp_gway import __version__
+from mcp_gway.admin.refresh import resolve_refresh_seconds
 from mcp_gway.admin.routes import create_admin_routes
 from mcp_gway.code_mode import CodeMode
 from mcp_gway.models import SSRF_IDLE_TIMEOUT, SSRF_MAX_BODY
@@ -322,6 +323,7 @@ class Gateway:
         registry: Registry,
         host: str = "127.0.0.1",
         transport: str = "http",
+        admin_refresh_seconds: int | None = None,
     ) -> None:
         """Build the ASGI app for a single MCP transport.
 
@@ -329,12 +331,22 @@ class Gateway:
         ``http`` (Streamable HTTP) exposes POST /mcp only; ``sse`` exposes
         GET /mcp + POST /mcp/messages only. The two never coexist and there
         is no fallback between them.
+
+        ``admin_refresh_seconds`` is the dashboard polling cadence; when
+        omitted it resolves from ``MCP_GWAY_ADMIN_REFRESH_SECONDS`` (default
+        5, ``0`` disables polling). Invalid values raise ``ValueError`` so
+        serve can exit 2 instead of silently drifting.
         """
         if transport not in ("http", "sse"):
             raise ValueError(f"unknown transport '{transport}'")
         self.registry = registry
         self.host = host
         self.transport = transport
+        self.admin_refresh_seconds = (
+            admin_refresh_seconds
+            if admin_refresh_seconds is not None
+            else resolve_refresh_seconds()
+        )
         self.code_mode = CodeMode(registry)
         self._sessions: dict[str, SessionInfo] = {}
         self.start_time: float = time.monotonic()
@@ -534,6 +546,7 @@ class Gateway:
         self.app.state.registry = registry  # type: ignore[attr-defined]
         self.app.state.serve_host = host  # type: ignore[attr-defined]
         self.app.state.transport = transport  # type: ignore[attr-defined]
+        self.app.state.admin_refresh_seconds = self.admin_refresh_seconds  # type: ignore[attr-defined]
         self.app.state.metrics = self.metrics  # type: ignore[attr-defined]
         self.app.state.gateway = self  # type: ignore[attr-defined]
         self.app.state.start_time = self.start_time  # type: ignore[attr-defined]

@@ -33,6 +33,18 @@ mcp-gway serve --transport http --host 127.0.0.1 --port 8080
 curl -s http://127.0.0.1:8080/health | jq
 ```
 
+## Admin dashboard refresh
+
+The dashboard polls itself with htmx. One variable controls every polling
+surface (status footer and the server-detail tools panel):
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `MCP_GWAY_ADMIN_REFRESH_SECONDS` | `5` | Whole seconds between refreshes. `0` disables polling and renders `auto-refresh off`. Non-integer or negative values make `serve` exit 2, naming the variable. |
+
+The value is resolved once at `serve` startup, so a change requires a restart.
+Interval copy uses `5s`, `30s`, or `10m` for whole minutes.
+
 ## Server Types (only `remote` / `local`)
 
 `--type` only accepts `local|remote` (`cli.py:97-102`). Legacy values `http|stdio|sse|streamable-http` are rejected by click, and `--args` / `--docs-url` do not exist. For `local`, `--command` is a single string (split via `shlex`).

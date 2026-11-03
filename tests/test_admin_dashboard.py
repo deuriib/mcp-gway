@@ -1056,3 +1056,74 @@ def test_explicit_allow_list_with_only_invalid_entries_renders_none(
         assert ">none</span>" in r.text
         assert "from MCP_GWAY_ALLOW_LOCAL_COMMANDS" in r.text
         assert "built-in defaults" not in r.text
+
+
+# --- Configurable admin auto-refresh ---
+
+
+@pytest.mark.parametrize(
+    ("raw", "trigger", "caption"),
+    [
+        (None, "every 5s", "polls every 5s"),
+        ("30", "every 30s", "polls every 30s"),
+        ("600", "every 600s", "polls every 10m"),
+        ("0", None, "auto-refresh off"),
+    ],
+)
+def test_admin_refresh_interval_is_configurable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str | None,
+    trigger: str | None,
+    caption: str,
+) -> None:
+    if raw is None:
+        monkeypatch.delenv("MCP_GWAY_ADMIN_REFRESH_SECONDS", raising=False)
+    else:
+        monkeypatch.setenv("MCP_GWAY_ADMIN_REFRESH_SECONDS", raw)
+    gw = _gw(tmp_path)
+    _seed_local(gw.registry)
+    c = _client(gw)
+
+    for path in ("/admin/servers", "/admin/servers/Loc1"):
+        r = c.get(path)
+        assert r.status_code == 200
+        assert caption in r.text
+        if trigger is None:
+            assert 'hx-trigger="every' not in r.text
+        else:
+            assert f'hx-trigger="{trigger}"' in r.text
+
+    if trigger is None:
+        assert "PAUSED" in c.get("/admin/servers").text
+
+
+@pytest.mark.parametrize("bad", ["abc", "-1", "1.5"])
+def test_invalid_admin_refresh_env_exits_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad: str
+) -> None:
+    from click.testing import CliRunner
+
+    from mcp_gway.cli import main
+
+    monkeypatch.setenv("MCP_GWAY_ADMIN_REFRESH_SECONDS", bad)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    result = CliRunner().invoke(
+        main, ["serve", "--transport", "http", "--port", "65530"]
+    )
+
+    assert result.exit_code == 2
+    assert "MCP_GWAY_ADMIN_REFRESH_SECONDS" in result.output
+
+
+def test_resolve_refresh_seconds_unit() -> None:
+    from mcp_gway.admin.refresh import resolve_refresh_seconds
+
+    assert resolve_refresh_seconds("") == 5
+    assert resolve_refresh_seconds("   ") == 5
+    assert resolve_refresh_seconds("0") == 0
+    assert resolve_refresh_seconds(" 30 ") == 30
+    for bad in ("abc", "-1", "1.5"):
+        with pytest.raises(ValueError):
+            resolve_refresh_seconds(bad)
