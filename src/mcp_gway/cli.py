@@ -528,7 +528,7 @@ def tools_docs(server: str, tool: str) -> None:
     "--timeout",
     type=float,
     default=None,
-    help="Execution timeout in seconds (default 30).",
+    help="Execution timeout in seconds (default: MCP_GWAY_EXEC_TIMEOUT, then 30).",
 )
 def tools_exec(code: str | None, file_path: str | None, timeout: float | None) -> None:
     """Execute Starlark code via MCP tools (same as executeTool).

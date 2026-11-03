@@ -13,6 +13,7 @@ def call_many(
     *,
     max_concurrency: int | None = None,
     concurrency: int | None = None,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """Convenience wrapper for host-side fan-out across tool calls."""
     from mcp_gway.code_mode import CodeMode
@@ -21,6 +22,7 @@ def call_many(
         tool_calls,
         max_concurrency=max_concurrency,
         concurrency=concurrency,
+        timeout=timeout,
     )
 
 

@@ -6,6 +6,7 @@ import json
 import pytest
 
 from mcp_gway.code_mode import CodeMode, to_pascal_case_identifier
+from mcp_gway.gateway import InvalidParamsError
 from mcp_gway.models import MCPServerConfig, ToolInfo
 from mcp_gway.registry import Registry
 
@@ -201,6 +202,60 @@ def test_execute_tool_notes_missing_result(code_mode):
     payload = json.loads(code_mode.execute_tool_code("x = 1"))
     assert payload["result"] is None
     assert any("did not assign 'result'" in line for line in payload["logs"])
+
+
+# --- Execution timeout tests ---
+
+
+def test_execute_tool_uses_env_timeout(code_mode, monkeypatch):
+    seen: list[float] = []
+
+    def fake_execute(code: str, timeout: float = 30.0) -> object:
+        seen.append(timeout)
+        return 1
+
+    monkeypatch.setenv("MCP_GWAY_EXEC_TIMEOUT", "7.5")
+    monkeypatch.setattr(code_mode.sandbox, "execute", fake_execute)
+
+    code_mode.execute_tool("1")
+
+    assert seen == [7.5]
+
+
+def test_execute_tool_per_call_timeout_beats_env(code_mode, monkeypatch):
+    seen: list[float] = []
+
+    def fake_execute(code: str, timeout: float = 30.0) -> object:
+        seen.append(timeout)
+        return 1
+
+    monkeypatch.setenv("MCP_GWAY_EXEC_TIMEOUT", "7.5")
+    monkeypatch.setattr(code_mode.sandbox, "execute", fake_execute)
+
+    code_mode.execute_tool("1", timeout=0.25)
+
+    assert seen == [0.25]
+
+
+def test_execute_tool_default_timeout_without_env(code_mode, monkeypatch):
+    seen: list[float] = []
+
+    def fake_execute(code: str, timeout: float = 30.0) -> object:
+        seen.append(timeout)
+        return 1
+
+    monkeypatch.delenv("MCP_GWAY_EXEC_TIMEOUT", raising=False)
+    monkeypatch.setattr(code_mode.sandbox, "execute", fake_execute)
+
+    code_mode.execute_tool("1")
+
+    assert seen == [30.0]
+
+
+@pytest.mark.parametrize("bad", [0, -1, "5", float("nan"), float("inf"), True])
+def test_execute_tool_rejects_invalid_timeout(code_mode, bad):
+    with pytest.raises(InvalidParamsError):
+        code_mode.execute_tool("1", timeout=bad)
 
 
 # --- Hyphenated tool name tests ---

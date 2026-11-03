@@ -251,21 +251,26 @@ CODE_MODE_TOOLS = [
     },
     {
         "name": "executeTool",
-        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). CALLS: keyword or positional arguments; positional ones bind in the order the stub declares them (Filesystem.read_file(".")). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"]. RETURN: assign `result`, or end the script with an expression and it is returned implicitly; a script that does neither returns null and says so in logs. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}.',
+        "description": 'Executes Python-like (Starlark) code in a sandboxed interpreter with MCP tool access as Server.tool_name(param=value) (e.g., Filesystem.read_file(path=".")). Final step of listToolFiles -> readToolFile -> (optional) getToolDocs -> executeTool; read the stub first and use the exact callable name shown. Security: L1 code validation (no imports/classes/file-IO/network primitives), L2 sandboxed runtime (no external modules, no filesystem/network/process access except via MCP tools, memory isolation), L3 bounded execution timeout, L4 Tool ACL (only tools_to_execute-allowed CodeMode servers/tools are visible). CALLS: keyword or positional arguments; positional ones bind in the order the stub declares them (Filesystem.read_file(".")). STARLARK RULES: no try/except/raise, no classes, no imports, no f-strings (use % formatting), no `is` (use ==), synchronous calls only, dict access via result["key"]. RETURN: assign `result`, or end the script with an expression and it is returned implicitly; a script that does neither returns null and says so in logs. Each call runs in a FRESH ISOLATED SCOPE (no state persists); print() output is captured to logs. Returns {"result": ..., "logs": [...]}. BUDGET: optional timeout in seconds; omitted uses MCP_GWAY_EXEC_TIMEOUT, then 30s.',
         "inputSchema": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "string",
                     "description": 'Starlark code calling tools as Server.tool_name(param="value") or Server.tool_name("value") — assign `result`, or end with an expression',
-                }
+                },
+                "timeout": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Wall-clock budget in seconds (float). Omit to use MCP_GWAY_EXEC_TIMEOUT, then the 30s default.",
+                },
             },
             "required": ["code"],
         },
     },
     {
         "name": "callManyTool",
-        "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeTool script for that.",
+        "description": "Runs up to 50 tool calls in one bounded fan-out (8 concurrent) and returns results in input order. Use it when several calls are independent - across servers or within one - and you want one round trip instead of N. Each item is {server, tool, arguments}; server and tool names are the ones readToolFile shows. A failed item returns ok=false with its error and never cancels its siblings, so a partial result is still usable. Do NOT use it when one call depends on another call's result: write an executeTool script for that. BUDGET: optional timeout in seconds caps the whole batch; omitted uses MCP_GWAY_EXEC_TIMEOUT, then 120s. Unfinished calls return ok=false with error.type=TimeoutError.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -292,7 +297,12 @@ CODE_MODE_TOOLS = [
                         },
                         "required": ["server", "tool"],
                     },
-                }
+                },
+                "timeout": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Wall-clock budget in seconds (float) for the whole batch. Omit to use MCP_GWAY_EXEC_TIMEOUT, then the 120s default. Finished calls keep their results; unfinished calls return ok=false with error.type=TimeoutError.",
+                },
             },
             "required": ["calls"],
         },
@@ -544,12 +554,14 @@ class Gateway:
         *,
         max_concurrency: int | None = None,
         concurrency: int | None = None,
+        timeout: float | None = None,
     ) -> list[dict[str, object]]:
         """Execute multiple MCP calls with per-call failure isolation."""
         return self.code_mode.call_many(
             tool_calls,
             max_concurrency=max_concurrency,
             concurrency=concurrency,
+            timeout=timeout,
         )
 
     async def aclose(self) -> None:
@@ -954,13 +966,17 @@ class Gateway:
                     raise InvalidParamsError(
                         "executeTool requires non-empty code [reason=invalid_params]"
                     )
-                result = self.code_mode.execute_tool(code=arguments["code"])
+                result = self.code_mode.execute_tool(
+                    code=arguments["code"], timeout=arguments.get("timeout")
+                )
             elif name == "callManyTool":
                 if not isinstance(arguments, dict) or "calls" not in arguments:
                     raise InvalidParamsError(
                         "callManyTool requires calls [reason=invalid_params]"
                     )
-                result = self.code_mode.call_many_envelope(arguments["calls"])
+                result = self.code_mode.call_many_envelope(
+                    arguments["calls"], timeout=arguments.get("timeout")
+                )
             else:
                 status = "error"
                 raise ValueError(f"Unknown tool: {name}")
