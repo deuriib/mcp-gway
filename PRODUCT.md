@@ -30,7 +30,7 @@ _\(confirmed by "1:1 with cli in functionalities" + existing architecture\)_
 
 - Local-first: server binds `127.0.0.1`; non-loopback requires `MCP_GWAY_ALLOW_REMOTE=1`. The admin UI itself remains loopback-only (fail closed).
 - Runs inside `mcp-gway serve --transport http|sse`; index route `/` (plus `/admin/`).
-- Operator watches live telemetry: status bar polls the same process every 5s.
+- Operator watches live telemetry: the status bar polls the same process every 5s by default (`MCP_GWAY_ADMIN_REFRESH_SECONDS`; `0` disables auto-refresh).
 - External CDN dependency for Tailwind + htmx accepted by the user (requires network at page load).
 
 ## Capabilities and Constraints
