@@ -44,13 +44,19 @@ A minimal remote entry looks like this — `resolved_transport` is filled in by 
 
 ## ENV vars — the complete table
 
-Only six `MCP_GWAY_*` vars exist. Everything else is flags or files.
+The server reads these `MCP_GWAY_*` vars (plus `HOME`); everything else is a flag or a file.
 
 | Variable | Effect | Default | Used in |
 |----------|--------|---------|---------|
 | `MCP_GWAY_ALLOW_LOCAL_COMMANDS` | CSV basenames allowed for `local` spawns (case-insensitive). Explicit value **overrides** defaults. `*`/paths/invalid → deny + warn. **Do NOT rename.** | `{npx,bunx,uvx,pipx}` when unset/blank | `core/policy.py:28,77` |
 | `MCP_GWAY_ALLOW_REMOTE` | `=1` permits `serve --host 0.0.0.0`. Anything else → exit 2 on non-loopback | unset (loopback-only) | `cli.py:627`, `observability/health.py:134` |
+| `MCP_GWAY_PORT` | Published host port in Docker Compose (`${MCP_GWAY_PORT:-8080}:8080`) | `8080` | `docker-compose*.yml` |
 | `MCP_GWAY_LOG_LEVEL` | `trace/debug/info/warning/error/critical` (`warn` → `warning`). CLI INFO events emit only when set; WARN/ERROR always | `info` | `cli.py:67,529`, `--log-level` overrides it per-run |
+| `MCP_GWAY_LOG_TO_FILE` | Persist the same JSON lines to a rotating file. `0/false/no/off` disables it | `1` (enabled) | `observability/logging.py` |
+| `MCP_GWAY_LOG_DIR` | Absolute directory for `gateway.log`. Relative values are ignored with a WARN | `$XDG_DATA_HOME/mcp-gway/logs`, else `~/.local/share/mcp-gway/logs` | `observability/logging.py`, `domain/policy.py` |
+| `MCP_GWAY_MAX_RESULT_BYTES` | Byte cap on a Code Mode envelope handed to an agent | `262144` (min `1024`, max `8388608`) | `budget.py` |
+| `MCP_GWAY_EXEC_TIMEOUT` | Default Code Mode execution bound in seconds (float). Per-call `timeout` wins | 30s `executeTool`, 120s `callManyTool` | `code_mode.py` |
+| `MCP_GWAY_IMAGE` | Digest-pinned image for the prod Compose profile | `mcp-gway:local` (locally built) | `docker-compose.prod.yml` |
 | `MCP_GWAY_URL` | Gateway endpoint override (agent plugins) | `http://127.0.0.1:8080/mcp` | plugins, not the server |
 | `MCP_GWAY_TOKEN` | Bearer token sent as `Authorization: Bearer …` (never written to `.mcp.json`) | unset (no auth header) | plugins, not the server |
 | `HOME` | Relocates the whole `~/.config/mcp-gway/` tree (POSIX override; `Path.home()` ignores it on Windows) | real home | `core/policy.py:22` (`home_dir()`) |

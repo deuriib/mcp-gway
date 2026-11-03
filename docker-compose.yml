@@ -30,6 +30,8 @@ services:
     volumes:
       # Registry servers + OAuth tokens persist outside the container.
       - mcp-gway-config:/home/gateway/.config/mcp-gway
+      # Rotating JSON logs survive restarts and the prod read_only root FS.
+      - mcp-gway-logs:/home/gateway/.local/share/mcp-gway/logs
     ports:
       - "${MCP_GWAY_PORT:-8080}:8080"
     healthcheck:
@@ -53,3 +55,4 @@ services:
 
 volumes:
   mcp-gway-config:
+  mcp-gway-logs:
