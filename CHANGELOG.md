@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.7.0 (2026-11-03)
+
+### Features
+
+- **admin**: Add Connect card with live endpoint and client recipes
+  ([`9903e66`](https://github.com/deuriib/mcp-gway/commit/9903e66d982d4d44fface8f0f080a290a7127b2b))
+
+
 ## v6.6.0 (2026-11-03)
 
 ### Features
