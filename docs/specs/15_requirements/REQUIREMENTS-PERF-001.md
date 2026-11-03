@@ -11,17 +11,18 @@
 | REQ-F-001 | Medir latencia p50/p95/p99 de `/mcp` POST (JSON-RPC 2.0) en local `127.0.0.1` con carga concurrente configurable | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
 | REQ-F-002 | Medir latencia p50/p95/p99 de `/mcp` GET (SSE) y `/mcp/messages` POST bajo sesiones SSE concurrentes | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
 | REQ-F-003 | Medir latencia p50/p95/p99 de `/health`, `/ready`, `/live`, `/metrics` (5 paths vivos totales) | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (benchmark script + JSON report) |
-| REQ-F-004 | Cuantificar overhead de Code Mode: `discover_tools`, `refresh_server`, 5 meta-tools en sandbox Starlark | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | not measured (ver #42) |
+| REQ-F-004 | Cuantificar overhead de Code Mode: `discover_tools`, `refresh_server`, 5 meta-tools en sandbox Starlark | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (bench_perf.py code_mode: p50/p95/p99 por meta-tool) |
 | REQ-F-005 | Medir consumo CPU/memoria/arranque en `serve --transport stdio|http|sse` en `127.0.0.1` | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (resource sampling + report) |
 | REQ-F-006 | Ejecutar suite 255 tests + `ruff check` + `ruff format --check` antes y después | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | test (CI parity) |
 | REQ-F-007 | Producir SLO draft defendible + runbook reproducible versionado | P0 | BRIEF-performance | SPEC-PERF-001 | engineering | review (doc + runbook) |
 | REQ-F-008 | Rankear top-5 costos con traza + tabla impacto vs riesgo para backlog | P1 | BRIEF-performance | SPEC-PERF-001 | engineering | review (findings doc) |
 
-> **Estado de evidencia (2026-11-02):** REQ-F-004 **no está medido**.
-> `measure_code_mode_overhead()` en `docs/specs/30_delivery/bench_perf.py`
-> usa `time.sleep(0.01)` como sustituto y cada fila reporta ese valor fijo, así
-> que no existe profiling ni traza real. La evidencia queda marcada como *no
-> medida* hasta que se cierre #42.
+> **Estado de evidencia (2026-11-03):** REQ-F-004 se mide con JSON-RPC real
+> contra `--target-url`: `measure_code_mode_overhead()` ejecuta los cinco
+> meta-tools y reporta p50/p95/p99 por tool. Si el gateway no tiene stubs o
+> tools, la fila dependiente se reporta como `skipped` con su razón — nunca
+> una latencia inventada. El artefacto es el reporte JSON/Markdown que genera
+> `docs/specs/30_delivery/bench_perf.py` en `--output-dir`.
 
 ## Non-Functional Requirements
 

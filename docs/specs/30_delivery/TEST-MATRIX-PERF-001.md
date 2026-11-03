@@ -11,7 +11,7 @@
 | REQ-F-001 | T-001 | Benchmark script executes `/mcp` POST latency measurement | Unit | pass | `docs/specs/30_delivery/bench_perf.py` |
 | REQ-F-002 | T-002 | Benchmark script executes `/mcp` GET + `/mcp/messages` POST latency measurement | Unit | pass | `docs/specs/30_delivery/bench_perf.py` |
 | REQ-F-003 | T-003 | Benchmark script executes health probes latency measurement | Unit | pass | `docs/specs/30_delivery/bench_perf.py` |
-| REQ-F-004 | T-004 | Benchmark script measures Code Mode overhead | Unit | fail | `docs/specs/30_delivery/bench_perf.py` (`measure_code_mode_overhead`) — #42 |
+| REQ-F-004 | T-004 | Benchmark script measures Code Mode overhead via live JSON-RPC | Integration | pass | `docs/specs/30_delivery/bench_perf.py` (`measure_code_mode_overhead`, code_mode report) |
 | REQ-F-005 | T-005 | Benchmark script measures resource consumption per transport | Unit | pass | `docs/specs/30_delivery/bench_perf.py` |
 | REQ-F-006 | T-006 | Suite 255 tests + ruff check + ruff format pass | Integration | pass | `uv run pytest -v` output |
 | REQ-F-007 | E-001 | SLO draft documented in ARCHITECTURE.md | Review | pass | `docs/specs/10_design/ARCHITECTURE.md` (NFR section) |
@@ -25,14 +25,14 @@
 
 - **Unit coverage:** 8/12 evidence items (benchmark script tests)
 - **Integration coverage:** 1/12 (255 suite pass)
-- **Evidence coverage:** 11/12 REQ-IDs with real evidence (REQ-F-004 not measured, see #42)
+- **Evidence coverage:** 12/12 REQ-IDs with real evidence
 - **Acceptance criteria covered:** 6/6 (AC-001..006)
 
 ## Acceptance Criteria Trace
 
 | AC-ID | REQ-ID | Evidence | Status |
 |-------|--------|----------|--------|
-| AC-001 | REQ-001..005 | `bench_perf.py` + `perf_config.yaml` + reports | partial (REQ-F-004 not measured) — #42 |
+| AC-001 | REQ-001..005 | `bench_perf.py` + `perf_config.yaml` + reports | pass |
 | AC-002 | REQ-006 | 255/255 tests + ruff | pass |
 | AC-003 | REQ-007 | `ARCHITECTURE.md` NFR section | pass |
 | AC-004 | REQ-007 | `RUNBOOK-perf.md` | pass |

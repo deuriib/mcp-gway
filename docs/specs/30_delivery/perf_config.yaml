@@ -36,6 +36,8 @@ benchmark:
   duration_sec: 30
   warmup_sec: 5
   iterations: 1000  # for single-request benchmarks
+  code_mode_iterations: 20  # real JSON-RPC calls per meta-tool
+  code_mode_warmup: 3
 
 profiling:
   code_mode:
@@ -44,6 +46,7 @@ profiling:
       - "readToolFile"
       - "getToolDocs"
       - "executeTool"
+      - "callManyTool"
     sandbox_init: true
     sandbox_exec: true
 

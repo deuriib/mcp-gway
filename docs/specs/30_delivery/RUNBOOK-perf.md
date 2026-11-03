@@ -89,10 +89,18 @@ Results are saved to `docs/specs/30_delivery/reports/`:
 
 ### Code Mode Overhead
 
+Every row is a real JSON-RPC call to the target gateway, measured after a short
+warmup, and reported as p50/p95/p99 over `--code-mode-iterations` samples
+(default 20).
+
 - **listToolFiles:** Time to list available tool files
 - **readToolFile:** Time to read a tool file stub
 - **getToolDocs:** Time to fetch tool documentation
 - **executeTool:** Time to execute Starlark code in sandbox
+- **callManyTool:** Time for a 2-item fan-out batch
+
+When the target has no server stubs or no tools, the dependent rows are
+reported as `skipped` with a reason — never as a synthetic latency.
 
 ## Interpreting `/metrics`
 
