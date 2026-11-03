@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.6.0 (2026-11-03)
+
+### Features
+
+- **admin**: Make dashboard auto-refresh configurable
+  ([`2cac5f6`](https://github.com/deuriib/mcp-gway/commit/2cac5f6097f5c4128061f5209151da330eec75ee))
+
+
 ## v6.5.0 (2026-11-03)
 
 
