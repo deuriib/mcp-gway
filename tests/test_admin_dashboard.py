@@ -996,3 +996,63 @@ def test_error_copy_names_action(tmp_path: Path) -> None:
     )
     assert r.status_code == 200
     assert "try Open again." in r.text
+
+
+# --- Allowed-binaries pills in the server forms ---
+
+
+@pytest.mark.parametrize(
+    ("env_value", "present", "absent", "caption"),
+    [
+        (None, {"npx", "bunx", "uvx", "pipx"}, set(), "built-in defaults"),
+        ("", {"npx", "bunx", "uvx", "pipx"}, set(), "built-in defaults"),
+        ("   ", {"npx", "bunx", "uvx", "pipx"}, set(), "built-in defaults"),
+        (
+            "npx,uvx",
+            {"npx", "uvx"},
+            {"bunx", "pipx"},
+            "from MCP_GWAY_ALLOW_LOCAL_COMMANDS",
+        ),
+    ],
+)
+def test_allow_list_pills_render_on_both_server_forms(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    env_value: str | None,
+    present: set[str],
+    absent: set[str],
+    caption: str,
+) -> None:
+    monkeypatch.delenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", raising=False)
+    if env_value is not None:
+        monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", env_value)
+    gw = _gw(tmp_path)
+    _seed_local(gw.registry)
+    c = _client(gw)
+
+    for path in ("/admin/servers", "/admin/servers/Loc1"):
+        r = c.get(path)
+        assert r.status_code == 200
+        assert "Allowed binaries" in r.text
+        assert caption in r.text
+        assert "(unset —" not in r.text
+        for binary in present:
+            assert f">{binary}</span>" in r.text
+        for binary in absent:
+            assert f">{binary}</span>" not in r.text
+
+
+def test_explicit_allow_list_with_only_invalid_entries_renders_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "*")
+    gw = _gw(tmp_path)
+    _seed_local(gw.registry)
+    c = _client(gw)
+
+    for path in ("/admin/servers", "/admin/servers/Loc1"):
+        r = c.get(path)
+        assert r.status_code == 200
+        assert ">none</span>" in r.text
+        assert "from MCP_GWAY_ALLOW_LOCAL_COMMANDS" in r.text
+        assert "built-in defaults" not in r.text

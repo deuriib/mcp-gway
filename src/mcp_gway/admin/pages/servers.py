@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from htpy import Element, Node, a, button, div, form, input, label, p, span
 
 from mcp_gway.admin import theme
@@ -33,6 +35,39 @@ from mcp_gway.admin.icons import (
     icon_trash,
 )
 from mcp_gway.models import MCPServerConfig, ToolInfo
+
+
+@dataclass(frozen=True)
+class AllowListDisplay:
+    """Effective local-command allow-list and where the value came from.
+
+    ``is_default`` is true only when ``MCP_GWAY_ALLOW_LOCAL_COMMANDS`` is unset
+    or blank, so the UI can distinguish the built-in defaults from an explicit
+    override — including an explicit value whose entries were all invalid.
+    """
+
+    values: frozenset[str]
+    is_default: bool
+
+
+def allow_list_badges(allow_list: AllowListDisplay) -> Node:
+    """One pill per allowed binary, matching the Policy page chips."""
+    chips: list[Node] = (
+        [badge(name, tone="white") for name in sorted(allow_list.values)]
+        if allow_list.values
+        else [badge("none", tone="gray")]
+    )
+    caption = (
+        "built-in defaults"
+        if allow_list.is_default
+        else "from MCP_GWAY_ALLOW_LOCAL_COMMANDS"
+    )
+    return div({"class": "flex flex-col gap-1.5"})[
+        span({"class": f"text-[12px] text-[{theme.TEXT_SILVER}]"})["Allowed binaries"],
+        div({"class": "flex flex-wrap gap-2"})[chips],
+        span({"class": f"text-[11px] text-[{theme.TEXT_SILVER}]"})[caption],
+    ]
+
 
 _ADD_HX: dict[str, str] = {
     "hx-post": "/admin/partials/servers",
@@ -201,7 +236,9 @@ def server_row(row: ServerRow) -> Element:
     ]
 
 
-def servers_content(*, q: str, rows: list[ServerRow], allow_env_value: str) -> Node:
+def servers_content(
+    *, q: str, rows: list[ServerRow], allow_list: AllowListDisplay
+) -> Node:
     """Full Servers page: header actions, add modal and the live grid."""
     header = div({"class": "flex flex-wrap items-end justify-between gap-4"})[
         section_title("Servers", sub=f"{len(rows)} connected"),
@@ -240,7 +277,7 @@ def servers_content(*, q: str, rows: list[ServerRow], allow_env_value: str) -> N
                 modal(
                     "add-server-modal",
                     "Add server",
-                    add_server_form(csrf_token="", allow_env_value=allow_env_value),
+                    add_server_form(csrf_token="", allow_list=allow_list),
                     cls="flex-1 md:flex-none",
                     trigger_cls="w-full justify-center md:w-auto",
                 ),
@@ -263,7 +300,7 @@ def servers_content(*, q: str, rows: list[ServerRow], allow_env_value: str) -> N
 def add_server_form(
     *,
     csrf_token: str,
-    allow_env_value: str,
+    allow_list: AllowListDisplay,
     modal_id: str = "add-server-modal",
     oob_reset: bool = False,
 ) -> Node:
@@ -326,9 +363,7 @@ def add_server_form(
                     "Command",
                     text_input("command", placeholder="npx -y my-mcp"),
                 ),
-                span({"class": f"text-[12px] text-[{theme.TEXT_SILVER}]"})[
-                    f"Allowed binaries: {allow_env_value}"
-                ],
+                allow_list_badges(allow_list),
             ],
             _field(
                 "Working directory", text_input("cwd", placeholder="/absolute/path")
@@ -359,7 +394,7 @@ def server_detail_content(
     tools: list[ToolInfo],
     csrf_token: str,
     name: str,
-    allow_env_value: str = "",
+    allow_list: AllowListDisplay,
 ) -> Node:
     """Full detail page: header, config card (masked headers) and tools column."""
     header = div({"class": "flex flex-col gap-2"})[
@@ -388,7 +423,7 @@ def server_detail_content(
                 config=config,
                 name=name,
                 csrf_token=csrf_token,
-                allow_env_value=allow_env_value,
+                allow_list=allow_list,
             )
         ],
     )
@@ -440,7 +475,7 @@ def detail_config_inner(
     config: MCPServerConfig,
     name: str,
     csrf_token: str,
-    allow_env_value: str = "",
+    allow_list: AllowListDisplay,
 ) -> list[Node]:
     """Inner content of #detail-config: facts, actions and the edit form.
 
@@ -494,7 +529,7 @@ def detail_config_inner(
         name=name,
         config=config,
         csrf_token=csrf_token,
-        allow_env_value=allow_env_value,
+        allow_list=allow_list,
     )
     actions = div({"class": "mt-4 flex flex-wrap gap-2"})[
         pill_button(
@@ -536,7 +571,7 @@ def _edit_config_details(
     name: str,
     config: MCPServerConfig,
     csrf_token: str,
-    allow_env_value: str = "",
+    allow_list: AllowListDisplay,
 ) -> Element:
     """Zero-JS disclosure form for config properties (never the tool list \u2014
     tools sync only on add/refresh). Type is immutable; secret fields are
@@ -579,9 +614,7 @@ def _edit_config_details(
                         rows=3,
                     ),
                 ),
-                span({"class": f"text-[12px] text-[{theme.TEXT_SILVER}]"})[
-                    f"Allowed binaries: {allow_env_value}"
-                ],
+                allow_list_badges(allow_list),
             ]
         )
     else:
