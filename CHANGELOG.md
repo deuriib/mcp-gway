@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v6.3.0 (2026-11-03)
+
+### Documentation
+
+- **perf**: Mark REQ-F-004 as not measured
+  ([`12b1aec`](https://github.com/deuriib/mcp-gway/commit/12b1aec8b45e4c58697b633538325b2ce27de16c))
+
+### Features
+
+- **code-mode**: Bound meta-tool execution with timeout
+  ([`3e76cf3`](https://github.com/deuriib/mcp-gway/commit/3e76cf3f6ee7d397329b2efb15424632fed4bee5))
+
+
 ## v6.2.0 (2026-11-02)
 
 ### Documentation
