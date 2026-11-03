@@ -31,6 +31,7 @@ from mcp_gway.admin.pages.observability import metrics_fragment, observability_c
 from mcp_gway.admin.pages.overview import overview_content
 from mcp_gway.admin.pages.policy import policy_content
 from mcp_gway.admin.pages.servers import (
+    AllowListDisplay,
     add_server_form,
     detail_config_inner,
     server_detail_content,
@@ -252,6 +253,14 @@ def _allow_env_display() -> str:
     return value if value else "(unset — built-in default allow-list)"
 
 
+def _allow_list_display() -> AllowListDisplay:
+    """Effective allow-list plus its source, parsed once on the server side."""
+    from mcp_gway.core.policy import get_allow_list
+
+    raw = os.environ.get("MCP_GWAY_ALLOW_LOCAL_COMMANDS", "").strip()
+    return AllowListDisplay(values=frozenset(get_allow_list()), is_default=not raw)
+
+
 # --------------------------------------------------------------------------
 # Full pages
 # --------------------------------------------------------------------------
@@ -299,7 +308,7 @@ async def h_servers(request: Request) -> Response:
         return denied
     q = request.query_params.get("q", "")
     rows = data.filter_rows(data.server_rows(_registry(request)), q)
-    content = servers_content(q=q, rows=rows, allow_env_value=_allow_env_display())
+    content = servers_content(q=q, rows=rows, allow_list=_allow_list_display())
     return _page(
         request,
         title="Servers",
@@ -353,7 +362,7 @@ async def h_server_detail(request: Request) -> Response:
         tools=tools,
         csrf_token=_form_token(request),
         name=name,
-        allow_env_value=_allow_env_display(),
+        allow_list=_allow_list_display(),
     )
     return _page(
         request,
@@ -661,7 +670,7 @@ async def p_add_server(request: Request) -> Response:
         tone = "green"
     fresh = add_server_form(
         csrf_token=_form_token(request),
-        allow_env_value=_allow_env_display(),
+        allow_list=_allow_list_display(),
         oob_reset=True,
     )
     return HTMLResponse(
@@ -1056,7 +1065,7 @@ async def p_set_config(request: Request) -> Response:
         config=updated,
         name=name,
         csrf_token=_form_token(request),
-        allow_env_value=_allow_env_display(),
+        allow_list=_allow_list_display(),
     )
     return _notice_frag(inner, f"Config updated for {name}.", "green")
 
