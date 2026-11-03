@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.8.0 (2026-11-03)
+
+### Features
+
+- **perf**: Measure Code Mode overhead with real JSON-RPC calls
+  ([`9671497`](https://github.com/deuriib/mcp-gway/commit/96714975c33d7a58038470a09569828b38017dbd))
+
+
 ## v6.7.1 (2026-11-03)
 
 ### Bug Fixes
