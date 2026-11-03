@@ -110,6 +110,9 @@ def _harden_console_encoding() -> None:
 def main() -> None:
     """MCP Gateway CLI - manage MCP servers with Code Mode."""
     _harden_console_encoding()
+    from mcp_gway.observability.logging import setup_logging
+
+    setup_logging(os.environ.get("MCP_GWAY_LOG_LEVEL", "warning"))
 
 
 @main.command()

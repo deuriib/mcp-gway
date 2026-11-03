@@ -58,6 +58,15 @@ def _stub_dns_hermetic(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture(autouse=True)
+def _hermetic_data_dir(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Keep persisted JSON logs out of the developer's real home."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    monkeypatch.delenv("MCP_GWAY_LOG_DIR", raising=False)
+    monkeypatch.delenv("MCP_GWAY_LOG_TO_FILE", raising=False)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _restore_stderr():
     orig_stderr = sys.__stderr__
     orig_stdout = sys.__stdout__

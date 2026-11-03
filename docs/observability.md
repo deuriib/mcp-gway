@@ -44,3 +44,36 @@ uv run mcp-gway serve --transport http --port 8080 2>&1 | head   # each line val
 - New opt-in flag: `mcp-gway add --retry-on-transport-error` — retries exactly once ONLY when the transport/connect phase fails (never after the tool call starts; non-idempotency-safe, ADR-012 decision 9). Default off → zero behavior change.
 
 **Local-first gating:** `/metrics` never leaks secrets; `serve` on non-loopback without `MCP_GWAY_ALLOW_REMOTE=1` exits 2; `X-Warning: exposed` only on `GET /metrics` → `403` (src/mcp_gway/observability/health.py:127-139).
+
+## Persisted JSON logs
+
+The stderr stream stays the primary sink. When it is enabled (default), the same
+JSON formatter also writes to a rotating file, so a crash or a supervisor that
+does not capture stderr does not erase the event history.
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| path | `$XDG_DATA_HOME/mcp-gway/logs/gateway.log`, else `~/.local/share/mcp-gway/logs/gateway.log` | `$XDG_DATA_HOME` is honored only when absolute, per the XDG spec |
+| `MCP_GWAY_LOG_DIR` | unset | Absolute directory override; a relative value is ignored with a WARN and the default applies |
+| `MCP_GWAY_LOG_TO_FILE` | `1` | `0`/`false`/`no`/`off` disables the file handler; unknown values keep the default with a WARN |
+| rotation | `10 MiB` × 6 files | `RotatingFileHandler`, `backupCount=5`; newest entries survive |
+| permissions | `0700` dir, `0600` file | POSIX only; the directory is tightened when this process creates it |
+
+The `mcp-gway` Click group initializes logging once, so management commands
+(`add`, `remove`, `list`, `refresh`, `tools exec`) persist their structured
+outcomes too. `--help` and `--version` stay side-effect free.
+
+Behavior on failure: if the directory cannot be created or the file cannot be
+opened (read-only filesystem, permissions), the gateway emits one WARN to
+stderr and keeps serving with stderr-only logging. Logging never aborts a
+command or a server.
+
+Docker: `docker-compose.yml` mounts the `mcp-gway-logs` named volume at
+`/home/gateway/.local/share/mcp-gway/logs`, which keeps working under the
+production `read_only: true` root filesystem. Operators who prefer the Docker
+json-file driver can set `MCP_GWAY_LOG_TO_FILE=0`.
+
+Known limitation: `RotatingFileHandler` is not multi-process safe. A CLI
+invocation and a running `serve` can append to the same file, and a rotation
+race can drop a line. A lock-based handler would require a third-party
+dependency, which the observability guardrail rejects.

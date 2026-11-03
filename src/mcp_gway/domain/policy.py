@@ -65,6 +65,25 @@ def config_dir() -> Path:
     return home_dir() / ".config" / "mcp-gway"
 
 
+def data_dir() -> Path:
+    """XDG data directory for mcp-gway.
+
+    ``$XDG_DATA_HOME`` wins only when it is absolute, per the XDG spec; a
+    relative value is ignored and the conventional
+    ``~/.local/share/mcp-gway`` is used instead.
+    """
+    xdg = os.environ.get("XDG_DATA_HOME")
+    if xdg:
+        candidate = Path(xdg).expanduser()
+        if candidate.is_absolute():
+            return candidate / "mcp-gway"
+    return home_dir() / ".local" / "share" / "mcp-gway"
+
+
+def logs_dir() -> Path:
+    return data_dir() / "logs"
+
+
 def get_allow_list() -> set[str]:
     """Parse allow-list CSV; matching is case-insensitive (lowercased, deduped).
 
