@@ -1,5 +1,15 @@
 # Integrations
 
+## Connect card
+
+The dashboard's Overview page renders a **Connect** card with the live endpoint
+and copy-paste recipes for Claude Code, OpenCode V2 and Antigravity. The URL is
+derived from the request host, so it reflects the port you actually opened;
+for `--transport sse` the card shows `GET /mcp` plus `POST /mcp/messages`.
+
+OpenCode and Antigravity point at the plugins in this repo — both register the
+gateway themselves, so no raw remote-server entry is needed.
+
 ## Connect from Claude Desktop
 
 Add the gateway to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):

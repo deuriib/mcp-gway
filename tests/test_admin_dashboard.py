@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import time
 from pathlib import Path
@@ -1127,3 +1128,52 @@ def test_resolve_refresh_seconds_unit() -> None:
     for bad in ("abc", "-1", "1.5"):
         with pytest.raises(ValueError):
             resolve_refresh_seconds(bad)
+
+
+# --- Overview Connect card ---
+
+
+def test_overview_connect_card_uses_live_endpoint(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    _seed_demo(gw.registry)
+    c = _client(gw)
+
+    r = c.get("/", headers={"host": "127.0.0.1:9000"})
+    body = html.unescape(r.text)
+
+    assert r.status_code == 200
+    assert "Connect" in body
+    assert "POST http://127.0.0.1:9000/mcp" in r.text
+    assert "Claude Code" in body
+    assert ".mcp.json (project root)" in body
+    assert '"url": "http://127.0.0.1:9000/mcp"' in body
+    assert '"type": "http"' in body
+    assert "OpenCode V2" in body
+    assert "opencode plugin add github:deuriib/mcp-gateway" in body
+    assert "MCP_GWAY_URL=http://127.0.0.1:9000/mcp" in body
+    assert "Antigravity" in body
+    assert "~/.gemini/config/plugins/mcp-gateway" in body
+    assert "onclick" not in body
+    assert "navigator.clipboard" not in body
+
+
+def test_overview_connect_card_sse_transport(tmp_path: Path) -> None:
+    gw = _gw(tmp_path, transport="sse")
+    c = _client(gw)
+
+    r = c.get("/")
+
+    assert r.status_code == 200
+    assert "GET http://127.0.0.1/mcp + POST http://127.0.0.1/mcp/messages" in r.text
+
+
+def test_overview_connect_card_survives_empty_registry(tmp_path: Path) -> None:
+    gw = _gw(tmp_path)
+    c = _client(gw)
+
+    r = c.get("/")
+
+    assert r.status_code == 200
+    assert "No servers yet." in r.text
+    assert "Connect" in r.text
+    assert "opencode plugin add github:deuriib/mcp-gateway" in r.text

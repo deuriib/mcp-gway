@@ -297,12 +297,15 @@ async def h_index(request: Request) -> Response:
         health = "ok" if check_registry(registry)[0] == "ok" else "degraded"
     except Exception:
         health = "degraded"
+    base_url = str(request.base_url).rstrip("/")
     content = overview_content(
         rows=rows,
         stats=stats,
         health=health,
         transport=getattr(request.app.state, "transport", "http"),
         host=getattr(request.app.state, "serve_host", "127.0.0.1"),
+        endpoint_url=f"{base_url}/mcp",
+        messages_url=f"{base_url}/mcp/messages",
     )
     return _page(
         request,
