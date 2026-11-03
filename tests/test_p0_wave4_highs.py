@@ -260,7 +260,11 @@ async def test_gateway_execute_offloaded(monkeypatch):
         return await real_to_thread(fn, *a, **k)
 
     monkeypatch.setattr(_aio, "to_thread", spy_to_thread)
-    monkeypatch.setattr(gw.code_mode, "execute_tool", lambda code: "ok")
+    monkeypatch.setattr(
+        gw.code_mode,
+        "execute_tool",
+        lambda code, timeout=None: "ok",
+    )
     body = {
         "jsonrpc": "2.0",
         "id": 1,

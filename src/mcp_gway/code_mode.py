@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import os
 import re
 import threading
 import time
@@ -25,6 +27,65 @@ from mcp_gway.server_factory import (
 )
 
 _VALID_BINDINGS = ("server", "tool")
+
+# Execution bounds (seconds). Callers may pass a per-call `timeout`; the
+# environment default applies when they do not, and these constants are the
+# last resort. `callManyTool` keeps a larger built-in bound because a batch of
+# up to 50 calls legitimately takes longer than one script.
+EXEC_TIMEOUT_ENV = "MCP_GWAY_EXEC_TIMEOUT"
+DEFAULT_EXECUTE_TIMEOUT = 30.0
+DEFAULT_CALL_MANY_TIMEOUT = 120.0
+
+
+def _coerce_timeout(value: object) -> float:
+    """Validate a caller-supplied timeout (seconds) or raise InvalidParams.
+
+    ``bool`` is rejected explicitly: ``isinstance(True, int)`` is true in
+    Python and a boolean would silently become a 1-second bound.
+    """
+    from mcp_gway.gateway import InvalidParamsError
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise InvalidParamsError(
+            "timeout must be a number of seconds [reason=invalid_params]"
+        )
+    timeout = float(value)
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise InvalidParamsError(
+            "timeout must be a positive finite number of seconds "
+            "[reason=invalid_params]"
+        )
+    return timeout
+
+
+def _env_timeout(fallback: float) -> float:
+    """Read ``MCP_GWAY_EXEC_TIMEOUT``; invalid values fall back with a WARN."""
+    raw = os.environ.get(EXEC_TIMEOUT_ENV)
+    if not raw or not raw.strip():
+        return fallback
+    try:
+        timeout = float(raw.strip())
+    except ValueError:
+        timeout = -1.0
+    if not math.isfinite(timeout) or timeout <= 0:
+        logging.getLogger("mcp_gway.code_mode").warning(
+            "invalid execution timeout ignored",
+            extra={
+                "env": EXEC_TIMEOUT_ENV,
+                "value": raw,
+                "fallback_seconds": fallback,
+            },
+        )
+        return fallback
+    return timeout
+
+
+def resolve_exec_timeout(value: object | None, *, fallback: float) -> float:
+    """Resolve an execution bound: per-call value > env default > fallback."""
+    if value is None:
+        return _env_timeout(fallback)
+    return _coerce_timeout(value)
+
 
 # L1 Code Validation: Starlark has no imports/classes/file-IO/network.
 # These patterns are rejected before execution with InvalidParams.
@@ -196,7 +257,7 @@ class CodeMode:
         self,
         registry: Registry,
         binding_level: str = "server",
-        tool_execution_timeout: float = 30.0,
+        tool_execution_timeout: float = DEFAULT_EXECUTE_TIMEOUT,
         max_agent_depth: int = 10,
     ) -> None:
         if binding_level not in _VALID_BINDINGS:
@@ -427,7 +488,9 @@ class CodeMode:
                 "executeTool requires non-empty code [reason=invalid_params]"
             )
         _validate_code(code)
-        effective_timeout = timeout or self.tool_execution_timeout
+        effective_timeout = resolve_exec_timeout(
+            timeout, fallback=self.tool_execution_timeout
+        )
         trace: list[dict[str, Any]] = []
         started = time.perf_counter()
 
@@ -520,6 +583,7 @@ class CodeMode:
         *,
         max_concurrency: int | None = None,
         concurrency: int | None = None,
+        timeout: float | None = None,
     ) -> list[dict[str, object]]:
         """Host-side fan-out with per-call success/error isolation.
 
@@ -531,10 +595,19 @@ class CodeMode:
         Servers run concurrently; calls to the *same* server run in order so the
         per-execution connection cache (the one ``executeTool`` relies on) is
         reused instead of spawning one upstream process per item.
+
+        The whole batch is bounded by ``timeout`` (seconds). Callers that omit it
+        inherit ``MCP_GWAY_EXEC_TIMEOUT`` or the 120s built-in default. When the
+        bound expires, finished calls keep their results and unfinished calls are
+        reported as ``ok=False`` with ``error.type="TimeoutError"`` in place.
         """
         calls = list(tool_calls or [])
         if not calls:
             return []
+
+        batch_timeout = resolve_exec_timeout(
+            timeout, fallback=DEFAULT_CALL_MANY_TIMEOUT
+        )
 
         effective_concurrency = max_concurrency
         if effective_concurrency is None:
@@ -576,9 +649,30 @@ class CodeMode:
             cache_token = _ACTIVE_CACHE.set({})
             locks_token = _ACTIVE_LOCKS.set({})
             try:
-                await asyncio.gather(
-                    *(_run_one(index, tc) for index, tc in enumerate(calls))
-                )
+                tasks = [
+                    asyncio.create_task(_run_one(index, tc))
+                    for index, tc in enumerate(calls)
+                ]
+                _, pending = await asyncio.wait(tasks, timeout=batch_timeout)
+                if pending:
+                    for task in pending:
+                        task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                for index, item in enumerate(results):
+                    if item is None:
+                        tc = calls[index]
+                        results[index] = {
+                            "id": tc.get("id"),
+                            "server": tc.get("server"),
+                            "tool": tc.get("tool"),
+                            "ok": False,
+                            "error": {
+                                "type": "TimeoutError",
+                                "message": (
+                                    f"batch exceeded {batch_timeout:g}s timeout"
+                                ),
+                            },
+                        }
                 return [item for item in results if item is not None]
             finally:
                 try:
@@ -591,7 +685,7 @@ class CodeMode:
 
         return _run_isolated(_call_many_async)
 
-    def call_many_envelope(self, calls: object) -> str:
+    def call_many_envelope(self, calls: object, timeout: object | None = None) -> str:
         """Meta-tool adapter: validate a batch, fan it out, return the envelope.
 
         Only a broken batch is a caller error. A broken item is data, because
@@ -608,11 +702,16 @@ class CodeMode:
                 f"callManyTool accepts at most {_MAX_CALL_MANY_ITEMS} calls "
                 "[reason=invalid_params]"
             )
+        batch_timeout = resolve_exec_timeout(
+            timeout, fallback=DEFAULT_CALL_MANY_TIMEOUT
+        )
 
         outcomes, dispatch, positions = _prepare_call_items(list(calls))
         started = time.perf_counter()
         if dispatch:
-            for position, result in zip(positions, self.call_many(dispatch)):
+            for position, result in zip(
+                positions, self.call_many(dispatch, timeout=batch_timeout)
+            ):
                 outcomes[position] = result
         duration_ms = int((time.perf_counter() - started) * 1000)
 

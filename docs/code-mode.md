@@ -98,6 +98,10 @@ Rules:
 - A denied tool or unknown server is also reported as a per-item error.
 - Results keep input order.
 - Default concurrency stays `min(8, len(calls))`.
+- `timeout` (optional, seconds) caps the whole batch. Finished calls keep their
+  results; unfinished calls come back as `ok: false` with
+  `error.type: "TimeoutError"`, in input order. Omit it to use
+  `MCP_GWAY_EXEC_TIMEOUT`, then the 120-second built-in default.
 
 The response is still the normal `build_envelope` payload:
 
@@ -115,6 +119,26 @@ The response is still the normal `build_envelope` payload:
 
 This tool is intentionally not available inside Starlark. It is a host-side
 orchestration surface, and the sandbox keeps the same safety profile.
+
+## Execution Budgets
+
+Every Code Mode execution is time-bounded. The bound resolves in this order:
+
+1. The per-call `timeout` parameter (seconds, positive finite number).
+2. `MCP_GWAY_EXEC_TIMEOUT` (seconds, float).
+3. The built-in default: `30` seconds for `executeTool`, `120` seconds for a
+   `callManyTool` batch.
+
+`listToolFiles`, `readToolFile`, and `getToolDocs` take no `timeout`: they read
+the local registry and never touch an upstream server.
+
+Invalid per-call values (`0`, negatives, `NaN`, `Infinity`, non-numbers) are
+rejected with `InvalidParamsError` before anything executes. An invalid
+`MCP_GWAY_EXEC_TIMEOUT` is ignored with a WARN and the built-in default applies,
+so a typo never takes the gateway down.
+
+`mcp-gway tools exec` honors `MCP_GWAY_EXEC_TIMEOUT` when `--timeout` is
+omitted, so the CLI and the MCP surface share one default.
 
 ## Result Budget
 
