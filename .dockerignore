@@ -52,8 +52,17 @@ node_modules
 servers
 unused-servers
 
-# Docs are source-of-truth in the repo, not the image
+# Docs are source-of-truth in the repo, not the image — except the benchmark
+# script, which tests/test_bench_perf.py loads by path in the `test` stage.
+# Negation needs every parent directory re-included first.
 docs
+!docs
+docs/*
+!docs/specs
+docs/specs/*
+!docs/specs/30_delivery
+docs/specs/30_delivery/*
+!docs/specs/30_delivery/bench_perf.py
 
 # Misc / AI / editor
 .agents

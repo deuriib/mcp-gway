@@ -6,13 +6,12 @@ Date: 2026-09-16
 
 Measures:
 - Latency p50/p95/p99 for 5 live HTTP/SSE paths
+- Code Mode overhead: real JSON-RPC calls to all five meta-tools, per-tool
+  p50/p95/p99 over N iterations. Tools that cannot be exercised against the
+  target gateway are reported as `skipped` with a reason, never as a
+  placeholder latency.
 - Resource consumption (CPU, memory, startup) across 3 transports
 - Generates JSON + markdown reports
-
-WARNING: Code Mode overhead rows are NOT measured.
-`measure_code_mode_overhead()` uses `time.sleep(0.01)` as a placeholder, so
-every meta-tool reports the same fixed value regardless of target or payload.
-Do not cite those rows as a benchmark or as SLO evidence until issue #42 lands.
 
 Usage:
     uv run python docs/specs/30_delivery/bench_perf.py --config docs/specs/30_delivery/perf_config.yaml
@@ -23,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 
 
 @dataclass
@@ -42,6 +42,8 @@ class BenchmarkConfig:
     duration_sec: int = 30
     warmup_sec: int = 5
     iterations: int = 1000
+    code_mode_iterations: int = 20
+    code_mode_warmup: int = 3
     output_dir: str = "docs/specs/30_delivery/reports"
     output_prefix: str = "perf_report"
 
@@ -77,13 +79,26 @@ class ResourceResult:
 
 @dataclass
 class CodeModeResult:
-    """Code Mode overhead result."""
+    """One Code Mode meta-tool measurement.
+
+    ``status`` is ``ok`` when every iteration completed, ``partial`` when some
+    failed, ``error`` when every iteration failed, and ``skipped`` when the
+    tool cannot be exercised against the target gateway (no stubs, no tools).
+    A skipped row carries a reason and never a fabricated latency.
+    """
 
     tool: str
+    status: str = "ok"
+    reason: str = ""
+    iterations: int = 0
+    p50_ms: float = 0.0
+    p95_ms: float = 0.0
+    p99_ms: float = 0.0
+    mean_ms: float = 0.0
+    min_ms: float = 0.0
+    max_ms: float = 0.0
+    errors: int = 0
     wall_time_sec: float = 0.0
-    cpu_time_sec: float = 0.0
-    memory_delta_mb: float = 0.0
-    sandbox_init_ms: float = 0.0
 
 
 @dataclass
@@ -115,6 +130,8 @@ def load_config(config_path: str) -> BenchmarkConfig:
             duration_sec=bench.get("duration_sec", 30),
             warmup_sec=bench.get("warmup_sec", 5),
             iterations=bench.get("iterations", 1000),
+            code_mode_iterations=bench.get("code_mode_iterations", 20),
+            code_mode_warmup=bench.get("code_mode_warmup", 3),
             output_dir=output.get("directory", "docs/specs/30_delivery/reports"),
             output_prefix=output.get("filename_prefix", "perf_report"),
         )
@@ -328,24 +345,192 @@ def measure_resources(
     return result
 
 
-def measure_code_mode_overhead() -> list[CodeModeResult]:
-    """Measure Code Mode tool overhead."""
-    results = []
-    tools = [
-        ("listToolFiles", "gateway_listToolFiles"),
-        ("readToolFile", "gateway_readToolFile"),
-        ("getToolDocs", "gateway_getToolDocs"),
-        ("executeTool", "gateway_executeTool"),
-        ("callManyTool", "gateway_callManyTool"),
-    ]
-    for tool_name, _ in tools:
-        result = CodeModeResult(tool=tool_name)
+_STUB_RE = re.compile(r"^\s{2}([A-Za-z0-9_]+)\.pyi", re.MULTILINE)
+_USAGE_RE = re.compile(r"^# Usage: ([A-Za-z0-9_]+)\.", re.MULTILINE)
+_TOOL_DEF_RE = re.compile(r"^def ([A-Za-z0-9_]+)\(", re.MULTILINE)
+
+
+def _first_stub(listing: str) -> str:
+    """First ``servers/<Name>.pyi`` in listToolFiles output ("" when none)."""
+    match = _STUB_RE.search(listing)
+    return match.group(1) if match else ""
+
+
+def _parse_stub(stub: str, fallback_server: str) -> tuple[str, str, str]:
+    """Return (server, raw tool name, sanitized tool name) from a .pyi stub."""
+    usage = _USAGE_RE.search(stub)
+    server = usage.group(1) if usage else fallback_server
+    tool_match = _TOOL_DEF_RE.search(stub)
+    tool = tool_match.group(1) if tool_match else ""
+    safe = re.sub(r"[^A-Za-z0-9_]", "_", tool)
+    if safe and safe[0].isdigit():
+        safe = f"_{safe}"
+    return server, tool, safe
+
+
+def _tool_call_text(
+    client: httpx.Client, target_url: str, name: str, arguments: dict[str, Any]
+) -> str:
+    """Issue one JSON-RPC ``tools/call`` and return the text content."""
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": arguments},
+    }
+    response = client.post(
+        f"{target_url}/mcp",
+        json=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    response.raise_for_status()
+    body = response.json()
+    if "error" in body:
+        raise RuntimeError(str(body["error"]))
+    content = (body.get("result") or {}).get("content") or []
+    return str(content[0].get("text", "")) if content else ""
+
+
+def _summarize(result: CodeModeResult, latencies: list[float]) -> None:
+    if not latencies:
+        result.status = "error"
+        if not result.reason:
+            result.reason = "every iteration failed"
+        return
+    latencies.sort()
+    n = len(latencies)
+    result.iterations = n
+    result.p50_ms = latencies[int(n * 0.50)]
+    result.p95_ms = latencies[int(n * 0.95)]
+    result.p99_ms = latencies[int(n * 0.99)]
+    result.min_ms = latencies[0]
+    result.max_ms = latencies[-1]
+    result.mean_ms = sum(latencies) / n
+    result.wall_time_sec = result.mean_ms / 1000
+    result.status = "ok" if result.errors == 0 else "partial"
+
+
+def _measure_rpc(
+    client: httpx.Client,
+    target_url: str,
+    tool: str,
+    arguments: dict[str, Any],
+    iterations: int,
+    warmup: int,
+) -> CodeModeResult:
+    """Time ``iterations`` real JSON-RPC calls after ``warmup`` discarded ones."""
+    result = CodeModeResult(tool=tool)
+    for _ in range(max(0, warmup)):
+        try:
+            _tool_call_text(client, target_url, tool, arguments)
+        except Exception:
+            pass
+
+    latencies: list[float] = []
+    for _ in range(max(1, iterations)):
         start = time.perf_counter()
-        # Simulate tool call (actual call would require MCP server running)
-        # This is a placeholder for the real measurement
-        time.sleep(0.01)  # simulated overhead
-        result.wall_time_sec = time.perf_counter() - start
-        results.append(result)
+        try:
+            _tool_call_text(client, target_url, tool, arguments)
+        except Exception as exc:
+            result.errors += 1
+            result.reason = f"{type(exc).__name__}: {exc}"
+            continue
+        latencies.append((time.perf_counter() - start) * 1000)
+    _summarize(result, latencies)
+    return result
+
+
+def measure_code_mode_overhead(
+    target_url: str, iterations: int = 20, warmup: int = 3
+) -> list[CodeModeResult]:
+    """Measure all five Code Mode meta-tools through the live gateway.
+
+    Every row is a real JSON-RPC round trip. When the target has no server
+    stubs or tools, the dependent tools are skipped with a reason instead of
+    reporting a synthetic number.
+    """
+    results: list[CodeModeResult] = []
+    with httpx.Client(timeout=30.0) as client:
+        try:
+            listing = _tool_call_text(client, target_url, "listToolFiles", {})
+        except Exception as exc:
+            return [
+                CodeModeResult(
+                    tool="listToolFiles",
+                    status="error",
+                    reason=f"{type(exc).__name__}: {exc}",
+                )
+            ]
+
+        results.append(
+            _measure_rpc(client, target_url, "listToolFiles", {}, iterations, warmup)
+        )
+
+        stub = _first_stub(listing)
+        if not stub:
+            reason = "no server stubs on the target gateway"
+            results.extend(
+                CodeModeResult(tool=tool, status="skipped", reason=reason)
+                for tool in (
+                    "readToolFile",
+                    "getToolDocs",
+                    "executeTool",
+                    "callManyTool",
+                )
+            )
+            return results
+
+        read_args = {"fileName": f"servers/{stub}.pyi"}
+        results.append(
+            _measure_rpc(
+                client, target_url, "readToolFile", read_args, iterations, warmup
+            )
+        )
+        try:
+            stub_text = _tool_call_text(client, target_url, "readToolFile", read_args)
+        except Exception as exc:
+            reason = f"stub unavailable: {type(exc).__name__}: {exc}"
+            results.extend(
+                CodeModeResult(tool=tool, status="skipped", reason=reason)
+                for tool in ("getToolDocs", "executeTool", "callManyTool")
+            )
+            return results
+
+        server, tool, safe_tool = _parse_stub(stub_text, stub)
+        if not tool:
+            reason = f"no tools listed in servers/{stub}.pyi"
+            results.extend(
+                CodeModeResult(tool=name, status="skipped", reason=reason)
+                for name in ("getToolDocs", "executeTool", "callManyTool")
+            )
+            return results
+
+        results.append(
+            _measure_rpc(
+                client,
+                target_url,
+                "getToolDocs",
+                {"server": server, "tool": tool},
+                iterations,
+                warmup,
+            )
+        )
+        results.append(
+            _measure_rpc(
+                client,
+                target_url,
+                "executeTool",
+                {"code": f"{server}.{safe_tool}()"},
+                iterations,
+                warmup,
+            )
+        )
+        calls = [{"server": server, "tool": tool, "arguments": {}} for _ in range(2)]
+        results.append(
+            _measure_rpc(
+                client, target_url, "callManyTool", {"calls": calls}, iterations, warmup
+            )
+        )
     return results
 
 
@@ -417,13 +602,21 @@ def run_benchmarks(config: BenchmarkConfig) -> BenchmarkReport:
 
     # Code Mode overhead
     print("Measuring Code Mode overhead...")
-    report.code_mode = measure_code_mode_overhead()
+    report.code_mode = measure_code_mode_overhead(
+        config.target_url,
+        iterations=config.code_mode_iterations,
+        warmup=config.code_mode_warmup,
+    )
 
     # Summary
     report.summary = {
         "total_paths_benchmarked": len(report.latencies),
         "total_requests": sum(r.total_requests for r in report.latencies),
         "total_errors": sum(r.errors for r in report.latencies),
+        "code_mode_measured": sum(
+            1 for r in report.code_mode if r.status in ("ok", "partial")
+        ),
+        "code_mode_skipped": sum(1 for r in report.code_mode if r.status == "skipped"),
         "p99_mcp_post_ms": next(
             (
                 r.p99_ms
@@ -472,6 +665,16 @@ def save_report(
                 "code_mode": [
                     {
                         "tool": r.tool,
+                        "status": r.status,
+                        "reason": r.reason,
+                        "iterations": r.iterations,
+                        "p50_ms": r.p50_ms,
+                        "p95_ms": r.p95_ms,
+                        "p99_ms": r.p99_ms,
+                        "mean_ms": r.mean_ms,
+                        "min_ms": r.min_ms,
+                        "max_ms": r.max_ms,
+                        "errors": r.errors,
                         "wall_time_sec": r.wall_time_sec,
                     }
                     for r in report.code_mode
@@ -499,10 +702,16 @@ def save_report(
             for r in report.latencies
         )
         f.write("\n## Code Mode Overhead\n\n")
-        f.write("| Tool | Wall Time (sec) |\n")
-        f.write("|------|----------------|\n")
+        f.write(
+            "| Tool | Status | Iterations | p50 (ms) | p95 (ms) | p99 (ms) | Errors | Reason |\n"
+        )
+        f.write(
+            "|------|--------|------------|----------|----------|----------|--------|--------|\n"
+        )
         f.writelines(
-            f"| {r.tool} | {r.wall_time_sec:.4f} |\n" for r in report.code_mode
+            f"| {r.tool} | {r.status} | {r.iterations} | {r.p50_ms:.2f} | "
+            f"{r.p95_ms:.2f} | {r.p99_ms:.2f} | {r.errors} | {r.reason} |\n"
+            for r in report.code_mode
         )
         f.write("\n## Summary\n\n")
         f.write(
@@ -511,6 +720,12 @@ def save_report(
         f.write(f"- Total requests: {report.summary.get('total_requests', 0)}\n")
         f.write(f"- Total errors: {report.summary.get('total_errors', 0)}\n")
         f.write(f"- p99 /mcp POST: {report.summary.get('p99_mcp_post_ms', 0):.2f} ms\n")
+        f.write(
+            f"- Code Mode tools measured: {report.summary.get('code_mode_measured', 0)}\n"
+        )
+        f.write(
+            f"- Code Mode tools skipped: {report.summary.get('code_mode_skipped', 0)}\n"
+        )
 
     return json_path, md_path
 
@@ -521,6 +736,7 @@ def main() -> None:
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--concurrency", type=int, default=None)
     parser.add_argument("--duration", type=int, default=None)
+    parser.add_argument("--code-mode-iterations", type=int, default=None)
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -530,6 +746,8 @@ def main() -> None:
         config.concurrency = args.concurrency
     if args.duration:
         config.duration_sec = args.duration
+    if args.code_mode_iterations:
+        config.code_mode_iterations = args.code_mode_iterations
 
     print("MCP Gateway Performance Benchmark")
     print(f"Target: {config.target_url}")
