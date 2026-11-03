@@ -6,9 +6,13 @@ Date: 2026-09-16
 
 Measures:
 - Latency p50/p95/p99 for 5 live HTTP/SSE paths
-- Code Mode overhead (discover_tools, refresh_server, 5 meta-tools)
 - Resource consumption (CPU, memory, startup) across 3 transports
 - Generates JSON + markdown reports
+
+WARNING: Code Mode overhead rows are NOT measured.
+`measure_code_mode_overhead()` uses `time.sleep(0.01)` as a placeholder, so
+every meta-tool reports the same fixed value regardless of target or payload.
+Do not cite those rows as a benchmark or as SLO evidence until issue #42 lands.
 
 Usage:
     uv run python docs/specs/30_delivery/bench_perf.py --config docs/specs/30_delivery/perf_config.yaml
