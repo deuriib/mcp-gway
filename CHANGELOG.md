@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.7.1 (2026-11-03)
+
+### Bug Fixes
+
+- **admin**: Make OAuth servers authenticatable from the dashboard
+  ([`fef5a7f`](https://github.com/deuriib/mcp-gway/commit/fef5a7fce648bb558df62f143db41a04e3679cd6))
+
+
 ## v6.7.0 (2026-11-03)
 
 ### Features
