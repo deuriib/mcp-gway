@@ -79,3 +79,36 @@ refused connection is reported as such instead of the old generic "no tools".
 The callback port is per server (`oauth_port`, default `8989`): set it in the
 add form or in **Edit config** when that port is busy. Tokens and DCR client
 info persist under `~/.config/mcp-gway/tokens/` with `0600`.
+
+### OAuth credentials and token lifecycle
+
+A configured `clientId`/`clientSecret` is sent to the authorization server
+byte-for-byte, including non-UUID IDs (`rlwy_...`, `gh_...`). Dynamic client
+registration (RFC 7591) runs only when no client ID is configured; persisted
+DCR client info is reused when its redirect URIs still match the current
+callback URL. If an older version fabricated a UUID `clientId` for a server,
+clear that field in **Edit config** so registration can run again.
+
+The token file now carries `expires_at`. A stored token is reused while valid;
+an expired one is refreshed with its refresh token (same `resource`, same
+client auth) and the refreshed token is persisted. If refresh fails, the stale
+token is discarded and the full authorization-code flow runs instead.
+
+### Probing the authorization endpoint
+
+Verify a server accepts the built authorization URL without logging in:
+
+```bash
+uv run python scripts/probe_oauth_authorize.py \
+  --server-url https://mcp.railway.com/mcp \
+  --client-id YOUR_PUBLIC_CLIENT_ID
+```
+
+The probe prints the naive and merged authorization URLs, then `status=` and
+`location=`. It exits `0` only for a `3xx` that redirects to a
+login/interaction page **without** an `error=` parameter. A `3xx` or `400`
+carrying `error=` exits `1` and prints `failure=<error>` plus the sanitized
+description. It performs no token exchange, opens no browser, and takes no
+secret. Use `--naive` to probe the unmerged URL, `--auth-endpoint` to replay a
+recorded endpoint shape, and `--scope`, `--redirect-uri`, or `--resource` to
+override the discovered values.

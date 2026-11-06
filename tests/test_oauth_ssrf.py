@@ -107,6 +107,92 @@ async def test_ssrf_get_manual_redirect_revalidated(monkeypatch):
         await M.ssrf_get("https://api.example.com/start")
 
 
+async def test_ssrf_get_follow_redirects_false_returns_redirect(monkeypatch):
+    from mcp_gway import models as M
+
+    calls: list[str] = []
+
+    class FakeResp:
+        def __init__(self, status=303, headers=None):
+            self.status_code = status
+            self.headers = headers or {}
+            self.content = b""
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kw):
+            calls.append(url)
+            return FakeResp(303, {"location": "https://api.example.com/after"})
+
+        async def post(self, url, **kw):
+            return FakeResp()
+
+    monkeypatch.setattr(M.httpx2, "AsyncClient", FakeClient)
+    resp = await M.ssrf_get("https://api.example.com/start", follow_redirects=False)
+    assert resp.status_code == 303
+    assert calls == ["https://api.example.com/start"]
+
+
+async def test_ssrf_get_default_still_follows_redirects(monkeypatch):
+    from mcp_gway import models as M
+
+    calls: list[str] = []
+
+    class FakeResp:
+        def __init__(self, status=200, headers=None):
+            self.status_code = status
+            self.headers = headers or {}
+            self.content = b"{}"
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kw):
+            calls.append(url)
+            if url.endswith("/start"):
+                return FakeResp(302, {"location": "https://api.example.com/final"})
+            return FakeResp(200)
+
+        async def post(self, url, **kw):
+            return FakeResp()
+
+    monkeypatch.setattr(M.httpx2, "AsyncClient", FakeClient)
+    resp = await M.ssrf_get("https://api.example.com/start")
+    assert resp.status_code == 200
+    assert calls == [
+        "https://api.example.com/start",
+        "https://api.example.com/final",
+    ]
+
+
+async def test_ssrf_get_follow_redirects_false_still_blocks_private():
+    from mcp_gway.models import ssrf_get
+
+    with pytest.raises(ValueError, match="private|loopback|not allowed|blocked"):
+        await ssrf_get("https://evil.example.com/mcp", follow_redirects=False)
+
+
 async def test_ssrf_get_enforces_1mb_cap_and_timeout(monkeypatch):
     import socket
 
@@ -159,3 +245,94 @@ async def test_ssrf_get_enforces_1mb_cap_and_timeout(monkeypatch):
     with pytest.raises(ValueError, match="too large|1MB|cap|payload"):
         await M.ssrf_get("https://api.example.com/big")
     assert seen.get("timeout") == 8.0, "timeout must be 8.0"
+
+
+async def test_ssrf_get_streamed_body_is_readable(monkeypatch):
+    import json as _json
+
+    from mcp_gway import models as M
+
+    class StreamedResp:
+        status_code = 200
+        headers: ClassVar[dict[str, str]] = {"content-type": "application/json"}
+
+        async def aiter_bytes(self):
+            yield b'{"ok": '
+            yield b"true}"
+
+        @property
+        def content(self):
+            if not hasattr(self, "_content"):
+                raise RuntimeError("ResponseNotRead")
+            return self._content
+
+        @property
+        def text(self):
+            return self.content.decode()
+
+        def json(self):
+            return _json.loads(self.content)
+
+    class Ctx:
+        def __init__(self, resp):
+            self.resp = resp
+
+        async def __aenter__(self):
+            return self.resp
+
+        async def __aexit__(self, *a):
+            return False
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, *a, **k):
+            return Ctx(StreamedResp())
+
+    monkeypatch.setattr(M.httpx2, "AsyncClient", FakeClient)
+    resp = await M.ssrf_get("https://api.example.com/stream")
+    assert resp.json() == {"ok": True}
+    assert resp.text == '{"ok": true}'
+
+
+async def test_ssrf_get_streamed_body_over_cap_raises(monkeypatch):
+    from mcp_gway import models as M
+
+    class BigStream:
+        status_code = 200
+        headers: ClassVar[dict[str, str]] = {}
+
+        async def aiter_bytes(self):
+            yield b"x" * 600_000
+            yield b"x" * 600_000
+
+    class Ctx:
+        async def __aenter__(self):
+            return BigStream()
+
+        async def __aexit__(self, *a):
+            return False
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, *a, **k):
+            return Ctx()
+
+    monkeypatch.setattr(M.httpx2, "AsyncClient", FakeClient)
+    with pytest.raises(ValueError, match="too large|1MB|cap|payload"):
+        await M.ssrf_get("https://api.example.com/big-stream")
