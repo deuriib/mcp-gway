@@ -116,7 +116,9 @@ mcp-gway add t --type local --command "npx -y my-mcp" --cwd rel/path           #
 
 SSRF-guard on every `remote --url` (`models.py`): only `http|https`; private/loopback/link-local/reserved/multicast hosts rejected. Example live value: `https://api.example.com/mcp`.
 
-OAuth flow, in order: RFC 8707 protected-resource discovery → authorization-server metadata → RFC 7591 dynamic client registration → PKCE authorization-code flow → tokens in `tokens/` (`0o600`). `refresh` tries anonymous discovery first and falls back to OAuth only for remote servers with empty discovery; `--auth` forces re-auth even with tokens; fail-closed (`PermissionError` when `force_auth` and no tokens).
+OAuth flow, in order: RFC 8707 protected-resource discovery → authorization-server metadata → client resolution (configured client ID → persisted `<server>_client.json` → RFC 7591 dynamic registration) → PKCE authorization-code flow → tokens in `tokens/` (`0o600`). `refresh` tries anonymous discovery first and falls back to OAuth only for remote servers with empty discovery; `--auth` retries discovery and runs the flow only when it still fails — a valid stored token short-circuits, so it does not force a fresh login. The authenticated-transport path is fail-closed (`PermissionError` when no token exists).
+
+One RFC 8707 `resource` (endpoint query > PRM `resource` > server URL) is sent in the authorize, code-exchange, and refresh requests. Scope precedence is configured > client metadata > PRM `scopes_supported` > `openid profile email`, and `offline_access` is appended only when the authorization server advertises it. Tokens persist `expires_at`; an expired token refreshes with its refresh token, and a failed refresh discards it and falls back to the code flow. Configured client IDs are sent byte-identical, including non-UUID IDs; DCR runs only when no client ID is configured or persisted.
 
 ```bash
 mcp-gway refresh supabase --auth                      # preferred — secrets stay out of shell history

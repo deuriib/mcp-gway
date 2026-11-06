@@ -58,7 +58,10 @@ async def _run_state_mismatch(tmp_path, monkeypatch, cb_state="WRONG"):
 
     monkeypatch.setattr(O.httpx2, "AsyncClient", HC)
     out = await O.run_oauth_flow(
-        "https://api.example.com/mcp", "statetest", output_callback=lambda m: None
+        "https://api.example.com/mcp",
+        "statetest",
+        output_callback=lambda m: None,
+        oauth_config={"clientId": "manual-client"},
     )
     return out, token_called["n"]
 
@@ -128,7 +131,10 @@ async def test_oauth_state_match_succeeds(tmp_path, monkeypatch):
 
     monkeypatch.setattr(O.httpx2, "AsyncClient", HC)
     out = await O.run_oauth_flow(
-        "https://api.example.com/mcp", "stateok", output_callback=lambda m: None
+        "https://api.example.com/mcp",
+        "stateok",
+        output_callback=lambda m: None,
+        oauth_config={"clientId": "manual-client"},
     )
     assert out is not None
     await out.aclose()

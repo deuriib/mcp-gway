@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html
 import json
 import re
 import secrets
 import string
-import uuid
+import time
 import webbrowser
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from mcp_gway.models import _validate_name_value
 
@@ -70,11 +72,31 @@ class FileTokenStorage:
         except Exception:
             return None
 
-    async def set_tokens(self, tokens: OAuthToken) -> None:
-        content = json.dumps(
-            tokens.model_dump(mode="json", exclude_none=True), indent=2
-        )
+    async def get_expires_at(self) -> int | None:
+        if not self._token_file.exists():
+            return None
+        try:
+            data = json.loads(self._token_file.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        value = data.get("expires_at") if isinstance(data, dict) else None
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None
+        return value
+
+    async def set_tokens(
+        self, tokens: OAuthToken, *, expires_at: int | None = None
+    ) -> None:
+        data = tokens.model_dump(mode="json", exclude_none=True)
+        if expires_at is None:
+            data.pop("expires_at", None)
+        else:
+            data["expires_at"] = int(expires_at)
+        content = json.dumps(data, indent=2)
         _secure_atomic_write(self._token_file, content)
+
+    async def clear_tokens(self) -> None:
+        self._token_file.unlink(missing_ok=True)
 
     async def get_client_info(self) -> OAuthClientInformationFull | None:
         info_file = self._storage_dir / f"{self._token_file.stem}_client.json"
@@ -124,11 +146,30 @@ class OAuthCallbackServer:
             else:
                 params = {}
 
-            # Extract code and state from callback
+            # Extract code, state and RFC 6749 error fields from the callback
             code = params.get("code", [None])[0]
             state = params.get("state", [None])[0]
+            error = params.get("error", [None])[0]
+            error_description = params.get("error_description", [None])[0]
 
-            if code:
+            if error:
+                self._result = {
+                    "error": _sanitize(error),
+                    "error_description": _sanitize(error_description or ""),
+                    "state": state or "",
+                }
+                self._event.set()
+                detail = self._result["error_description"]
+                escaped = f"<p>{html.escape(detail)}</p>" if detail else ""
+                response = (
+                    "HTTP/1.1 400 Bad Request\r\n"
+                    "Content-Type: text/html\r\n"
+                    "\r\n"
+                    "<html><body><h1>Authentication failed</h1>"
+                    f"<p>{html.escape(self._result['error'])}</p>{escaped}"
+                    "</body></html>"
+                )
+            elif code:
                 self._result = {"code": code, "state": state or ""}
                 self._event.set()
 
@@ -181,6 +222,12 @@ class OAuthCallbackServer:
         if last_exc:
             raise last_exc
 
+    async def close(self) -> None:
+        if self._server:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+
     async def wait_for_callback(
         self, timeout: float = SSRF_IDLE_TIMEOUT
     ) -> dict[str, str] | None:
@@ -191,9 +238,7 @@ class OAuthCallbackServer:
         except TimeoutError:
             return None
         finally:
-            if self._server:
-                self._server.close()
-                await self._server.wait_closed()
+            await self.close()
 
     @property
     def callback_url(self) -> str:
@@ -209,6 +254,79 @@ def generate_pkce() -> tuple[str, str]:
     digest = hashlib.sha256(code_verifier.encode()).digest()
     code_challenge = __import__("base64").urlsafe_b64encode(digest).decode().rstrip("=")
     return code_verifier, code_challenge
+
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+_MAX_ERROR_CHARS = 200
+
+
+def _sanitize(value: object, limit: int = _MAX_ERROR_CHARS) -> str:
+    """Strip control chars and truncate attacker-influenced text for logs/HTML."""
+    return _CONTROL_CHARS.sub("", str(value))[:limit]
+
+
+def authorization_endpoint_resource(auth_endpoint: str) -> str | None:
+    """The `resource` value embedded in the authorization endpoint query, if any."""
+    values = parse_qs(urlparse(auth_endpoint).query).get("resource") or []
+    return next((value for value in values if value.strip()), None)
+
+
+def build_authorization_url(auth_endpoint: str, params: dict[str, str]) -> str:
+    """Merge OAuth params into the endpoint query (one '?', '&' separators).
+
+    Caller params override endpoint params, except `resource`: an
+    endpoint-supplied resource is authoritative and never duplicated.
+    `response_type` is always forced to "code". Fragment preserved.
+    """
+    parsed = urlparse(auth_endpoint)
+    existing = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if not (key == "resource" and not value.strip())
+    ]
+    endpoint_resource = any(key == "resource" for key, _ in existing)
+    merged = [
+        (key, value)
+        for key, value in existing
+        if key not in params or (key == "resource" and endpoint_resource)
+    ]
+    merged.extend(
+        (key, value)
+        for key, value in params.items()
+        if not (key == "resource" and endpoint_resource)
+    )
+    merged = [(key, value) for key, value in merged if key != "response_type"]
+    merged.append(("response_type", "code"))
+    return urlunparse(parsed._replace(query=urlencode(merged)))
+
+
+def resolve_resource(
+    *, auth_endpoint: str, prm_resource: str | None, server_url: str
+) -> str:
+    """One RFC 8707 resource value shared by authorize, exchange and refresh."""
+    return authorization_endpoint_resource(auth_endpoint) or prm_resource or server_url
+
+
+def resolve_scope(
+    *,
+    configured: str | None,
+    client_metadata_scope: str | None,
+    prm_scopes: Sequence[object] | None,
+    as_scopes: Sequence[object] | None,
+) -> str:
+    """Scope precedence plus `offline_access` when the AS advertises it."""
+    prm_joined = " ".join(str(s) for s in prm_scopes or [] if str(s).strip())
+    effective = ""
+    for candidate in (configured, client_metadata_scope, prm_joined):
+        if candidate and str(candidate).strip():
+            effective = str(candidate).strip()
+            break
+    if not effective:
+        effective = "openid profile email"
+    advertised = {str(s) for s in as_scopes or []}
+    if "offline_access" in advertised and "offline_access" not in effective.split():
+        effective = f"{effective} offline_access"
+    return effective
 
 
 def _parse_resource_metadata_url(www_auth: str) -> str | None:
@@ -295,6 +413,7 @@ async def discover_oauth_metadata(server_url: str) -> dict[str, Any] | None:
     )
 
     auth_server_url = None
+    prm_data: dict[str, Any] | None = None
     for url in prm_urls:
         try:
             _require_https(url)
@@ -311,6 +430,7 @@ async def discover_oauth_metadata(server_url: str) -> dict[str, Any] | None:
                     except ValueError:
                         continue
                     auth_server_url = cand
+                    prm_data = prm
                     break
         except Exception:  # noqa: S112
             continue
@@ -334,11 +454,262 @@ async def discover_oauth_metadata(server_url: str) -> dict[str, Any] | None:
             await avalidate_url_ssrf(url)
             response = await ssrf_get(url)
             if response.status_code == 200:
-                return response.json()
+                as_metadata = response.json()
+                if prm_data is None:
+                    return as_metadata
+                extra: dict[str, Any] = {}
+                if prm_data.get("resource"):
+                    extra["resource"] = prm_data["resource"]
+                if prm_data.get("scopes_supported") is not None:
+                    extra["prm_scopes_supported"] = prm_data["scopes_supported"]
+                return {**as_metadata, **extra} if extra else as_metadata
         except Exception:  # noqa: S112
             continue
 
     return None
+
+
+def _response_payload(response: Any) -> dict[str, Any] | None:
+    try:
+        payload = response.json()
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _response_error(response: Any) -> str:
+    """Status plus parsed RFC 6749 error fields; never the raw response body."""
+    status = getattr(response, "status_code", "unknown")
+    payload = _response_payload(response)
+    if payload:
+        error = payload.get("error")
+        description = payload.get("error_description")
+        if error or description:
+            detail = ": ".join(str(part) for part in (error, description) if part)
+            return f"status {status}: {_sanitize(detail)}"
+    return f"status {status}"
+
+
+def _token_from_response(
+    token_response: dict[str, Any], previous: OAuthToken | None
+) -> OAuthToken | None:
+    access_token = token_response.get("access_token")
+    if not isinstance(access_token, str) or not access_token.strip():
+        return None
+    expires_in = token_response.get("expires_in")
+    if expires_in is None and previous is not None:
+        expires_in = previous.expires_in
+    refresh_token = token_response.get("refresh_token")
+    if not refresh_token and previous is not None:
+        refresh_token = previous.refresh_token
+    scope = token_response.get("scope")
+    if not scope and previous is not None:
+        scope = previous.scope
+    try:
+        return OAuthToken(
+            access_token=access_token,
+            token_type=token_response.get("token_type") or "Bearer",
+            expires_in=expires_in,
+            scope=scope,
+            refresh_token=refresh_token,
+        )
+    except Exception:
+        return None
+
+
+def _expires_at_for(tokens: OAuthToken) -> int | None:
+    if tokens.expires_in is None:
+        return None
+    try:
+        return int(time.time()) + int(tokens.expires_in)
+    except (TypeError, ValueError):
+        return None
+
+
+def _client_redirect_ok(
+    client_info: OAuthClientInformationFull, callback_url: str
+) -> bool:
+    uris = client_info.redirect_uris or []
+    if not uris:
+        return True
+    target = callback_url.rstrip("/")
+    return any(str(uri).rstrip("/") == target for uri in uris)
+
+
+def _extract_credentials(cfg: Any) -> tuple[str | None, str | None, str | None]:
+    if cfg is None:
+        return None, None, None
+    if isinstance(cfg, dict):
+        return (
+            cfg.get("clientId") or cfg.get("client_id"),
+            cfg.get("clientSecret") or cfg.get("client_secret"),
+            cfg.get("scope"),
+        )
+    cid = getattr(cfg, "clientId", None) or getattr(cfg, "client_id", None)
+    csec = getattr(cfg, "clientSecret", None) or getattr(cfg, "client_secret", None)
+    return cid, csec, getattr(cfg, "scope", None)
+
+
+async def _register_client(
+    *,
+    registration_endpoint: str,
+    callback_url: str,
+    storage: FileTokenStorage,
+    output_callback: Any,
+) -> tuple[str | None, str | None]:
+    from mcp_gway.models import ssrf_post
+
+    output_callback("Registering OAuth client...")
+    request = {
+        "client_name": "MCP Gateway",
+        "redirect_uris": [callback_url],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "none",
+    }
+    try:
+        response = await ssrf_post(
+            registration_endpoint,
+            headers={"Content-Type": "application/json"},
+            json=request,  # type: ignore[arg-type]
+        )
+    except Exception as e:
+        output_callback(f"Warning: Client registration failed: {_sanitize(e)}")
+        return None, None
+    if response.status_code not in (200, 201):
+        output_callback(
+            f"Warning: Client registration failed ({response.status_code})."
+        )
+        return None, None
+    data = _response_payload(response) or {}
+    client_id = data.get("client_id")
+    if not client_id:
+        output_callback("Warning: Client registration returned no client_id.")
+        return None, None
+    client_secret = data.get("client_secret")
+    try:
+        client_info = OAuthClientInformationFull(
+            client_id=str(client_id),
+            client_secret=client_secret,
+            **{
+                key: value
+                for key, value in data.items()
+                if key not in ("client_id", "client_secret")
+            },
+        )
+        await storage.set_client_info(client_info)
+    except Exception:
+        output_callback("Warning: Client registration response was invalid.")
+        return None, None
+    output_callback(f"Registered client: {str(client_id)[:16]}...")
+    return str(client_id), client_secret
+
+
+async def _exchange_code(
+    *,
+    token_endpoint: str,
+    resource: str,
+    code: str,
+    code_verifier: str,
+    redirect_uri: str,
+    client_id: str,
+    client_secret: str | None,
+    output_callback: Any,
+) -> OAuthToken | None:
+    from mcp_gway.models import ssrf_post
+
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
+        "client_id": client_id,
+        "resource": resource,
+    }
+    if client_secret:
+        data["client_secret"] = client_secret
+    try:
+        response = await ssrf_post(
+            token_endpoint,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    except Exception as e:
+        output_callback(f"Error during token exchange: {_sanitize(e)}")
+        return None
+    if response.status_code != 200:
+        output_callback(f"Error: Token exchange failed ({_response_error(response)}).")
+        return None
+    tokens = _token_from_response(_response_payload(response) or {}, None)
+    if tokens is None:
+        output_callback("Error: Token exchange failed: no access token in response.")
+    return tokens
+
+
+async def _refresh_tokens(
+    *,
+    token_endpoint: str,
+    resource: str,
+    client_id: str,
+    client_secret: str | None,
+    previous: OAuthToken,
+    output_callback: Any,
+) -> OAuthToken | None:
+    from mcp_gway.models import ssrf_post
+
+    data = {
+        "grant_type": "refresh_token",
+        "refresh_token": previous.refresh_token or "",
+        "client_id": client_id,
+        "resource": resource,
+    }
+    if client_secret:
+        data["client_secret"] = client_secret
+    try:
+        response = await ssrf_post(
+            token_endpoint,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    except Exception as e:
+        output_callback(f"Refresh failed: {_sanitize(e)}")
+        return None
+    if response.status_code != 200:
+        output_callback(f"Refresh failed ({_response_error(response)}).")
+        return None
+    tokens = _token_from_response(_response_payload(response) or {}, previous)
+    if tokens is None:
+        output_callback("Refresh failed: no access token in response.")
+    return tokens
+
+
+async def _resolve_client(
+    *,
+    configured_cid: str | None,
+    configured_csec: str | None,
+    persisted: OAuthClientInformationFull | None,
+    registration_endpoint: str | None,
+    callback_url: str,
+    storage: FileTokenStorage,
+    output_callback: Any,
+) -> tuple[str | None, str | None]:
+    """Credential chain: configured → persisted (port-matched) → DCR → None."""
+    if configured_cid:
+        output_callback(
+            f"Using pre-registered client: {configured_cid[:16]}... (manual)"
+        )
+        return configured_cid, configured_csec
+    if persisted is not None and _client_redirect_ok(persisted, callback_url):
+        output_callback(f"Using registered client: {persisted.client_id[:16]}...")
+        return persisted.client_id, persisted.client_secret
+    if registration_endpoint:
+        return await _register_client(
+            registration_endpoint=registration_endpoint,
+            callback_url=callback_url,
+            storage=storage,
+            output_callback=output_callback,
+        )
+    return None, None
 
 
 async def run_oauth_flow(
@@ -351,9 +722,9 @@ async def run_oauth_flow(
 ) -> httpx2.AsyncClient | None:
     """Run the full OAuth flow.
 
-    Supports both manual (pre-registered clientId/secret) and autodiscovery
-    (dynamic registration RFC 7591). If oauth_config contains a valid clientId,
-    manual mode is used and registration is skipped.
+    Configured client credentials are used verbatim; dynamic registration
+    (RFC 7591) only runs when no client ID is configured or persisted. A valid
+    stored token is reused; an expired one is refreshed before the browser flow.
 
     Args:
         server_url: The MCP server URL
@@ -369,10 +740,9 @@ async def run_oauth_flow(
     if output_callback is None:
         output_callback = lambda msg: None
 
-    from mcp_gway.models import _require_https, avalidate_url_ssrf, ssrf_post
+    from mcp_gway.models import _require_https, avalidate_url_ssrf
 
     _flow_timeout = SSRF_TIMEOUT
-    created_client: httpx2.AsyncClient | None = None
     try:
         _require_https(server_url)
         await avalidate_url_ssrf(server_url)
@@ -382,16 +752,33 @@ async def run_oauth_flow(
 
     storage = FileTokenStorage(server_name)
 
-    # Check for existing valid tokens
+    async def _finish(tokens: OAuthToken) -> httpx2.AsyncClient | None:
+        client = httpx2.AsyncClient(
+            timeout=_flow_timeout,
+            headers={"Authorization": f"Bearer {tokens.access_token}"},
+            follow_redirects=False,
+        )
+        try:
+            await storage.set_tokens(tokens, expires_at=_expires_at_for(tokens))
+        except Exception:
+            await client.aclose()
+            output_callback("Error: could not persist the OAuth token.")
+            return None
+        return client
+
     existing_tokens = await storage.get_tokens()
-    if existing_tokens and existing_tokens.access_token:
+    expires_at = await storage.get_expires_at()
+    if (
+        existing_tokens
+        and existing_tokens.access_token
+        and (expires_at is None or expires_at > int(time.time()))
+    ):
         output_callback("Using existing token...")
-        created_client = httpx2.AsyncClient(
+        return httpx2.AsyncClient(
             timeout=_flow_timeout,
             headers={"Authorization": f"Bearer {existing_tokens.access_token}"},
             follow_redirects=False,
         )
-        return created_client
 
     # Discover OAuth metadata
     output_callback(f"Discovering OAuth metadata for {server_url}...")
@@ -426,91 +813,75 @@ async def run_oauth_flow(
         output_callback(f"Error: blocked OAuth endpoint: {e}")
         return None
 
-    # Generate PKCE parameters
-    code_verifier, code_challenge = generate_pkce()
-    state = secrets.token_urlsafe(32)
-
-    def _extract_credentials(cfg: Any) -> tuple[str | None, str | None, str | None]:
-        if cfg is None:
-            return None, None, None
-        if isinstance(cfg, dict):
-            return (
-                cfg.get("clientId") or cfg.get("client_id"),
-                cfg.get("clientSecret") or cfg.get("client_secret"),
-                cfg.get("scope"),
-            )
-        cid = getattr(cfg, "clientId", None) or getattr(cfg, "client_id", None)
-        csec = getattr(cfg, "clientSecret", None) or getattr(cfg, "client_secret", None)
-        sc = getattr(cfg, "scope", None)
-        return cid, csec, sc
-
+    resource = resolve_resource(
+        auth_endpoint=auth_endpoint,
+        prm_resource=metadata.get("resource"),
+        server_url=server_url,
+    )
     oauth_cid, oauth_csec, oauth_scope = _extract_credentials(oauth_config)
-    # also consider client_metadata scope
+    configured_cid = (
+        str(oauth_cid).strip() if oauth_cid and str(oauth_cid).strip() else None
+    )
+    configured_csec = oauth_csec or None
+    persisted = None if configured_cid else await storage.get_client_info()
+
+    if existing_tokens is not None:
+        refresh_cid = configured_cid or (persisted.client_id if persisted else None)
+        refresh_csec = (
+            configured_csec
+            if configured_cid
+            else getattr(persisted, "client_secret", None)
+        )
+        refreshed = None
+        if existing_tokens.refresh_token and refresh_cid:
+            output_callback("Refreshing expired token...")
+            refreshed = await _refresh_tokens(
+                token_endpoint=token_endpoint,
+                resource=resource,
+                client_id=refresh_cid,
+                client_secret=refresh_csec,
+                previous=existing_tokens,
+                output_callback=output_callback,
+            )
+        if refreshed is not None:
+            client = await _finish(refreshed)
+            if client is None:
+                return None
+            output_callback("Authentication successful!")
+            return client
+        await storage.clear_tokens()
+        output_callback("Stored token is no longer valid; re-authentication required.")
+
     meta_scope = getattr(client_metadata, "scope", None) if client_metadata else None
-    effective_scope = oauth_scope or meta_scope or "openid profile email"
+    effective_scope = resolve_scope(
+        configured=oauth_scope,
+        client_metadata_scope=meta_scope,
+        prm_scopes=metadata.get("prm_scopes_supported"),
+        as_scopes=metadata.get("scopes_supported"),
+    )
 
-    is_manual = False
-    if oauth_cid:
-        try:
-            uuid.UUID(str(oauth_cid))
-            is_manual = True
-        except Exception:
-            oauth_cid = None
-
-    # Start callback server
     callback_server = OAuthCallbackServer(port=callback_port)
     await callback_server.start()
 
-    # Client credentials: manual takes precedence, else dynamic registration
-    if is_manual:
-        client_id = str(oauth_cid)
-        client_secret = oauth_csec
-        output_callback(f"Using pre-registered client: {client_id[:16]}... (manual)")
-    else:
-        client_id = str(uuid.uuid4())
-        client_secret = None
+    client_id, client_secret = await _resolve_client(
+        configured_cid=configured_cid,
+        configured_csec=configured_csec,
+        persisted=persisted,
+        registration_endpoint=registration_endpoint,
+        callback_url=callback_server.callback_url,
+        storage=storage,
+        output_callback=output_callback,
+    )
+    if client_id is None:
+        output_callback(
+            "Error: no client_id configured and dynamic registration is unavailable."
+        )
+        await callback_server.close()
+        return None
 
-    if not is_manual and registration_endpoint:
-        output_callback("Registering OAuth client...")
-        reg_request = {
-            "client_name": "MCP Gateway",
-            "redirect_uris": [callback_server.callback_url],
-            "grant_types": ["authorization_code", "refresh_token"],
-            "response_types": ["code"],
-            "token_endpoint_auth_method": "none",
-        }
-        try:
-            reg_response = await ssrf_post(
-                registration_endpoint,
-                headers={"Content-Type": "application/json"},
-                json=reg_request,  # type: ignore[arg-type]
-            )
-            if reg_response.status_code in (200, 201):
-                reg_data = reg_response.json()
-                client_id = reg_data.get("client_id", client_id)
-                client_secret = reg_data.get("client_secret")
-                await storage.set_client_info(
-                    OAuthClientInformationFull(
-                        client_id=client_id,
-                        client_secret=client_secret,
-                        **{
-                            k: v
-                            for k, v in reg_data.items()
-                            if k not in ("client_id", "client_secret")
-                        },
-                    )
-                )
-                output_callback(f"Registered client: {client_id[:16]}...")
-            else:
-                output_callback(
-                    f"Warning: Client registration failed ({reg_response.status_code}), using default client_id"
-                )
-        except Exception as e:
-            output_callback(
-                f"Warning: Client registration failed: {e}, using default client_id"
-            )
+    code_verifier, code_challenge = generate_pkce()
+    state = secrets.token_urlsafe(32)
 
-    # Build authorization URL
     auth_params = {
         "response_type": "code",
         "client_id": client_id,
@@ -519,9 +890,9 @@ async def run_oauth_flow(
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "scope": effective_scope,
+        "resource": resource,
     }
-
-    auth_url = f"{auth_endpoint}?{urlencode(auth_params)}"
+    auth_url = build_authorization_url(auth_endpoint, auth_params)
 
     output_callback("Opening browser for authentication...")
     output_callback(f"If the browser doesn't open, visit:\n{auth_url}")
@@ -533,7 +904,18 @@ async def run_oauth_flow(
     output_callback("Waiting for authentication callback...")
     callback_result = await callback_server.wait_for_callback(timeout=SSRF_IDLE_TIMEOUT)
 
-    if not callback_result or not callback_result.get("code"):
+    if not callback_result:
+        output_callback("Error: Authentication timed out or no code received.")
+        return None
+
+    error = callback_result.get("error")
+    if error:
+        description = callback_result.get("error_description") or ""
+        detail = f"{error}: {description}" if description else str(error)
+        output_callback(f"Error: authorization failed: {detail}")
+        return None
+
+    if not callback_result.get("code"):
         output_callback("Error: Authentication timed out or no code received.")
         return None
 
@@ -541,64 +923,33 @@ async def run_oauth_flow(
         output_callback("Error: OAuth state mismatch (possible CSRF).")
         return None
 
-    # Exchange code for tokens
     output_callback("Exchanging authorization code for tokens...")
-
-    token_data = {
-        "grant_type": "authorization_code",
-        "code": callback_result["code"],
-        "redirect_uri": callback_server.callback_url,
-        "code_verifier": code_verifier,
-        "client_id": client_id,
-    }
-
-    if client_secret:
-        token_data["client_secret"] = client_secret
-
-    try:
-        response = await ssrf_post(
-            token_endpoint,
-            data=token_data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-
-        if response.status_code == 200:
-            token_response = response.json()
-            tokens = OAuthToken(
-                access_token=token_response.get("access_token", ""),
-                token_type=token_response.get("token_type", "Bearer"),
-                refresh_token=token_response.get("refresh_token"),
-                expires_in=token_response.get("expires_in"),
-            )
-            await storage.set_tokens(tokens)
-            output_callback("Authentication successful!")
-
-            created_client = httpx2.AsyncClient(
-                timeout=_flow_timeout,
-                headers={"Authorization": f"Bearer {tokens.access_token}"},
-                follow_redirects=False,
-            )
-            return created_client
-        else:
-            output_callback(
-                f"Error: Token exchange failed with status {response.status_code}"
-            )
-            output_callback(f"Response: {response.text[:200]}")
-            if created_client is not None:
-                try:
-                    await created_client.aclose()
-                except Exception:
-                    pass
-            return None
-
-    except Exception as e:
-        output_callback(f"Error during token exchange: {e}")
-        if created_client is not None:
-            try:
-                await created_client.aclose()
-            except Exception:
-                pass
+    tokens = await _exchange_code(
+        token_endpoint=token_endpoint,
+        resource=resource,
+        code=callback_result["code"],
+        code_verifier=code_verifier,
+        redirect_uri=callback_server.callback_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        output_callback=output_callback,
+    )
+    if tokens is None:
         return None
+    client = await _finish(tokens)
+    if client is None:
+        return None
+    output_callback("Authentication successful!")
+    return client
+
+
+async def has_stored_tokens(server_name: str) -> bool:
+    """True when a stored token with a non-empty access token exists."""
+    try:
+        tokens = await FileTokenStorage(server_name).get_tokens()
+    except OSError:
+        return False
+    return bool(tokens and tokens.access_token)
 
 
 async def get_authenticated_client(server_name: str) -> httpx2.AsyncClient | None:

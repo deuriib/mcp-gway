@@ -261,6 +261,7 @@ def _patch_full_flow(
 
     def _fake_open(url):
         captured_auth["url"] = url
+        captured["auth_url"] = url
         return True
 
     monkeypatch.setattr(O.webbrowser, "open", _fake_open)
@@ -372,7 +373,7 @@ async def test_run_oauth_flow_reg_exception_and_token_fail(tmp_path, monkeypatch
         tmp_path,
         "regfail",
         meta,
-        reg_payload={},
+        reg_payload={"client_id": "reg-client"},
         token_payload={},
         token_status=400,
     )
@@ -386,9 +387,15 @@ async def test_run_oauth_flow_token_exception(tmp_path, monkeypatch):
     meta = {
         "authorization_endpoint": "https://a/auth",
         "token_endpoint": "https://a/token",
+        "registration_endpoint": "https://a/register",
     }
     _patch_full_flow(
-        monkeypatch, tmp_path, "tokexc", meta, token_exc=RuntimeError("boom")
+        monkeypatch,
+        tmp_path,
+        "tokexc",
+        meta,
+        reg_payload={"client_id": "reg-client"},
+        token_exc=RuntimeError("boom"),
     )
     out = await O.run_oauth_flow(
         "https://api.example.com/mcp", "tokexc", output_callback=lambda m: None
@@ -424,21 +431,26 @@ async def test_run_oauth_flow_callback_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(O, "OAuthCallbackServer", CBNone)
     monkeypatch.setattr(O.webbrowser, "open", lambda url: True)
     out = await O.run_oauth_flow(
-        "https://api.example.com/mcp", "cbtimeout", output_callback=lambda m: None
+        "https://api.example.com/mcp",
+        "cbtimeout",
+        output_callback=lambda m: None,
+        oauth_config={"clientId": "manual-client"},
     )
     assert out is None
 
 
-async def test_run_oauth_flow_invalid_manual_falls_back(tmp_path, monkeypatch):
+async def test_run_oauth_flow_non_uuid_manual_used(tmp_path, monkeypatch):
     meta = {
         "authorization_endpoint": "https://a/auth",
         "token_endpoint": "https://a/token",
+        "registration_endpoint": "https://a/register",
     }
-    _patch_full_flow(
+    captured = _patch_full_flow(
         monkeypatch,
         tmp_path,
         "badmanual",
         meta,
+        reg_payload={"client_id": "should-not-be-used"},
         token_payload={"access_token": "AT3", "token_type": "Bearer"},
     )
     out = await O.run_oauth_flow(
@@ -449,6 +461,38 @@ async def test_run_oauth_flow_invalid_manual_falls_back(tmp_path, monkeypatch):
     )
     assert out is not None
     await out.aclose()
+    assert "client_id=not-a-uuid" in captured["auth_url"]
+    assert captured["url"] == "https://a/token"
+
+
+async def test_run_oauth_flow_authorize_url_has_single_query(tmp_path, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    meta = {
+        "authorization_endpoint": (
+            "https://a/auth?resource=https%3A%2F%2Fmcp.example.com%2Fmcp"
+        ),
+        "token_endpoint": "https://a/token",
+        "registration_endpoint": "https://a/register",
+    }
+    captured = _patch_full_flow(
+        monkeypatch,
+        tmp_path,
+        "mergeq",
+        meta,
+        reg_payload={"client_id": "cid"},
+        token_payload={"access_token": "AT", "token_type": "Bearer"},
+    )
+    out = await O.run_oauth_flow(
+        "https://api.example.com/mcp", "mergeq", output_callback=lambda m: None
+    )
+    assert out is not None
+    await out.aclose()
+    url = captured["auth_url"]
+    assert url.count("?") == 1
+    query = parse_qs(urlparse(url).query)
+    assert query["response_type"] == ["code"]
+    assert query["resource"] == ["https://mcp.example.com/mcp"]
 
 
 async def test_get_authenticated_client(tmp_path, monkeypatch):

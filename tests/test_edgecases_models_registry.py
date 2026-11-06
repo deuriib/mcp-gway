@@ -98,27 +98,30 @@ def test_ssrf_guard_allows_public():
 
 def test_oauth_validators():
     o = OAuthConfig(clientId="notauuid")
-    assert o.clientId is not None and o.clientId != "notauuid"
+    assert o.clientId == "notauuid"
     o2 = OAuthConfig(clientId=None)
     assert o2.clientId is None
     c = MCPServerConfig(
         name="o1", type="remote", url="https://api.example.com/mcp", oauth=True
     )
-    assert c.oauth is not None
+    assert isinstance(c.oauth, OAuthConfig)
+    assert c.oauth.clientId is None
     c2 = MCPServerConfig(
         name="o2",
         type="remote",
         url="https://api.example.com/mcp",
         oauth={"scope": "x"},
     )
-    assert c2.oauth is not None
+    assert isinstance(c2.oauth, OAuthConfig)
+    assert c2.oauth.clientId is None
     c3 = MCPServerConfig(
         name="o3",
         type="remote",
         url="https://api.example.com/mcp",
         oauth={"clientId": "bad"},
     )
-    assert c3.oauth is not None
+    assert isinstance(c3.oauth, OAuthConfig)
+    assert c3.oauth.clientId == "bad"
     c4 = MCPServerConfig(
         name="o4", type="remote", url="https://api.example.com/mcp", oauth=False
     )

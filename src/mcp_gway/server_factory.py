@@ -238,8 +238,15 @@ class ServerFactory:
                     At this point the tool call has not started, so re-running this
                     phase cannot duplicate a side effect (BR-112).
                     """
+                    from mcp_gway.oauth import has_stored_tokens
+
+                    force_auth = (
+                        getattr(config, "type", None) == "remote"
+                        and getattr(config, "oauth", None) is not False
+                        and await has_stored_tokens(server)
+                    )
                     read, write = await stack.enter_async_context(
-                        create_client_transport(config)
+                        create_client_transport(config, force_auth=force_auth)
                     )
                     session = await stack.enter_async_context(
                         ClientSession(read, write)

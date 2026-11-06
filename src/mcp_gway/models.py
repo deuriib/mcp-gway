@@ -8,7 +8,6 @@ import ipaddress
 import re
 import socket
 import time
-import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path as _Path
 from pathlib import PurePosixPath as _PurePosix
@@ -735,7 +734,11 @@ def _ensure_body_limits(resp: Any) -> None:
 
 
 async def _enforce_streaming_cap(resp: Any) -> None:
-    """Incremental 1MB cap for streaming/chunked bodies (no full buffering)."""
+    """Incremental 1MB cap for streaming/chunked bodies (no full buffering).
+
+    Chunks are retained on the response so `.content`/`.text`/`.json()` keep
+    working after the stream context closes.
+    """
     headers = getattr(resp, "headers", {}) or {}
     clen = headers.get("content-length", headers.get("Content-Length"))
     try:
@@ -749,15 +752,20 @@ async def _enforce_streaming_cap(resp: Any) -> None:
         _ensure_body_limits(resp)
         return
     total = 0
+    chunks: list[bytes] = []
     try:
         async for chunk in aiter():
             total += len(chunk)
             if total > SSRF_MAX_BODY:
                 raise ValueError("ssrf: response too large [reason=response_too_large]")
+            chunks.append(chunk)
     except ValueError:
         raise
     except Exception:
         _ensure_body_limits(resp)
+        return
+    # Mirror Response.aread(): keep the capped body after the stream closes.
+    resp._content = b"".join(chunks)
 
 
 _check_body_limits = _ensure_body_limits
@@ -916,6 +924,7 @@ async def _ssrf_fetch(
     headers: dict[str, str] | None = None,
     json_body: dict[str, object] | None = None,
     data: dict[str, str] | None = None,
+    follow_redirects: bool = True,
 ) -> Any:
     parsed0 = _urlparse_for_validation(url)
     if parsed0.scheme != "https":
@@ -943,6 +952,8 @@ async def _ssrf_fetch(
             )
             status = getattr(resp, "status_code", 200)
             if _is_redirect_status(status):
+                if not follow_redirects:
+                    return resp
                 loc = (
                     resp.headers.get("location", "") if hasattr(resp, "headers") else ""
                 )
@@ -954,8 +965,21 @@ async def _ssrf_fetch(
     raise ValueError("ssrf: too many redirects [reason=redirect]")
 
 
-async def ssrf_get(url: str, *, headers: dict[str, str] | None = None) -> Any:
-    return await _ssrf_fetch("GET", url, headers=headers)
+async def ssrf_get(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    follow_redirects: bool = True,
+) -> Any:
+    """GET through the SSRF gate.
+
+    With ``follow_redirects=False`` the first redirect response is returned as
+    is. Its ``Location`` header is **unvalidated**: never fetch it directly,
+    re-enter through ``ssrf_get`` so each hop is validated and pinned.
+    """
+    return await _ssrf_fetch(
+        "GET", url, headers=headers, follow_redirects=follow_redirects
+    )
 
 
 async def ssrf_post(
@@ -978,17 +1002,6 @@ class OAuthConfig(BaseModel):
     clientId: str | None = None
     clientSecret: str | None = None
     scope: str | None = None
-
-    @field_validator("clientId")
-    @classmethod
-    def validate_client_id(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        try:
-            uuid_obj = uuid.UUID(v)
-            return str(uuid_obj)
-        except Exception:
-            return str(uuid.uuid4())
 
 
 class MCPServerConfig(BaseModel):
@@ -1052,30 +1065,8 @@ class MCPServerConfig(BaseModel):
     @field_validator("oauth", mode="before")
     @classmethod
     def validate_oauth(cls, v: Any) -> Any:
-        if v is None or v is False:
-            return v
         if v is True:
-            return {"clientId": str(uuid.uuid4())}
-        if isinstance(v, dict):
-            if not v.get("clientId"):
-                v = dict(v)
-                v["clientId"] = str(uuid.uuid4())
-            else:
-                try:
-                    uuid.UUID(str(v["clientId"]))
-                except Exception:
-                    v = dict(v)
-                    v["clientId"] = str(uuid.uuid4())
-            return v
-        if isinstance(v, OAuthConfig):
-            if not v.clientId:
-                v.clientId = str(uuid.uuid4())
-            else:
-                try:
-                    uuid.UUID(v.clientId)
-                except Exception:
-                    v.clientId = str(uuid.uuid4())
-            return v
+            return OAuthConfig()
         return v
 
     @field_validator("command")

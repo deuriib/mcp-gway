@@ -89,20 +89,16 @@ def test_local_with_cwd():
     assert config.cwd == "/path/to/workdir"
 
 
-def test_oauth_client_id_auto_uuid():
-    import uuid
-
+def test_oauth_client_id_preserved():
     cfg = MCPServerConfig(
         name="s", type="remote", url="https://x", oauth={"clientId": "not-a-uuid"}
     )
-    assert cfg.oauth.clientId != "not-a-uuid"
-    uuid.UUID(cfg.oauth.clientId)
+    assert cfg.oauth.clientId == "not-a-uuid"
 
     cfg2 = MCPServerConfig(
         name="s2", type="remote", url="https://x", oauth={"scope": "openid"}
     )
-    assert cfg2.oauth.clientId is not None
-    uuid.UUID(cfg2.oauth.clientId)
+    assert cfg2.oauth.clientId is None
 
 
 def test_oauth_client_id_valid_uuid_kept():
