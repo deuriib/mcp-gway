@@ -943,6 +943,12 @@ async def run_oauth_flow(
     return client
 
 
+async def has_stored_tokens(server_name: str) -> bool:
+    """True when a stored token with a non-empty access token exists."""
+    tokens = await FileTokenStorage(server_name).get_tokens()
+    return bool(tokens and tokens.access_token)
+
+
 async def get_authenticated_client(server_name: str) -> httpx2.AsyncClient | None:
     """Get an authenticated httpx client if tokens exist.
 
