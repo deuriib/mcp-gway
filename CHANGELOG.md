@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v6.8.1 (2026-11-06)
+
+### Bug Fixes
+
+- **oauth**: Attach stored tokens to tool-call transports
+  ([`a9ec26c`](https://github.com/deuriib/mcp-gway/commit/a9ec26c28d8ef99b5105f78bf3fce9b96a8e7a6f))
+
+- **oauth**: Repair authorization flow for MCP servers
+  ([`620421d`](https://github.com/deuriib/mcp-gway/commit/620421d3d9975a84b1b731ae23c8a27742feb15d))
+
+- **oauth**: Tolerate unreadable token storage for anonymous remotes
+  ([`5df6545`](https://github.com/deuriib/mcp-gway/commit/5df6545d2884d617104763d98670149b8facc9bb))
+
+
 ## v6.8.0 (2026-11-03)
 
 ### Features
