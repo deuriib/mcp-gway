@@ -53,6 +53,13 @@ def _install_session(monkeypatch) -> None:
     monkeypatch.setattr("mcp.ClientSession", _Session)
 
 
+async def test_has_stored_tokens_unwritable_home_returns_false(tmp_path, monkeypatch):
+    blocked = tmp_path / "blocked-home"
+    blocked.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(blocked))
+    assert await has_stored_tokens("srv") is False
+
+
 async def _seed_token(name: str, access_token: str = "stored-token") -> None:
     await FileTokenStorage(name).set_tokens(
         OAuthToken(access_token=access_token, token_type="Bearer")

@@ -945,7 +945,10 @@ async def run_oauth_flow(
 
 async def has_stored_tokens(server_name: str) -> bool:
     """True when a stored token with a non-empty access token exists."""
-    tokens = await FileTokenStorage(server_name).get_tokens()
+    try:
+        tokens = await FileTokenStorage(server_name).get_tokens()
+    except OSError:
+        return False
     return bool(tokens and tokens.access_token)
 
 

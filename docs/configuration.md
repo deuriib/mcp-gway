@@ -89,10 +89,13 @@ DCR client info is reused when its redirect URIs still match the current
 callback URL. If an older version fabricated a UUID `clientId` for a server,
 clear that field in **Edit config** so registration can run again.
 
-The token file now carries `expires_at`. A stored token is reused while valid;
-an expired one is refreshed with its refresh token (same `resource`, same
-client auth) and the refreshed token is persisted. If refresh fails, the stale
-token is discarded and the full authorization-code flow runs instead.
+The token file carries `expires_at`. A stored token is reused while valid. When
+it expires, the next **Authenticate** (or `refresh --auth`) refreshes it with
+the stored refresh token (same `resource`, same client auth) and persists the
+result without opening a browser. If refresh fails, the stale token is
+discarded and the full authorization-code flow runs instead. Tool calls
+themselves do not refresh: if calls start returning `401`, click Authenticate
+once to renew the token.
 
 ### Probing the authorization endpoint
 
