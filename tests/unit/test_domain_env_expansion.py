@@ -63,3 +63,21 @@ def test_missing_variable_raises_naming_variable() -> None:
         expand_env_references({"API_KEY": "{env:PROVIDER_API_KEY}"}, {}.get)
 
     assert "PROVIDER_API_KEY" in str(excinfo.value)
+
+
+def test_missing_variable_message_never_leaks_other_values() -> None:
+    lookup = {"OTHER_KEY": "synthetic-secret-xyz"}.get
+
+    with pytest.raises(ValueError, match=r"\[reason=missing_env_ref\]") as excinfo:
+        expand_env_references({"API_KEY": "{env:TOTALLY_UNSET_VAR}"}, lookup)
+
+    message = str(excinfo.value)
+    assert "TOTALLY_UNSET_VAR" in message
+    assert "synthetic-secret-xyz" not in message
+    assert "OTHER_KEY" not in message
+
+
+def test_empty_string_value_is_substituted_not_treated_as_unset() -> None:
+    result = expand_env_references({"K": "{env:EMPTY}"}, {"EMPTY": ""}.get)
+
+    assert result == {"K": ""}

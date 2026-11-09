@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+
+import pytest
 
 from mcp_gway.core.client import create_client_transport
 from mcp_gway.core.parsing import parse_envs
@@ -68,3 +71,43 @@ def test_registry_persists_placeholder_only(tmp_path) -> None:
     stored = (tmp_path / "r" / "envx.json").read_text()
     assert "{env:PROVIDER_API_KEY}" in stored
     assert "synthetic-secret-abc" not in stored
+
+
+async def test_missing_reference_names_variable_without_leaking_secrets(
+    monkeypatch, caplog
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    capture = SimpleNamespace()
+    _stub_spawn(monkeypatch, capture)
+    monkeypatch.setenv("TEST_UNSET_GUARD", "synthetic-secret-xyz")
+    cfg = MCPServerConfig(
+        name="envx",
+        type="local",
+        command=["fakeserver"],
+        environment={"API_KEY": "{env:TOTALLY_UNSET_VAR}"},
+    )
+
+    with pytest.raises(ValueError, match=r"\[reason=missing_env_ref\]") as excinfo:
+        async with create_client_transport(cfg):
+            pass
+
+    assert "TOTALLY_UNSET_VAR" in str(excinfo.value)
+    assert "synthetic-secret-xyz" not in str(excinfo.value)
+    assert "synthetic-secret-xyz" not in caplog.text
+
+
+async def test_denylisted_key_still_rejected_before_expansion(monkeypatch) -> None:
+    capture = SimpleNamespace()
+    _stub_spawn(monkeypatch, capture)
+    cfg = MCPServerConfig.model_construct(
+        name="denyenv",
+        type="local",
+        command=["fakeserver"],
+        environment={"PATH": "{env:SAFE}"},
+    )
+
+    with pytest.raises(ValueError, match=r"\[reason=denied_env\]"):
+        async with create_client_transport(cfg):
+            pass
+
+    assert not hasattr(capture, "params")
