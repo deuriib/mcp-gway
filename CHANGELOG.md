@@ -4,6 +4,16 @@
 
 ## v6.9.0 (2026-11-09)
 
+### Keep secrets out of server config
+
+`environment` values can now reference the process env:
+
+    { "API_KEY": "{env:PROVIDER_API_KEY}" }
+
+Resolved at spawn, never stored. Missing variables fail with `missing_env_ref` — name only, never the value. Escape a literal with `{{env:NAME}}`.
+
+Already have a literal key in a server config? Replace the value with `"{env:PROVIDER_API_KEY}"` and set the variable where the gateway runs.
+
 ### Documentation
 
 - Document {env:NAME} env placeholders

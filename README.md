@@ -41,6 +41,10 @@ MCP Gateway aggregates multiple MCP servers behind a single headless HTTP/SSE en
 
 For more examples and transports, see the [CLI Reference](docs/cli.md) and [Integrations](docs/integrations.md).
 
+> **Keep secrets out of your config.**
+> Point server env vars at `{env:NAME}` — mcp-gway resolves them at spawn.
+> `servers/*.json` keeps the reference. Your machine keeps the secret.
+
 ## Features
 
 - **Multi-Server Aggregation** — Connect to multiple MCP servers (local or remote) and expose them through a single endpoint. One URL for every agent; one registry to manage.
