@@ -110,7 +110,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 `MCP_GWAY_ALLOW_REMOTE=1` opt-in; without it the gateway exits rather than exposing
 itself (fail-closed). Secrets and OAuth tokens live in the named `mcp-gway-config`
 volume (`~/.config/mcp-gway/` inside the container), never in env files
-(OPS-04 / DENY-13).
+(OPS-04 / DENY-13). Per-server `environment` values can reference the gateway
+process env with `{env:NAME}` — only the placeholder persists and the secret
+resolves in the spawned child; see `docs/configuration.md`.
 
 **Production hardening** — the `prod` override enforces `read_only: true`, drops all
 Linux capabilities (`cap_drop: [ALL]`), sets `no-new-privileges`, and pins CPU/memory

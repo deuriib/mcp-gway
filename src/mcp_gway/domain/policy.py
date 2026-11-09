@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,6 +53,8 @@ ENV_DENYLIST_PREFIXES = ("DYLD_", "NPM_CONFIG_", "BUN_", "UV_")
 
 _ARG_RE = re.compile(r"^[A-Za-z0-9_./:@-]{1,80}$")
 _BASENAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}$")
+_ENV_REF_RE = re.compile(r"\A\{env:([A-Za-z_][A-Za-z0-9_]*)\}\Z")
+_ENV_ESCAPE_RE = re.compile(r"\A\{\{(env:[^{}]*)\}\}\Z")
 
 
 @dataclass(frozen=True)
@@ -254,6 +257,39 @@ def check_environment(env: dict[str, str] | None) -> dict[str, str] | None:
                 f"environment variable not allowed: {key} [reason=denied_env]"
             )
     return env
+
+
+def expand_env_references(
+    env: dict[str, str] | None,
+    lookup: Callable[[str], str | None],
+) -> dict[str, str] | None:
+    """Resolve whole-value ``{env:NAME}`` placeholders from ``lookup``.
+
+    Only a value that is entirely ``{env:NAME}`` expands; ``{{env:...}}``
+    unescapes to the literal ``{env:...}``; any other shape (including
+    embedded or invalid placeholders) passes through unchanged. The returned
+    mapping is always a new dict; the caller's dict is never mutated.
+    """
+    if env is None:
+        return None
+    expanded: dict[str, str] = {}
+    for key, value in env.items():
+        escaped = _ENV_ESCAPE_RE.match(value)
+        if escaped:
+            expanded[key] = "{" + escaped.group(1) + "}"
+            continue
+        ref = _ENV_REF_RE.match(value)
+        if ref is None:
+            expanded[key] = value
+            continue
+        name = ref.group(1)
+        resolved = lookup(name)
+        if resolved is None:
+            raise ValueError(
+                f"environment variable not set: {name} [reason=missing_env_ref]"
+            )
+        expanded[key] = resolved
+    return expanded
 
 
 def audit_local_action(

@@ -102,6 +102,8 @@ mcp-gway add t --type local --command "npx -y my-mcp" --cwd rel/path           #
 
 **Gate 3 — env.** `--env KEY=VALUE` rejects denylisted names (`reason_code=denied_env`). Exact: `PATH,PATHEXT,SYSTEMROOT,COMSPEC,LD_PRELOAD,LD_LIBRARY_PATH,PYTHONPATH,PYTHONHOME,NODE_OPTIONS,NODE_PATH,NODE_EXTRA_CA_CERTS,NODE_TLS_REJECT_UNAUTHORIZED`. Prefixes: `DYLD_*,NPM_CONFIG_*,BUN_*,UV_*`. `PATH` itself is controlled, not pass-through. `NODE_ENV` is allowed. `bunx` ships in `DEFAULT_ALLOW_LIST` as a runner shim; widening the list needs pin + owner + 90-day re-gate; the `bun` runtime stays out.
 
+Values may be `{env:NAME}` placeholders: whole-value match only (`prefix-{env:NAME}` and invalid shapes like `{env:}`, `{env:2BAD}`, `{env:a b}` are literals), `{{env:NAME}}` escapes to a literal, and an unset variable raises `[reason=missing_env_ref]` naming the variable, never its value. Ordering: `check_environment` gates keys first, then `expand_env_references` resolves values in `core/client.py`; the placeholder is what persists in `servers/*.json`.
+
 ## Execution stack — CodeMode → factory → sandbox
 
 `code_mode.py` — `CodeMode(registry)` + `to_pascal_case_identifier` (names normalize to PascalCase; hyphens in upstream tool names become underscores in the sandbox). Five MCP meta-tools expose discovery and execution; host-only agent helpers include `classify_tool_calls`, `execute_agent_tool`, `call_many` (bounded fan-out with per-call error isolation), and `auto_execute`. `call_many` is not available inside Starlark; the fifth MCP meta-tool is `callManyTool`, surfaced as a host-side orchestration adapter. Tool ACL comes from `tools_to_execute` (`["*"]` = all) — `update <name> --tools` rewrites it without re-discovery.
@@ -110,7 +112,7 @@ mcp-gway add t --type local --command "npx -y my-mcp" --cwd rel/path           #
 
 `sandbox.py` — Starlark via `starlark-pyo3`: `struct(Server.tool=callable)`, fresh isolated scope per `execute()`, `result` assignment required, `print()` → logs, `SandboxTimeoutError` on deadline, degrade-visible skips counted in `code_mode_servers_skipped_total{reason}`.
 
-`core/transport.py` + `core/client.py` — remote auto-detect `streamable-http → sse → http` (`detect_transport`); `create_client_transport` (local|remote), `discover_tools`, `refresh_server`; `parsing.py` — `parse_headers`/`parse_envs` (`KEY=VALUE`, repeatable flags).
+`core/transport.py` + `core/client.py` — remote auto-detect `streamable-http → sse → http` (`detect_transport`); `create_client_transport` (local|remote), `discover_tools`, `refresh_server`; `expand_env_references` resolves `{env:NAME}` values at local spawn; `parsing.py` — `parse_headers`/`parse_envs` (`KEY=VALUE`, repeatable flags).
 
 ## Remote + OAuth (`oauth.py`, `models.py`)
 

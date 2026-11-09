@@ -1,7 +1,7 @@
 # Security (Local-First Design)
 
 - **Loopback by default** — Binds to `127.0.0.1`. To expose on non-loopback interfaces, set `MCP_GWAY_ALLOW_REMOTE=1`. Without opt-in, binding non-loopback will exit with code 2.
-- **Secret hygiene** — Tokens and credentials are never logged or exposed in metrics responses.
+- **Secret hygiene** — Tokens and credentials are never logged or exposed in metrics responses. Per-server `environment` values may use `{env:NAME}` placeholders: only the placeholder is persisted in `servers/*.json`, and the secret is resolved from the gateway process env into the child environment at spawn. `{{env:...}}` escapes to a literal; invalid shapes are literals; an unset variable fails with `[reason=missing_env_ref]` naming the variable, never its value.
 - **Policy enforcement** — Local command allowlists, SSRF guards, and configurable policy boundaries.
 - **Admin dashboard hardening** — Loopback-only interface with CSRF protection, CSP, and secure headers.
 - **Transport safety** — Per-transport route enforcement returns `405` with `Allow`; clear auth boundaries and structured JSON logs.

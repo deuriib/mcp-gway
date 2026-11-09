@@ -24,7 +24,7 @@ Default habit: `refresh` a server before `exec`/`inspect` against it. A stale `.
 | `--url <url>` | Remote endpoint | required for `remote` |
 | `--command "<cmd>"` | Local invocation, single string | required for `local` |
 | `--tools <csv>` | Tool ACL filter | `"*"` (all) |
-| `--env KEY=VALUE` | Local env var (repeatable) | — |
+| `--env KEY=VALUE` | Local env var (repeatable); the value may be `{env:NAME}` to resolve from the gateway process env at spawn | — |
 | `--header KEY=VALUE` | Remote HTTP header (repeatable, remote only) | — |
 | `--cwd <path>` | Local working dir, must be absolute | — |
 | `--timeout <ms>` | Connect timeout, int ms | `5000` |
@@ -53,6 +53,10 @@ mcp-gway add filesystem --type local --command "npx -y @modelcontextprotocol/ser
 # Local — env + cwd + tool filter
 mcp-gway add tools --type local --command "python -m my_mcp_server" \
   --env MY_VAR=value --env OTHER=123 --cwd /srv/mcp/workdir --tools "read,write"
+
+# Local — reference the gateway env instead of storing the secret
+mcp-gway add tools --type local --command "python -m my_mcp_server" \
+  --env API_KEY={env:PROVIDER_API_KEY}
 
 # Local — retry connect-phase failures once
 mcp-gway add flaky --type local --command "uvx my-mcp-server" --retry-on-transport-error
@@ -179,5 +183,6 @@ mcp-gway refresh ParallelSearch && \
 ## Local-first security (see `mcp-gway-core`)
 
 - `local` requires `MCP_GWAY_ALLOW_LOCAL_COMMANDS` (CSV basenames, case-insensitive); unset/blank → `DEFAULT_ALLOW_LIST {npx,bunx,uvx,pipx}` (`core/policy.py:23`). `*`/paths denied + warn. No bypass exists. `--cwd` absolute. Denylisted env rejected.
+- Env values: `{env:NAME}` (whole value only) is stored raw and resolved from the gateway process env at stdio spawn; `{{env:NAME}}` escapes to a literal `{env:NAME}`; invalid shapes are literals; an unset variable fails at first use with `[reason=missing_env_ref]` naming the variable, never its value. The deny-list still applies to keys.
 - `remote --url` has an SSRF-guard (`models.py`): only `http|https`; private/loopback/link-local/reserved/multicast rejected.
 - Secrets: never put real tokens in `--header` / `--oauth-client-secret` (shell history). Prefer `refresh <name> --auth`. Tokens live in `~/.config/mcp-gway/tokens/` (`0o600`).

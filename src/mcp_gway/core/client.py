@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -42,6 +43,7 @@ async def _create_local_transport(
         check_cwd,
         check_environment,
         check_local_command,
+        expand_env_references,
     )
     from mcp_gway.stdio_transport import (
         filtered_stdio_client,
@@ -61,6 +63,7 @@ async def _create_local_transport(
     args = cmd_list[1:] if len(cmd_list) > 1 else []
     resolved = resolve_windows_command(command)
     env_dict = check_environment(getattr(config, "environment", None))
+    env_dict = expand_env_references(env_dict, os.environ.get)
     raw_cwd = getattr(config, "cwd", None)
     cwd = check_cwd(raw_cwd) if raw_cwd else None
     try:

@@ -29,7 +29,7 @@ Options for `add` — 14 flags (cli.py:97-136):
 | `--url <url>`                  | URL for `remote`                                 |
 | `--header "KEY=VALUE"`         | HTTP header for `remote` (repeatable)            |
 | `--command "<cmd>"`            | Command for `local` (e.g. `"npx -y my-mcp"`)     |
-| `--env KEY=VALUE`              | Environment variable for `local` (repeatable)    |
+| `--env KEY=VALUE`              | Environment variable for `local` (repeatable); a value may be `{env:NAME}` to resolve from the gateway process env at spawn |
 | `--cwd <path>`                 | Working directory for `local`                    |
 | `--oauth-client-id ID`         | Pre-registered OAuth client ID                   |
 | `--oauth-client-secret SECRET` | Pre-registered OAuth client secret               |
