@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v6.9.0 (2026-11-09)
+
+### Documentation
+
+- Document {env:NAME} env placeholders
+  ([`c6d241b`](https://github.com/deuriib/mcp-gway/commit/c6d241ba371f56b112d667ce44e848ae9b4e776b))
+
+### Features
+
+- **client**: Expand env placeholders at stdio spawn
+  ([`9fcc17a`](https://github.com/deuriib/mcp-gway/commit/9fcc17ae288baca8c32aca84b8805c7611bb921b))
+
+- **policy**: Resolve {env:NAME} placeholders in server env
+  ([`224a50b`](https://github.com/deuriib/mcp-gway/commit/224a50bad045bb6c4f6da7b878af1bc7c638fded))
+
+### Testing
+
+- **policy**: Cover missing_env_ref error and secret hygiene
+  ([`cd8c4b4`](https://github.com/deuriib/mcp-gway/commit/cd8c4b4d019db35631a74c7c1234efa428d97978))
+
+- **policy**: Pin {{env:NAME}} escape and invalid-shape literals
+  ([`296c9b5`](https://github.com/deuriib/mcp-gway/commit/296c9b5d033b5d2c135d08c1081b741c45b199c0))
+
+
 ## v6.8.1 (2026-11-06)
 
 ### Bug Fixes
