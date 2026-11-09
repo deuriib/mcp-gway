@@ -111,3 +111,21 @@ async def test_denylisted_key_still_rejected_before_expansion(monkeypatch) -> No
             pass
 
     assert not hasattr(capture, "params")
+
+
+async def test_spawn_escaped_placeholder_reaches_child_literal(monkeypatch) -> None:
+    capture = SimpleNamespace()
+    _stub_spawn(monkeypatch, capture)
+    monkeypatch.setenv("TEST_PROVIDER_KEY", "synthetic-secret-abc")
+    cfg = MCPServerConfig(
+        name="envx",
+        type="local",
+        command=["fakeserver"],
+        environment={"API_KEY": "{{env:TEST_PROVIDER_KEY}}"},
+    )
+
+    async with create_client_transport(cfg):
+        pass
+
+    assert capture.params.env["API_KEY"] == "{env:TEST_PROVIDER_KEY}"
+    assert cfg.environment["API_KEY"] == "{{env:TEST_PROVIDER_KEY}}"

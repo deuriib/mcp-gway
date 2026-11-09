@@ -25,7 +25,7 @@ def test_accepts_valid_name_charset(name: str) -> None:
 
 @pytest.mark.parametrize(
     "value",
-    ["plain", "", "prefix-{env:FOO}-suffix"],
+    ["plain", "", "prefix-{env:FOO}-suffix", "{env:}", "{env:2BAD}", "{env:a b}"],
 )
 def test_non_placeholder_values_pass_through(value: str) -> None:
     env = {"K": value}
@@ -81,3 +81,38 @@ def test_empty_string_value_is_substituted_not_treated_as_unset() -> None:
     result = expand_env_references({"K": "{env:EMPTY}"}, {"EMPTY": ""}.get)
 
     assert result == {"K": ""}
+
+
+@pytest.mark.parametrize("set_value", [None, "hit"])
+def test_escaped_placeholder_yields_literal_without_expansion(
+    set_value: str | None,
+) -> None:
+    lookup = {"FOO": set_value}.get if set_value is not None else {}.get
+
+    result = expand_env_references({"K": "{{env:FOO}}"}, lookup)
+
+    assert result == {"K": "{env:FOO}"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("{{env:}}", "{env:}"),
+        ("{{env:2BAD}}", "{env:2BAD}"),
+        ("{{env:a b}}", "{env:a b}"),
+        ("{{{env:FOO}}}", "{{{env:FOO}}}"),
+        ("{{env:FOO}", "{{env:FOO}"),
+    ],
+)
+def test_escape_grammar_edges(value: str, expected: str) -> None:
+    result = expand_env_references({"K": value}, {"FOO": "hit"}.get)
+
+    assert result == {"K": expected}
+
+
+def test_expanded_value_is_not_re_expanded() -> None:
+    result = expand_env_references(
+        {"K": "{env:FIRST}"}, {"FIRST": "{env:SECOND}", "SECOND": "nope"}.get
+    )
+
+    assert result == {"K": "{env:SECOND}"}
