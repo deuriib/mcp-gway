@@ -25,6 +25,7 @@ mcp-gway add api --type remote --url https://api.example.com/mcp --timeout 10000
 mcp-gway add filesystem --type local --command "npx -y @anthropic/mcp-filesystem"
 mcp-gway add tools --type local --command "python -m my_mcp_server" --env MY_VAR=value --cwd /path/to/workdir
 mcp-gway add tools --type local --command "npx -y my-mcp" --env KEY=VALUE --env OTHER=123 --cwd /srv/mcp/workdir
+mcp-gway add api --type local --command "python -m my_mcp_server" --env API_KEY={env:PROVIDER_API_KEY}
 
 # List and serve (local-first)
 mcp-gway list
@@ -32,6 +33,23 @@ mcp-gway serve --transport http --port 8080         # binds 127.0.0.1 by default
 mcp-gway serve --transport http --host 127.0.0.1 --port 8080
 curl -s http://127.0.0.1:8080/health | jq
 ```
+
+## Environment placeholders (`{env:NAME}`)
+
+Per-server `environment` values may reference the gateway process environment
+instead of embedding the secret. The placeholder is what gets persisted; the
+value is read only when the stdio child is spawned.
+
+- A value must be **exactly** `{env:NAME}` (NAME matches `[A-Za-z_][A-Za-z0-9_]*`)
+  to expand. Embedded placeholders (`prefix-{env:NAME}`) and invalid shapes
+  (`{env:}`, `{env:2BAD}`, `{env:a b}`) are literals and pass through unchanged.
+- `{{env:NAME}}` escapes to the literal `{env:NAME}` in the child.
+- An unset variable fails at first use with
+  `environment variable not set: NAME [reason=missing_env_ref]`. The variable
+  name is reported, never any value.
+- Registration stays raw, so `mcp-gway add` succeeds even when the variable is
+  unset; the failure surfaces on the first tool call or `serve`. The env
+  denylist still applies to keys.
 
 ## Admin dashboard refresh
 
