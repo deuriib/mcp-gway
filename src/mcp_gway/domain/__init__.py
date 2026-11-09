@@ -15,6 +15,7 @@ from mcp_gway.domain.policy import (
     DEFAULT_ALLOW_LIST,
     PolicyDecision,
     check_environment,
+    expand_env_references,
     get_allow_list,
     validate_command_syntax,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "TokenStoragePort",
     "ToolInfo",
     "check_environment",
+    "expand_env_references",
     "get_allow_list",
     "validate_command_syntax",
 ]
