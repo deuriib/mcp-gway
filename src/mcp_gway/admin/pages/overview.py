@@ -103,33 +103,29 @@ def _connect_card(*, endpoint_url: str, messages_url: str, transport: str) -> No
         else f"POST {endpoint_url}"
     )
     claude = json.dumps(
-        {"mcpServers": {"mcp-gateway": {"type": "http", "url": endpoint_url}}},
+        {"mcpServers": {"gateway": {"type": "http", "url": endpoint_url}}},
         indent=2,
     )
-    opencode = (
-        "opencode plugin add github:deuriib/mcp-gateway\n\n"
-        "# only when the gateway is not on the default port\n"
-        f"export MCP_GWAY_URL={endpoint_url}"
+    opencode = json.dumps(
+        {"mcp": {"servers": {"gateway": {"type": "remote", "url": endpoint_url}}}}
     )
-    antigravity = (
-        "mkdir -p ~/.gemini/config/plugins/mcp-gateway\n"
-        "cp -r plugins/antigravity/* ~/.gemini/config/plugins/mcp-gateway/"
-    )
+    antigravity = json.dumps({"mcpServers": {"gateway": {"serverUrl": endpoint_url}}})
+
     return card(
         div({"class": "flex flex-wrap items-baseline justify-between gap-2"})[
             feature_heading("Connect"),
             span({"class": f"text-[11px] text-[{theme.TEXT_SILVER}]"})[endpoint],
         ],
         div({"class": "mt-3 grid lg:grid-cols-3 gap-4"})[
-            _connect_block("Claude Code", ".mcp.json (project root)", claude),
+            _connect_block("Claude Code", "mcp.json (global)", claude),
             _connect_block(
                 "OpenCode V2",
-                "Plugin — registers the gateway automatically",
+                "~/.config/opencode/opencode.jsonc (global)",
                 opencode,
             ),
             _connect_block(
                 "Antigravity",
-                "Plugin — ~/.gemini/config/plugins/mcp-gateway",
+                "~/.gemini/config/mcp_config.json (global)",
                 antigravity,
             ),
         ],
