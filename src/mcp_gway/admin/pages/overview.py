@@ -117,7 +117,7 @@ def _connect_card(*, endpoint_url: str, messages_url: str, transport: str) -> No
             span({"class": f"text-[11px] text-[{theme.TEXT_SILVER}]"})[endpoint],
         ],
         div({"class": "mt-3 grid lg:grid-cols-3 gap-4"})[
-            _connect_block("Claude Code", "mcp.json (global)", claude),
+            _connect_block("Claude Code", "~/.claude.json (user scope)", claude),
             _connect_block(
                 "OpenCode V2",
                 "~/.config/opencode/opencode.jsonc (global)",
