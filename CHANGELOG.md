@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v6.9.1 (2026-11-10)
+
+### Bug Fixes
+
+- **admin**: Improve cards for herness mcp config
+  ([`cd6fefb`](https://github.com/deuriib/mcp-gway/commit/cd6fefb8dfca8d1a78b389b29008435c3d51624e))
+
+### Documentation
+
+- Announce {env:NAME} environment references
+  ([`763f532`](https://github.com/deuriib/mcp-gway/commit/763f532306fc429cebf141a962de1ef653e7d863))
+
+
 ## v6.9.0 (2026-11-09)
 
 ### Keep secrets out of server config
