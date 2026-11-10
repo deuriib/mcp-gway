@@ -1178,14 +1178,15 @@ def test_overview_connect_card_uses_live_endpoint(tmp_path: Path) -> None:
     assert "Connect" in body
     assert "POST http://127.0.0.1:9000/mcp" in r.text
     assert "Claude Code" in body
-    assert ".mcp.json (project root)" in body
+    assert "~/.claude.json (user scope)" in body
     assert '"url": "http://127.0.0.1:9000/mcp"' in body
     assert '"type": "http"' in body
     assert "OpenCode V2" in body
-    assert "opencode plugin add github:deuriib/mcp-gateway" in body
-    assert "MCP_GWAY_URL=http://127.0.0.1:9000/mcp" in body
+    assert "~/.config/opencode/opencode.jsonc (global)" in body
+    assert '"type": "remote"' in body
     assert "Antigravity" in body
-    assert "~/.gemini/config/plugins/mcp-gateway" in body
+    assert "~/.gemini/config/mcp_config.json (global)" in body
+    assert '"serverUrl": "http://127.0.0.1:9000/mcp"' in body
     assert "onclick" not in body
     assert "navigator.clipboard" not in body
 
@@ -1209,7 +1210,8 @@ def test_overview_connect_card_survives_empty_registry(tmp_path: Path) -> None:
     assert r.status_code == 200
     assert "No servers yet." in r.text
     assert "Connect" in r.text
-    assert "opencode plugin add github:deuriib/mcp-gateway" in r.text
+    assert "OpenCode V2" in r.text
+    assert "mcp_config.json (global)" in r.text
 
 
 # --- Dashboard OAuth flow ---
