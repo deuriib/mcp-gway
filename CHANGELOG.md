@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v6.9.2 (2026-11-10)
+
+### Bug Fixes
+
+- **admin**: Name claude code user scope config file
+  ([`8221c24`](https://github.com/deuriib/mcp-gway/commit/8221c24c7f2fe570acd5ddd2c1a58d3932dd96a2))
+
+
 ## v6.9.1 (2026-11-10)
 
 ### Bug Fixes
